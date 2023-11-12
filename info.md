@@ -1,4 +1,10 @@
-Extensive control of lights based on time of day with mode event in addition to motion, presence, lux, rain, and media player sensors. Define different modes like morning, dinner, guests, tv, etc and configure lighting for each mode if you want someting different than normal configuration. Use custom mode for complete freeze of automations for special days or until you get automation completely right.
+# Lightwand
+an Appdaemon app for extensive control of lights based on time of day with mode event in addition to motion, presence, lux, rain, and media player sensors. Define different modes like morning, dinner, guests, tv, etc and configure lighting for each mode if you want someting different than normal configuration. Use custom mode for complete freeze of automations for special days or until you get automation completely right.
+
+
+## Installation
+
+Download the `Lightwand` directory from inside the `apps` directory here to your local `apps` directory, then add the configuration to enable the `Lightwand` module.
 
 ## App usage and tips to configure
 All sections and configurations are optional, so you use only what is applicable
