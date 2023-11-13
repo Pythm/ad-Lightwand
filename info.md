@@ -252,7 +252,7 @@ key | optional | type | default | description
 -- | -- | -- | -- | --
 `module` | False | string | lightwand | The module name of the app.
 `class` | False | string | Room | The name of the Class.
-`json_path` | True | string | `/config/appdaemon/apps/Lightwand/wand_s`| Uses Json to store mode and lux data for persistency when restarted. Adds 'your_room_name' + '.json' to the json_path
+`json_path` | True | string | `/config/appdaemon/apps/Lightwand/wand_`| Uses Json to store mode and lux data for persistency when restarted. Adds 'your_room_name' + '.json' to the json_path
 `namespace` | True | string | `mqtt`| MQTT namespace
 `OutLuxZigbee` | True | string | | Zigbee lux sensor for lux control and constraint
 `OutLuxZwave` | True | string || Zwave over MQTT lux sensor for lux control and constraint
