@@ -1,6 +1,9 @@
 # Lightwand
 an Appdaemon app for complete control of your lights in every situation
 
+## Updates to come
+Improved time of day setting of the light (with brightness). Reason : The need for light varies massively from summer to winter (I'm living in Norway). At 21.00 it can be bright as day in summer, need for some light during autum/spring and pitch black in winter. It can be done now but the configuration becomes quite messy. 
+
 ## Installation
 
 Download the `Lightwand` directory from inside the `apps` directory here to your local `apps` directory, then add the configuration to enable the `Lightwand` module.
