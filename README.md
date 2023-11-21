@@ -1,8 +1,14 @@
 # Lightwand
 an Appdaemon app for complete control of your lights in every situation
 
-## Updates to come
-Improved time of day setting of the light (with brightness). Reason : The need for light varies massively from summer to winter (I'm living in Norway). At 21.00 it can be bright as day in summer, need for some light during autum/spring and pitch black in winter. It can be done now but the configuration becomes quite messy. 
+## Updates coming within the week
+Improved time of day setting of the light (with brightness). Reason : The need for light varies massively from summer to winter (I'm living in Norway). At 21.00 it can be bright as day in summer, need for some light during autum/spring and pitch black outside in winter. It can be done now but the configuration becomes quite messy.
+
+Motion will be a separate dictionary when configuring light instead of beeing configured as a mode to help a bit on configuration. Will also remove a bug when motion is detected when setting a new mode.
+
+## Updates coming later
+Try to clean up configuration of the app to make it easier to get started.
+Set brightness transition over time. -/+ 1 brightness pr x minutes.
 
 ## Installation
 
