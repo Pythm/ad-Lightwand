@@ -503,17 +503,22 @@ class Light:
                             timeToAdd += datetime.timedelta(days = 1)
                         automation['time'] = automation['orLater']
                 elif timeToAdd > datetime.timedelta(minutes = 0) :
+                    if 'fixed' in automation :
+                        continue
                     newtime = self.ADapi.parse_datetime(automation['time']) + timeToAdd
                     automation['time'] = str(newtime.time())
 
-                    # Deletes automations that are later than next. Useful when both time with sunset and fixed time is given in automations
+                    # Deletes automations that are earlier than previous time. Useful when both time with sunset and fixed time is given in automations
                 if test_time <= self.ADapi.parse_time(automation['time']) :
                     test_time = self.ADapi.parse_time(automation['time'])
                 elif test_time > self.ADapi.parse_time(automation['time']) :
-                    #self.ADapi.log(f"Deletes automation: {self.automations[num]}") # For logging purposes to check if your times are as planned
-                    automationsToDelete.append(num)
+                    if not 'fixed' in automation :
+                        #self.ADapi.log(f"Deletes automation: {self.automations[num]}") # For logging purposes to check if your times are as planned
+                        automationsToDelete.append(num)
+
             for num in reversed(automationsToDelete) :
                 del self.automations[num]
+            self.ADapi.log(f"Automation: {self.automations}")
 
             for automation in self.automations :
                 if not 'state' in automation :
@@ -542,15 +547,18 @@ class Light:
                                 timeToAdd += datetime.timedelta(days = 1)
                             automation['time'] = automation['orLater']
                     elif timeToAdd > datetime.timedelta(minutes = 0) :
+                        if 'fixed' in automation :
+                            continue
                         newtime = self.ADapi.parse_datetime(automation['time']) + timeToAdd
                         automation['time'] = str(newtime.time())
 
-                        # Deletes automations that are later than next. Useful when both time with sunset and fixed time is given in automations
+                        # Deletes automations that are earlier than previous time. Useful when both time with sunset and fixed time is given in automations
                     if test_time <= self.ADapi.parse_time(automation['time']) :
                         test_time = self.ADapi.parse_time(automation['time'])
                     elif test_time > self.ADapi.parse_time(automation['time']) :
-                        #self.ADapi.log(f"Deletes automation: {self.automations[num]}") # For logging purposes to check if your times are as planned
-                        automationsToDelete.append(num)
+                        if not 'fixed' in automation :
+                            #self.ADapi.log(f"Deletes automation: {self.automations[num]}") # For logging purposes to check if your times are as planned
+                            automationsToDelete.append(num)
                 for num in reversed(automationsToDelete) :
                     del self.motionlight[num]
 
@@ -581,15 +589,18 @@ class Light:
                                 timeToAdd += datetime.timedelta(days = 1)
                             automation['time'] = automation['orLater']
                     elif timeToAdd > datetime.timedelta(minutes = 0) :
+                        if 'fixed' in automation :
+                            continue
                         newtime = self.ADapi.parse_datetime(automation['time']) + timeToAdd
                         automation['time'] = str(newtime.time())
 
-                        # Deletes automations that are later than next. Useful when both time with sunset and fixed time is given in automations
+                        # Deletes automations that are earlier than previous time. Useful when both time with sunset and fixed time is given in automations
                     if test_time <= self.ADapi.parse_time(automation['time']) :
                         test_time = self.ADapi.parse_time(automation['time'])
                     elif test_time > self.ADapi.parse_time(automation['time']) :
-                        #self.ADapi.log(f"Deletes mode automation: {self.automations[num]}") # For logging purposes to check if your times are as planned
-                        automationsToDelete.append(num)
+                        if not 'fixed' in automation :
+                            #self.ADapi.log(f"Deletes mode automation: {self.automations[num]}") # For logging purposes to check if your times are as planned
+                            automationsToDelete.append(num)
                 for num in reversed(automationsToDelete) :
                     del mode['automations'][num]
 
@@ -1216,3 +1227,4 @@ class Toggle(Light):
                     lightwand_data.update({ light : {"toggle" : self.current_toggle }})
                     with open(self.JSON_PATH, 'w') as json_write :
                         json.dump(lightwand_data, json_write, indent = 4)
+

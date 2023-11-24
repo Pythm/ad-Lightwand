@@ -3,22 +3,24 @@ an Appdaemon app for complete control of your lights in every situation
 
 ## Updates coming
 Try to clean up configuration of the app to make it easier to get started.
-Set brightness transition over time. -/+ 1 brightness pr x minutes.
+Set brightness transition over time. -/+ 1 brightness pr x minutes. Will be defined with dimrate
 
 ## Installation
-Download the `Lightwand` directory from inside the `apps` directory here to your `apps` directory, then add configuration to a yaml file to enable the `Lightwand` module.
+Download the `Lightwand` directory from inside the `apps` directory here to your Appdaemon `apps` directory, then add configuration to a yaml file to enable the `Lightwand` module. See configuration below or my lightwand.yaml file for examples.
 
 ## App usage and tips to configure
 All sections and configurations are optional, so you use only what is applicable.
-Each app contains one 'Room' with all of the sensors you want to use for that room and all the lights that are natural to control based on the given sensors.
+Each app contains one 'Room' with all of the sensors you want to use for that room and define all the lights to automate the way you want.
 
 ### Mode change events
 This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with 'normal' mode as default setting. See my ModeManagement example code if you want to automate some default away/morning/night modes.
 
 Options is to call new mode from another app with:
+
     self.fire_event("MODE_CHANGE", mode = 'your_mode_name')
 
 Or define scripts and activate in lovelace to trigger an event like this:
+
     day:
       alias: "Day"
       sequence:
@@ -27,7 +29,7 @@ Or define scripts and activate in lovelace to trigger an event like this:
             mode: 'normal'
 
 
-I have chosen this approach because I also base some other automations on mode change. E.g. 'dinner' mode will also send a notification to childrens phones and tablets.
+I have chosen this approach because I also base some other automations on mode change. E.g. calling 'dinner' mode from iPhone with ios_event will also send a notification to childrens phones and tablets.
 
 When a event with "MODE_CHANGE" is triggered, it will check thru all defined modes for all lights in the app/Room.
 <br>- If mode is defined in room and in light it will update light with attributes defined in mode
@@ -50,24 +52,34 @@ Other modes with additional behaviour: <b>morning</b>, <b>night*</b>
 
 When <b>custom</b> mode is triggered it will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights. Be aware that it does not do any mediaplayer/motion or lux detection either.
 <br>- Use 'exclude_from_custom: True' in configuration to exclude the room from custom mode. Can be useful for rooms you forget to adjust light like outdoor lights and kid's bedroom.
+<br><br>
+You can define an Home Assistant input_text in one of the apps/rooms to display current LightMode in Lovelace. It will allways update with latest mode even if mode is not present in room
 
 ### Default light behaviour
-is configured with automations for each set of light and is activated with mode <b>normal</b>. If you only want lux control on/off you do not need to set up any automations. Both Lux constraint and conditions need to be meet before lights turns on in normal mode. Automations is based on 'time' that can be both time with sunrise/sunset +- or fixed time. App deletes automations that are later than next in cases where both time with sunrise/sunset and fixed time is given. Yes I live quite far North so sunrise/sunset varies a lot. In addition to 'time' you can also specify 'orLater' to have more accurate control of when lights changes depending on season. E.g.
+is configured with automations for each set of light and is activated with mode <b>normal</b>. If you only want lux control on/off you do not need to set up any automations. Both Lux constraint and conditions need to be meet before lights turns on in normal mode.
+
+Automations is based on 'time' that can be both time with sunrise/sunset +- or fixed time. App sorts thru and deletes automations that are earlier than previous time when both time with sunset and fixed time is given in automations in cases where both time with sunrise/sunset and fixed time is given. I live quite far North so sunrise/sunset varies a lot and might be a bigger problem here than other places. In addition to 'time' you can also specify 'orLater' to have more accurate control of when lights changes depending on season. E.g.
+
     - time: '08:00:00'
       orLater: 'sunrise + 00:15:00'
+
 If 'orLater' is later than 'time' it will shift all times following the same timedelta as here until a new 'orLater' is defined.
+
+You can in prevent shifts and deletions with a 'fixed: True' under time that locks time from beeing moved of deleted. I only use this to make sure the lights for the children turns off at bedtime even when sun sets after.
 
 ### Motion behaviour
 Configure <b>motionlights</b> to change light based on motion sensors in room. Easiest configuration is
+
     motionlights:
       state: turn_on
+
 to have the light turn on if lux constraints and conditions are met.
 If light is dimmable you can provide offset to 'state: turn_on' to increase or decrease brightness compared to 'light_data' in automation for normal light. You can also define light_data here or even a new set of automations with times same as automations for normal mode if you want different brightness etc during the day. 
-<br>- motionlights will not turn down brightness in case other modes sets brightness higher e.g. 'wash'.
+<br>- motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
 <br>- If media players is on or night* mode is active motion detection is deactivated.
 
 ### Lights
-<b>All lights for the room is configured under 'Lights' or 'ToggleLights if you have that. There you can configure multiple '-lights' that contains a list of the lights you want to configure with the same settings and automations, motionlights, light_modes, lux on/off/constraints and conditions</b>
+<b>All lights</b> for the room is configured under <b>Lights</b> or <b>ToggleLights</b> if you have that. There you can configure multiple <b>-lights</b> that contains a list of the lights you want to configure with the same settings and automations, motionlights, light_modes, lux on/off/constraints and conditions
 
 ### Configure automations and motionlights
 Each time can have a <b>state</b> and/or a <b>light_data</b>
@@ -75,7 +87,7 @@ Each time can have a <b>state</b> and/or a <b>light_data</b>
 <b>state</b> defines behavior. No need to define state in time for the times you want light to turn on, or based on lux constraints and conditions if any restrictions is defined.
 <br>- turn_off: Turns off light at given time. Can also be defined in motionlights to turn off and keep light off after given time until next time. E.g. turn off at kid's bedroom at 21:00.
 <br>- adjust: Does not turn on or off light but adjusts light_data at given time. Turn on/off with other modes or manual switch. Not applicable for motion.
-
+<br><br>
 Some considerations when writing your automations:
 <br>If '00:00:00' is not defined a 'turn_off' state will be default at midnight if other times is configured in automations or motionlights in defined for lights. 
 'light_data' contains a set of attributes to be set to light: brightness, transition, color_temp, rgb_color, effect, etc. All attributes are optional.
@@ -89,12 +101,19 @@ You can create as many modes in <b>light_mode</b> as you are able to have the ti
 <br>- 'lux_controlled' only turns/keeps light on if lux is below lux_constraint
 <br>- 'turn_off' Turns off light
 <br>- 'manual' Completly manual on/off/brightness etc.
-
+<br><br>
 'offset' can be provided to state 'lux_controlled' or 'turn_on' to increase or decrease brightness based on 'light_data' in normal automation
 
 ### Sensors
-Zigbee and Zwave motion and lux sensors listens to MQTT events. Default namespace is mqtt
-If you have not set up mqtt you can use HA sensors to listen for HA state change
+<br>Zigbee and Zwave motion and lux sensors listens to MQTT events. Default namespace is mqtt
+<br>If you have not set up mqtt you can use HA sensors to listen for HA state change.
+<br>You can define time after sensor not longer detects motion before it turns light back with <b>delay</b> in seconds, and define constraints to each motion sensor as an if statement that must be true for motion to activate. Inherits Appdaemon API to self. Same applies to trackers and if presence mode is defined it will stay in that mode for seconds defined with delay.
+
+### Media players
+Sorted by priority if more than one mediaplayer is defined in room. Can be any sensor or switch with on/off state. Define name of mode for each sensor and define light attributes in 'light_modes'. Media mode will set light and keep as media mode when motion is detected as well as morning, normal and night* modes are called. Calling any other modes will set light to the new mode. If any of the morning, normal or night* modes is called when media is on, media mode will be active again.
+
+### Conditions and constraints
+You can use Lux sensors to control or constrain lights. Optionally you can provide if statement to be meet for light to turn on at normal/morning/motion mode or with automations defined. Inherits Appdaemon Api as ADapi.
 
 ### Get started
 Easisest to start off with is to copy this example. There is a lot of list/dictionaries that needs to be correctly indented. And remember: All sections and configurations are optional, so you use only what is applicable
@@ -120,7 +139,7 @@ your_room_name:
   # HA sensor for detection of rain. If rain is detected, it will raise lux constraint by * 1.5
   rain_sensor: sensor.netatmo_rain
 
-  # You can define an Home Assistant input_text in one of the apps/rooms to display current LightMode in Lovelace. It will allways update with latest mode even if mode is not present in room
+  # Home Assistant input_text to display current LightMode in Lovelace
   haLightModeText: input_text.lightmode
 
   # Exclude the room from custom mode
@@ -201,28 +220,33 @@ your_room_name:
         light_data:
           brightness: 80
           effect: fireplace
+      - time: '22:01:00'
+        dimrate: 2 # Will start to dim from previous brightness (80) - 1 per x minutes. In this case every 2 minutes.
+        light_data:
+          brightness: 10
+          effect: fireplace
       - time: '23:00:00'
         state: turn_off
 
       # Configure motion lights same way as normal automations
       motionlights:
-      - time: '00:00:00'
-        light_data:
-          brightness: 90
-      - time: sunrise - 00:30:00
+      - time: '06:30:00'
         light_data:
           brightness: 160
-      - time: sunrise + 00:30:00
+      - time: '08:30:00'
+        orLater: 'sunrise + 00:30:00'
         light_data:
           brightness: 120
-      - time: sunset - 00:30:00
+      - time: 'sunset - 00:30:00'
+        orLater: '19:00:00'
         light_data:
           brightness: 140
-      - time: sunset + 00:30:00
+      - time: 'sunset + 00:30:00'
         light_data:
           brightness: 110
       - time: '21:00:00'
         state: turn_off
+        fixed: True
 
       # Define light modes to change light accordingly.
       # Modes can be configured with automations, light_data or state: turn_on, lux_controlled or turn_off
