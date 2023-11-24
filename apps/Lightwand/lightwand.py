@@ -518,7 +518,6 @@ class Light:
 
             for num in reversed(automationsToDelete) :
                 del self.automations[num]
-            self.ADapi.log(f"Automation: {self.automations}")
 
             for automation in self.automations :
                 if not 'state' in automation :
