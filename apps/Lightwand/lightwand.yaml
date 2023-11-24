@@ -4,10 +4,11 @@ kjokkenlys:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   RoomLuxZwave: KITCH_FibaroSensor
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
-  haLightModeText: input_text.lightmode #Home Assistant input_text. to display current LightMode in Lovelace
+  HALightModeText: input_text.lightmode #Home Assistant input_text. to display current LightMode in Lovelace
   zigbee_motion_sensors:
     - motion_sensor: KITCH_motion_Aqara
       delay: 300
@@ -19,6 +20,7 @@ kjokkenlys:
   Lights:
     - lights:
       - light.kjokkenlys
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -36,59 +38,67 @@ kjokkenlys:
         state: turn_off
         light_data:
           brightness: 80
-      - time: 'sunset - 01:00:00'
+      - time: 'sunset - 01:30:00'
         light_data:
           brightness: 50
+      - time: '21:00:00'
+        light_data:
+          brightness: 30
       - time: 'sunset + 00:30:00'
         light_data:
           brightness: 30
       - time: 'sunset + 01:00:00'
         light_data:
-          brightness: 10
+          brightness: 12
       - time: 'sunset + 01:20:00'
         light_data:
           brightness: 8
+      - time: '23:00:00'
+        light_data:
+          brightness: 8
+
+      motionlights:
+      - time: '00:00:00'
+        light_data:
+          brightness: 3
+      - time: '04:00:00'
+        light_data:
+          brightness: 140
+      - time: 'sunrise - 00:15:00'
+        light_data:
+          brightness: 180
+      - time: 'sunrise + 00:20:00'
+        light_data:
+          brightness: 200
+      - time: 'sunrise + 00:40:00'
+        light_data:
+          brightness: 180
+      - time: 'sunrise + 01:00:00'
+        light_data:
+          brightness: 160
+      - time: 'sunrise + 01:20:00'
+        light_data:
+          brightness: 140
+      - time: 'sunrise + 01:30:00'
+        light_data:
+          brightness: 120
+      - time: 'sunset - 01:00:00'
+        light_data:
+          brightness: 100
+      - time: 'sunset + 00:40:00'
+        light_data:
+          brightness: 80
+      - time: '21:00:00'
+        light_data:
+          brightness: 60
+      - time: 'sunset + 01:00:00'
+        light_data:
+          brightness: 60
+      - time: 'sunset + 01:20:00'
+        light_data:
+          brightness: 40
 
       light_modes:
-        - mode: motion
-          automations:
-          - time: '00:00:00'
-            light_data:
-              brightness: 3
-          - time: '04:00:00'
-            light_data:
-              brightness: 140
-          - time: 'sunrise - 00:15:00'
-            light_data:
-              brightness: 180
-          - time: 'sunrise + 00:20:00'
-            light_data:
-              brightness: 200
-          - time: 'sunrise + 00:40:00'
-            light_data:
-              brightness: 180
-          - time: 'sunrise + 01:00:00'
-            light_data:
-              brightness: 160
-          - time: 'sunrise + 01:20:00'
-            light_data:
-              brightness: 140
-          - time: 'sunrise + 01:30:00'
-            light_data:
-              brightness: 120
-          - time: 'sunset - 01:00:00'
-            light_data:
-              brightness: 100
-          - time: 'sunset + 00:40:00'
-            light_data:
-              brightness: 80
-          - time: 'sunset + 01:00:00'
-            light_data:
-              brightness: 60
-          - time: 'sunset + 01:20:00'
-            light_data:
-              brightness: 40
-
         - mode: lagmat
           automations:
           - time: '00:00:00'
@@ -116,29 +126,23 @@ kjokkenlys:
             light_data:
               brightness: 160
           - time: 'sunset + 01:00:00'
-
         - mode: morning
           light_data:
             brightness: 230
         - mode: guest
           state: turn_on
           offset: -20
-        - mode: morelight
-          state: turn_on
-          offset: 20
-        - mode: evenmorelight
-          state: turn_on
-          offset: 40
         - mode: movie
           state: turn_off
 
     - lights:
       - switch.lys_kjokkenvindu # Kjøkkenvindu sør
+
       light_modes:
         - mode: lagmat
           state: turn_on
         - mode: night
-          state: turn_on
+          state: lux_controlled
         - mode: guest
           state: turn_on
         - mode: morelight
@@ -153,10 +157,12 @@ kjokkenlys:
 
     - lights:
       - switch.kitch_plantelys # Aqara smartplug Kjøkkenvindu øst (Plantelys)
+
       automations:
       - time: '02:00:00'
       - time: '12:00:00'
         state: turn_off
+
       light_modes:
         - mode: movie
           state: turn_off
@@ -183,6 +189,7 @@ stuelys:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/logs/
   OutLuxZigbee: OutdoorHueLux
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
   # Media players for light presets
@@ -198,6 +205,7 @@ stuelys:
       - light.ledstrip1
       - light.ledstrip2
       - light.ledstrip_tvstue_east
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -249,6 +257,7 @@ stuelys:
             - 174
             - 86
       - time: 'sunset + 00:30:00'
+        orLater: '21:00:00'
         light_data:
           brightness: 30
           transition: 3
@@ -258,12 +267,21 @@ stuelys:
             - 60
       - time: 'sunset + 01:00:00'
         light_data:
+          brightness: 20
+          transition: 3
+          rgb_color:
+            - 255
+            - 160
+            - 60
+      - time: 'sunset + 01:30:00'
+        light_data:
           brightness: 10
           transition: 3
           rgb_color:
             - 255
             - 160
             - 60
+
       light_modes:
         - mode: morning
           light_data:
@@ -273,8 +291,6 @@ stuelys:
             - 255
             - 184
             - 84
-        - mode: lagmat
-          state: turn_on
         - mode: mat
           state: turn_on
           offset: 30
@@ -313,6 +329,7 @@ stuelys:
 
     - lights:
       - light.ledstrip_tvstue_north
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -364,6 +381,7 @@ stuelys:
             - 174
             - 86
       - time: 'sunset + 00:30:00'
+        orLater: '21:00:00'
         light_data:
           brightness: 30
           transition: 3
@@ -373,12 +391,21 @@ stuelys:
             - 60
       - time: 'sunset + 01:00:00'
         light_data:
+          brightness: 20
+          transition: 3
+          rgb_color:
+            - 255
+            - 160
+            - 60
+      - time: 'sunset + 01:30:00'
+        light_data:
           brightness: 10
           transition: 3
           rgb_color:
             - 255
             - 160
             - 60
+
       light_modes:
         - mode: morning
           light_data:
@@ -388,8 +415,6 @@ stuelys:
             - 255
             - 184
             - 84
-        - mode: lagmat
-          state: turn_on
         - mode: mat
           state: turn_on
           offset: 30
@@ -435,6 +460,7 @@ stuelys:
 
     - lights:
       - light.ledstrip_vegg
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -516,6 +542,7 @@ stuelys:
             - 13
             - 124
             - 255
+
       light_modes:
         - mode: morning
           light_data:
@@ -577,6 +604,7 @@ stuelys:
 
     - lights:
       - light.ledstrip_glassvegg
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -658,6 +686,7 @@ stuelys:
             - 13
             - 124
             - 255
+
       light_modes:
         - mode: morning
           light_data:
@@ -713,18 +742,14 @@ stuelys:
 
     - lights:
       - light.stue_spot_kontor
+
       automations:
       - time: '00:00:00'
         light_data:
-          brightness: 20
+          brightness: 30
           transition: 3
+
       light_modes:
-        - mode: mat
-          state: turn_on
-          offset: 10
-        - mode: guest
-          state: turn_on
-          offset: 10
         - mode: morelight
           state: turn_on
           offset: 50
@@ -741,12 +766,14 @@ stuelys:
         - mode: pc
           light_data:
             brightness: 5
+
       lux_constraint: 1200
       lux_turn_on: 900
       lux_turn_off: 1200
 
     - lights:
       - light.tvstue_spot
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -768,6 +795,7 @@ stuelys:
         light_data:
           brightness: 15
           transition: 3
+
       light_modes:
         - mode: mat
           state: turn_on
@@ -797,46 +825,34 @@ stuelys:
 
     - lights:
       - light.stue_spot_ovn
+
       automations:
       - time: '00:00:00'
         light_data:
           brightness: 5
           transition: 3
-      - time: 'sunrise + 00:30:00'
+      - time: '05:30:00'
         light_data:
-          brightness: 60
-          transition: 3
-      - time: 'sunrise + 00:45:00'
-        light_data:
-          brightness: 40
-          transition: 3
-      - time: 'sunrise + 01:30:00'
-        light_data:
-          brightness: 60
-          transition: 3
-      - time: 'sunset - 01:00:00'
-        light_data:
-          brightness: 20
-          transition: 3
-      - time: 'sunset - 00:30:00'
-        light_data:
-          brightness: 30
+          brightness: 55
           transition: 3
       - time: 'sunset + 00:30:00'
+        orLater: '21:00:00'
+        dimrate: 1
         light_data:
           brightness: 15
           transition: 3
+
       light_modes:
         - mode: morning
           light_data:
-            brightness: 150
+            brightness: 130
             transition: 3
         - mode: mat
           state: turn_on
           offset: 30
         - mode: guest
           state: turn_on
-          offset: 40
+          offset: 35
         - mode: morelight
           state: turn_on
           offset: 50
@@ -860,6 +876,7 @@ stuelys:
 
     - lights:
       - light.stue_spot_northeast
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -885,6 +902,7 @@ stuelys:
         light_data:
           brightness: 30
           transition: 3
+
       light_modes:
         - mode: morning
           light_data:
@@ -921,6 +939,7 @@ stuelys:
 
     - lights:
       - light.stue_spot_southwest
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -946,6 +965,7 @@ stuelys:
         light_data:
           brightness: 30
           transition: 3
+
       light_modes:
         - mode: morning
           light_data:
@@ -981,14 +1001,13 @@ stuelys:
     - lights:
       - switch.stue_stikk_1_south
       #- switch.stue_stikk_5_west
+
       automations:
-      - time: '06:50:00'
-        state: adjust
+      - time: '06:50:00' # No need to specify other than time to get lux control
       - time: '22:00:00'
         state: turn_off
+
       light_modes:
-        - mode: morning
-          state: turn_on
         - mode: guest
           state: turn_on
         - mode: morelight
@@ -1010,53 +1029,28 @@ stuelys:
 
     - lights:
       - light.stue_spisebord
+
       automations:
       - time: '00:00:00'
         state: adjust
         light_data:
-          brightness: 3
-      - time: '04:00:00'
+          brightness: 1
+      - time: '05:30:00'
         state: adjust
         light_data:
           brightness: 100
           transition: 3
-      - time: 'sunrise - 00:15:00'
-        state: adjust
-        light_data:
-          brightness: 150
-          transition: 3
-      - time: 'sunrise + 01:00:00'
-        state: adjust
-        light_data:
-          brightness: 100
-          transition: 3
+
       - time: 'sunset - 01:00:00'
         state: adjust
+        dimrate: 3
         light_data:
-          brightness: 80
+          brightness: 60
           transition: 3
-      - time: 'sunset + 00:10:00'
+      - time: 'sunset + 01:00:00'
+        orLater: '21:00:00'
         state: adjust
-        light_data:
-          brightness: 65
-          transition: 3
-      - time: 'sunset + 00:25:00'
-        state: adjust
-        light_data:
-          brightness: 20
-          transition: 3
-      - time: 'sunset + 00:45:00'
-        state: adjust
-        light_data:
-          brightness: 10
-          transition: 3
-      - time: 'sunset + 00:50:00'
-        state: adjust
-        light_data:
-          brightness: 5
-          transition: 3
-      - time: 'sunset + 01:20:00'
-        state: adjust
+        dimrate: 1
         light_data:
           brightness: 1
           transition: 3
@@ -1067,19 +1061,22 @@ stuelys:
             brightness: 150
             transition: 3
         - mode: mat
-          automations:
-          - time: '00:00:00'
-            state: turn_on
+          state: turn_on
         - mode: morelight
           state: turn_on
+          offset: 10
         - mode: evenmorelight
           state: turn_on
+          offset: 20
         - mode: tv
           state: turn_off
         - mode: projector
           state: turn_off
         - mode: movie
           state: turn_off
+        - mode: Camilla
+          state: manual
+
       lux_constraint: 35000
 
 ############################## LYS Gang           ##############################
@@ -1088,6 +1085,7 @@ ganglys:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
   presence:
@@ -1095,6 +1093,7 @@ ganglys:
   Lights:
     - lights:
       - light.gang_spot
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -1120,6 +1119,7 @@ ganglys:
         light_data:
           brightness: 30
           transition: 3
+
       light_modes:
         - mode: guest
           state: turn_on
@@ -1143,11 +1143,13 @@ ganglys:
 
     - lights:
       - switch.lys_skjenk
+
       automations:
       - time: '06:50:00'
         state: turn_on
       - time: '22:00:00'
         state: turn_off
+
       light_modes:
         - mode: guest
           state: turn_on
@@ -1171,6 +1173,7 @@ entrelys:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
   zwave_motion_sensors:
@@ -1180,6 +1183,7 @@ entrelys:
   Lights:
     - lights:
       - light.entre_spot
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -1205,6 +1209,11 @@ entrelys:
         light_data:
           brightness: 30
           transition: 3
+
+      motionlights:
+        state: turn_on
+        offset: 30
+
       light_modes:
         - mode: guest
           state: turn_on
@@ -1218,14 +1227,9 @@ entrelys:
         - mode: morning
           light_data:
             brightness: 160
-            transition: 3
-        - mode: motion
-          state: turn_on
-          offset: 30
         - mode: nightNathaniel
           light_data:
             brightness: 20
-
 
       lux_constraint: 20000
       lux_turn_on: 10000
@@ -1238,6 +1242,7 @@ lys_nathaniel:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   RoomLuxZwave: NATH_Multisensor_Seng
   #RoomLuxZigbee: NATH_motion_door
@@ -1257,75 +1262,79 @@ lys_nathaniel:
   Lights:
     - lights:
       - light.nano_dimmer_current_value_2
+
       automations:
       - time: '21:00:00'
         state: turn_off
+
+      motionlights:
+      - time: '00:00:00'
+        light_data:
+          brightness: 90
+      - time: sunrise - 00:30:00
+        light_data:
+          brightness: 160
+      - time: sunrise + 00:30:00
+        light_data:
+          brightness: 120
+      - time: sunset - 00:30:00
+        light_data:
+          brightness: 140
+      - time: sunset + 00:30:00
+        light_data:
+          brightness: 110
+      - time: '21:00:00'
+        state: turn_off
+
       light_modes:
         - mode: nightNathaniel
           state: adjust
           light_data:
             brightness: 20
-        - mode: motion
-          automations:
-          - time: '00:00:00'
-            light_data:
-              brightness: 90
-          - time: sunrise - 00:30:00
-            light_data:
-              brightness: 160
-          - time: sunrise + 00:30:00
-            light_data:
-              brightness: 120
-          - time: sunset - 00:30:00
-            light_data:
-              brightness: 140
-          - time: sunset + 00:30:00
-            light_data:
-              brightness: 110
-          - time: '21:00:00'
-            state: turn_off
       lux_constraint: 4000
       room_lux_constraint: 60
       conditions:
         - "self.ADapi.get_tracker_state('person.nathaniel') == 'home' or self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home' or self.ADapi.get_tracker_state('person.anders_heibo') == 'home'"
 
-
     - lights: # Taklampe Nathaniel
       - light.fibaro_walli_dimmer
+
       automations:
       - time: '21:00:00'
         state: turn_off
+
+      motionlights:
+      - time: '00:00:00'
+        state: adjust
+        light_data:
+          brightness: 90
+      - time: sunrise - 00:30:00
+        state: adjust
+        light_data:
+          brightness: 160
+      - time: sunrise + 00:30:00
+        state: adjust
+        light_data:
+          brightness: 120
+      - time: sunset - 00:30:00
+        state: adjust
+        light_data:
+          brightness: 140
+      - time: sunset + 00:30:00
+        state: adjust
+        light_data:
+          brightness: 110
+      - time: sunset + 01:30:00
+        state: adjust
+        light_data:
+          brightness: 70
+      - time: '21:00:00'
+        state: turn_off
+
       light_modes:
         - mode: nightNathaniel
           state: turn_off
-        - mode: motion
-          automations:
-          - time: '00:00:00'
-            state: adjust
-            light_data:
-              brightness: 90
-          - time: sunrise - 00:30:00
-            state: adjust
-            light_data:
-              brightness: 160
-          - time: sunrise + 00:30:00
-            state: adjust
-            light_data:
-              brightness: 120
-          - time: sunset - 00:30:00
-            state: adjust
-            light_data:
-              brightness: 140
-          - time: sunset + 00:30:00
-            state: adjust
-            light_data:
-              brightness: 110
-          - time: sunset + 01:30:00
-            state: adjust
-            light_data:
-              brightness: 70
-          - time: '21:00:00'
-            state: turn_off
+
       lux_constraint: 10000
       room_lux_constraint: 100
       conditions:
@@ -1334,6 +1343,7 @@ lys_nathaniel:
     - lights: #Nattlys
       - switch.nattlys_nathaniel
       #- fan.mi_air_purifier_nathaniel #Mi Air Purifier
+
       automations:
       - time: '00:00:00'
         state: turn_on
@@ -1341,13 +1351,16 @@ lys_nathaniel:
         state: turn_off
       - time: '20:00:00'
         state: turn_on
+
+      motionlights:
+        state: turn_on
+
       light_modes:
         - mode: nightNathaniel
           state: manual
         - mode: night
           state: manual
-        - mode: motion
-          state: turn_on
+
       conditions:
         - "self.ADapi.get_tracker_state('person.nathaniel') == 'home'"
 
@@ -1356,6 +1369,7 @@ lys_oliver:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   RoomLuxZwave: OLLI_Multisensor_illuminance
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
@@ -1365,7 +1379,7 @@ lys_oliver:
       motion_constraints: "self.now_is_between('06:30:00', '23:30:00') "
   presence:
     - tracker: person.oliver
-      tracker_constraints: "self.now_is_between('06:30:00', '22:00:00') "
+      tracker_constraints: "self.now_is_between('06:30:00', '23:00:00') "
   # Media players for light presets
   mediaplayers: # Sorted by priority pr room
     - mediaplayer: binary_sensor.makrell587
@@ -1373,12 +1387,13 @@ lys_oliver:
   Lights:
     - lights:
       - light.huegradient_oliverstorhylle
+
       automations:
       - time: '06:30:00'
         state: turn_on
         light_data:
           brightness: 255
-          effect: sunrice
+          effect: sunrise
       - time: '09:15:00'
         state: turn_on
         light_data:
@@ -1394,11 +1409,13 @@ lys_oliver:
         light_data:
           brightness: 40
           effect: fireplace
+
       light_modes:
         - mode: nightOliver
           state: turn_off
         - mode: presence
           state: turn_on
+
       lux_constraint: 12000
       room_lux_constraint: 100
       conditions:
@@ -1407,40 +1424,39 @@ lys_oliver:
 
     - lights:
       - light.0x086bd7fffe5d394a # Zigbee dimmer Olivers rom
-      automations:
+
+      motionlights:
       - time: '00:00:00'
-        state: turn_off
+        light_data:
+          brightness: 10
+      - time: '06:00:00'
+        light_data:
+          brightness: 110
+      - time: sunrise - 00:10:00
+        light_data:
+          brightness: 160
+      - time: sunrise + 00:30:00
+        light_data:
+          brightness: 144
+      - time: sunset - 01:00:00
+        light_data:
+          brightness: 120
+      - time: sunset - 00:20:00
+        light_data:
+          brightness: 80
+      - time: sunset + 00:30:00
+        light_data:
+          brightness: 60
+      - time: sunset + 01:30:00
+        light_data:
+          brightness: 30
+
       light_modes:
         - mode: oliver_pc
           state: turn_off
         - mode: nightOliver
           state: turn_off
-        - mode: motion
-          automations:
-          - time: '00:00:00'
-            light_data:
-              brightness: 10
-          - time: '04:00:00'
-            light_data:
-              brightness: 110
-          - time: sunrise - 00:10:00
-            light_data:
-              brightness: 160
-          - time: sunrise + 00:30:00
-            light_data:
-              brightness: 144
-          - time: sunset - 01:00:00
-            light_data:
-              brightness: 120
-          - time: sunset - 00:20:00
-            light_data:
-              brightness: 80
-          - time: sunset + 00:30:00
-            light_data:
-              brightness: 60
-          - time: sunset + 01:30:00
-            light_data:
-              brightness: 30
+
       lux_constraint: 12000
       room_lux_constraint: 100
       lux_turn_off: 12000
@@ -1478,6 +1494,7 @@ lys_gaming_krok:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
   # Media players for light presets
@@ -1489,11 +1506,13 @@ lys_gaming_krok:
       - switch.0x04cf8cdf3c89e75d # Aqara smart plug Gaming krok
       toggle: 3 # On toggles to get desired dim
       num_dim_steps: 3 # Number of dim steps in bulb
+
       light_modes:
         - mode: night
           toggle: 3
         - mode: gaming
-          state: turn_off
+          toggle: 3
+
       lux_constraint: 900
       lux_turn_on: 600
       lux_turn_off: 900
@@ -1504,6 +1523,7 @@ utelys:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
 
@@ -1516,6 +1536,7 @@ utelys:
     - lights:
       - light.utelys_altan
       - light.utelys_veranda
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -1553,10 +1574,8 @@ utelys:
       - time: sunset + 01:45:00
         light_data:
           brightness: 10
+
       light_modes:
-        #- mode: motion
-        #  light_data:
-        #    brightness: 250
         - mode: presence
           light_data:
             brightness: 250
@@ -1577,6 +1596,7 @@ utelys:
 
     - lights:
       - light.utelys_inngang
+
       automations:
       - time: '00:00:00'
         light_data:
@@ -1605,10 +1625,8 @@ utelys:
       - time: sunset + 01:00:00
         light_data:
           brightness: 80
+
       light_modes:
-        #- mode: motion
-        #  light_data:
-        #    brightness: 250
         - mode: presence
           light_data:
             brightness: 250
@@ -1630,6 +1648,7 @@ utelys_inngang_leil:
   module: lightwand
   class: Room
   log: lights_log
+  json_path: /homeassistant/appdaemon/apps/Lightwand/wand_
   OutLuxZigbee: OutdoorHueLux
   RoomLuxZigbee: LEIL_OutdoorHueLux
   rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain # Regnsensor
@@ -1641,9 +1660,10 @@ utelys_inngang_leil:
   Lights:
     - lights:
       - switch.leil_utelys
-      light_modes:
-        - mode: motion
-          state: turn_on
+
+      motionlights:
+        state: turn_on
+
       lux_constraint: 600
       room_lux_constraint: 10
 
