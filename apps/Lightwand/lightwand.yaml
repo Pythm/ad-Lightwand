@@ -7,7 +7,7 @@ kjokkenlys:
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
   RoomLuxZwave: KITCH_FibaroSensor
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
+  rain_sensor: sensor.netatmo_rain
   HALightModeText: input_text.lightmode #To display current LightMode in Lovelace
   zigbee_motion_sensors:
     - motion_sensor: KITCH_motion_Aqara
@@ -40,10 +40,10 @@ kjokkenlys:
         light_data: # Input light_data even if state is turn_off if you have modes with offset +-
           brightness: 60
       - time: 'sunset - 01:30:00'
-        orLater: '21:00:00'
         light_data:
           brightness: 50
       - time: 'sunset + 00:30:00'
+        orLater: '21:00:00'
         dimrate: 2 # Will start to dim from previous brightness (50) - 1 per x minutes. In this case every 2 minutes.
         light_data:
           brightness: 3
@@ -140,122 +140,20 @@ stuelys:
   log: lights_log
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
+  rain_sensor: sensor.netatmo_rain
   # Media players for light presets
   mediaplayers: # Sorted by rooms and priority pr room
-    - mediaplayer: switch.sony_vlp_hw65
+    - mediaplayer: switch.sony_vlp
       mode: projector
-    - mediaplayer: media_player.samsung_q6_series_82
+    - mediaplayer: media_player.samsung_q6
       mode: tv
-    - mediaplayer: media_player.samsung_s95ba_55_tv
+    - mediaplayer: media_player.samsung_pc
       mode: pc
   Lights:
     - lights:
       - light.ledstrip1
       - light.ledstrip2
       - light.ledstrip_tvstue_east
-
-      automations:
-      - time: '00:00:00'
-        light_data:
-          brightness: 3
-          transition: 3
-          #color_temp: 427
-          rgb_color:
-            - 255
-            - 160
-            - 60
-      - time: '06:30:00'
-        light_data:
-          brightness: 70
-          transition: 3
-          rgb_color:
-            - 255
-            - 160
-            - 60
-      - time: 'sunrise - 00:30:00'
-        light_data:
-          brightness: 80
-          transition: 3
-          rgb_color:
-            - 255
-            - 184
-            - 84
-      - time: '08:30:00'
-        orLater: 'sunrise + 00:15:00'
-        dimrate: 2
-        light_data:
-          brightness: 50
-          transition: 3
-          rgb_color:
-            - 255
-            - 184
-            - 84
-      - time: 'sunset - 00:30:00'
-        light_data:
-          brightness: 40
-          transition: 3
-          rgb_color:
-            - 255
-            - 174
-            - 86
-      - time: 'sunset + 00:30:00'
-        orLater: '21:00:00'
-        dimrate: 2
-        light_data:
-          brightness: 10
-          transition: 3
-          rgb_color:
-            - 255
-            - 160
-            - 60
-
-      light_modes:
-        - mode: morning
-          light_data:
-            brightness: 150
-            transition: 3
-            rgb_color:
-            - 255
-            - 184
-            - 84
-        - mode: mat
-          state: turn_on
-          offset: 30
-        - mode: decor
-          state: turn_on
-          offset: 20
-        - mode: morelight
-          state: turn_on
-          offset: 50
-        - mode: evenmorelight
-          state: turn_on
-          offset: 80
-        - mode: wash
-          light_data:
-            brightness: 230
-            rgb_color:
-            - 255
-            - 184
-            - 84
-        - mode: tv
-          light_data:
-            brightness: 3
-            transition: 3
-            rgb_color:
-            - 255
-            - 174
-            - 86
-        - mode: projector
-          state: turn_off
-        - mode: movie
-          state: turn_off
-
-      lux_constraint: 5000
-      lux_turn_on: 4500
-      lux_turn_off: 5000
-
-    - lights:
       - light.ledstrip_tvstue_north
 
       automations:
@@ -352,20 +250,14 @@ stuelys:
         - mode: projector
           state: turn_off
         - mode: movie
-          light_data:
-            brightness: 3
-            transition: 3
-            rgb_color:
-            - 255
-            - 174
-            - 86
+          state: turn_off
 
       lux_constraint: 5000
       lux_turn_on: 4500
       lux_turn_off: 5000
 
     - lights:
-      - light.ledstrip_vegg
+      - light.ledstrip_wall
 
       automations:
       - time: '00:00:00'
@@ -481,7 +373,7 @@ stuelys:
       lux_turn_off: 5000
 
     - lights:
-      - light.ledstrip_glassvegg
+      - light.ledstrip_glasswall
 
       automations:
       - time: '00:00:00'
@@ -590,7 +482,7 @@ stuelys:
       lux_turn_off: 5000
 
     - lights:
-      - light.stue_spot_kontor
+      - light.stue_spot_desk
 
       automations:
       - time: '00:00:00'
@@ -621,6 +513,7 @@ stuelys:
       lux_turn_off: 1200
 
     - lights:
+      - light.stue_spot_ovn
       - light.tvstue_spot
 
       automations:
@@ -671,170 +564,12 @@ stuelys:
       lux_constraint: 4000
       lux_turn_on: 3500
       lux_turn_off: 4000
-
-    - lights:
-      - light.stue_spot_ovn
-
-      automations:
-      - time: '00:00:00'
-        light_data:
-          brightness: 5
-          transition: 3
-      - time: '06:30:00'
-        light_data:
-          brightness: 55
-          transition: 3
-      - time: 'sunset + 00:30:00'
-        orLater: '21:00:00'
-        dimrate: 1
-        light_data:
-          brightness: 15
-          transition: 3
-
-      light_modes:
-        - mode: morning
-          light_data:
-            brightness: 130
-            transition: 3
-        - mode: mat
-          state: turn_on
-          offset: 30
-        - mode: decor
-          state: turn_on
-          offset: 35
-        - mode: morelight
-          state: turn_on
-          offset: 50
-        - mode: evenmorelight
-          state: turn_on
-          offset: 80
-        - mode: tv
-          light_data:
-            brightness: 5
-            transition: 3
-        - mode: projector
-          state: turn_off
-        - mode: movie
-          state: turn_off
-
-      lux_constraint: 4000
-      lux_turn_on: 3500
-      lux_turn_off: 4000
-      conditions:
-        - "self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
-
-    - lights:
-      - light.stue_spot_northeast
-
-      automations:
-      - time: '00:00:00'
-        light_data:
-          brightness: 25
-          transition: 3
-      - time: '06:30:00'
-        light_data:
-          brightness: 70
-          transition: 3
-      - time: 'sunset - 00:30:00'
-        light_data:
-          brightness: 60
-          transition: 3
-      - time: 'sunset + 00:30:00'
-        orLater: '21:00:00'
-        dimrate: 2
-        light_data:
-          brightness: 30
-          transition: 3
-
-      light_modes:
-        - mode: morning
-          light_data:
-            brightness: 150
-            transition: 3
-        - mode: mat
-          state: turn_on
-          offset: 40
-        - mode: decor
-          state: turn_on
-          offset: 30
-        - mode: morelight
-          state: turn_on
-          offset: 50
-        - mode: evenmorelight
-          state: turn_on
-          offset: 80
-        - mode: tv
-          light_data:
-            brightness: 10
-            transition: 3
-        - mode: projector
-          state: turn_off
-        - mode: movie
-          state: turn_off
-        - mode: pc
-          state: turn_off
-
-      lux_constraint: 6000
-      lux_turn_on: 5500
-      lux_turn_off: 6000
-      conditions:
-        - "self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
-
-    - lights:
-      - light.stue_spot_southwest
-
-      automations:
-      - time: '00:00:00'
-        light_data:
-          brightness: 25
-          transition: 3
-      - time: '06:30:00'
-        light_data:
-          brightness: 70
-          transition: 3
-      - time: 'sunset - 00:30:00'
-        light_data:
-          brightness: 60
-          transition: 3
-      - time: 'sunset + 00:30:00'
-        orLater: '21:00:00'
-        dimrate: 2
-        light_data:
-          brightness: 30
-          transition: 3
-
-      light_modes:
-        - mode: morning
-          light_data:
-            brightness: 150
-            transition: 3
-        - mode: mat
-          state: turn_on
-          offset: 30
-        - mode: decor
-          state: turn_on
-          offset: 20
-        - mode: morelight
-          state: turn_on
-          offset: 50
-        - mode: evenmorelight
-          state: turn_on
-          offset: 80
-        - mode: tv
-          light_data:
-            brightness: 10
-            transition: 3
-        - mode: movie
-          state: turn_off
-
-      lux_constraint: 6000
-      lux_turn_on: 5500
-      lux_turn_off: 6000
-      conditions:
-        - "self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
+      conditions: # Add contitions
+        - "self.ADapi.get_tracker_state('person.wife') == 'home'" # Keep this light off if person is not home without adding presence to room
 
     - lights:
       - switch.stue_stikk_1_south
+      #- switch.stue_stikk_5_west
 
       automations:
       - time: '06:50:00' # No need to specify other than time to get lux control
@@ -858,6 +593,7 @@ stuelys:
       lux_turn_on: 400
       lux_turn_off: 600
       conditions:
+        #- "self.ADapi.now_is_between('06:50:00', '22:00:00')"
         - "self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
 
     - lights:
@@ -865,7 +601,7 @@ stuelys:
 
       automations:
       - time: '00:00:00'
-        state: adjust
+        state: adjust # Only adjust lights. Other modes or switches turns on/off
         light_data:
           brightness: 1
       - time: '06:30:00'
@@ -919,9 +655,9 @@ ganglys:
   log: lights_log
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
+  rain_sensor: sensor.netatmo_rain
   presence:
-    - tracker: person.camilla_nordvik_2
+    - tracker: person.wife
   Lights:
     - lights:
       - light.gang_spot
@@ -972,33 +708,6 @@ ganglys:
       lux_constraint: 8000
       lux_turn_on: 6000
       lux_turn_off: 8000
-      conditions:
-        - "self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
-
-    - lights:
-      - switch.lys_skjenk
-
-      automations:
-      - time: '06:50:00'
-      - time: '22:00:00'
-        state: turn_off
-
-      light_modes:
-        - mode: morning
-          state: turn_on
-        - mode: decor
-          state: turn_on
-        - mode: morelight
-          state: turn_on
-        - mode: evenmorelight
-          state: turn_on
-        - mode: movie
-          state: turn_off
-      lux_constraint: 900
-      lux_turn_on: 600
-      lux_turn_off: 900
-      conditions:
-        - "self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
 
 ############################## Lights Outer Hallway ##############################
 
@@ -1008,7 +717,7 @@ entrelys:
   log: lights_log
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
+  rain_sensor: sensor.netatmo_rain
   zwave_motion_sensors:
     - motion_sensor: ENTRE_Multisensor
       delay: 120
@@ -1057,7 +766,7 @@ entrelys:
         - mode: morning
           light_data:
             brightness: 160
-        - mode: nightNathaniel
+        - mode: nightKid
           light_data:
             brightness: 20
 
@@ -1066,150 +775,31 @@ entrelys:
       lux_turn_off: 13000
 
 
-############################## Lights Nathaniels room ##############################
+############################## Lights Kid room ##############################
 
-lys_nathaniel:
+lys_kid:
   module: lightwand
   class: Room
   log: lights_log
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
-  RoomLuxZwave: NATH_Multisensor_Seng
-  #RoomLuxZigbee: NATH_motion_door
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
+  RoomLuxZwave: Multisensor_illuminance
+  rain_sensor: sensor.netatmo_rain
   exclude_from_custom: True
-  zigbee_motion_sensors:
-    - motion_sensor: NATH_motion_door
-      delay: 600
-      motion_constraints: "self.now_is_between('06:30:00', '21:00:00')"
   zwave_motion_sensors:
-    - motion_sensor: NATH_Multisensor_seng
-      delay: 600
-      motion_constraints: "self.now_is_between('06:30:00', '21:00:00')"
-  presence:
-    - tracker: person.nathaniel
-      tracker_constraints: "self.now_is_between('06:30:00', '22:00:00') "
-  Lights:
-    - lights:
-      - light.nano_dimmer_current_value_2
-
-      automations:
-      - time: '21:00:00'
-        state: turn_off
-
-      motionlights:
-      - time: '06:30:00'
-        light_data:
-          brightness: 160
-      - time: '08:30:00'
-        orLater: 'sunrise + 00:30:00'
-        light_data:
-          brightness: 120
-      - time: 'sunset - 00:30:00'
-        orLater: '19:00:00'
-        light_data:
-          brightness: 140
-      - time: 'sunset + 00:30:00'
-        light_data:
-          brightness: 110
-      - time: '21:00:00'
-        state: turn_off
-        fixed: True # Locks time from beeing moved of deleted 
-
-      light_modes:
-        - mode: nightNathaniel
-          state: adjust
-          light_data:
-            brightness: 20
-
-      lux_constraint: 4000
-      room_lux_constraint: 60
-      conditions:
-        - "self.ADapi.get_tracker_state('person.nathaniel') == 'home' or self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home' or self.ADapi.get_tracker_state('person.anders_heibo') == 'home'"
-
-    - lights:
-      - light.fibaro_walli_dimmer
-
-      automations:
-      - time: '21:00:00'
-        state: turn_off
-
-      motionlights:
-      - time: '06:30:00'
-        state: adjust
-        light_data:
-          brightness: 160
-      - time: '08:30:00'
-        orLater: 'sunrise + 00:30:00'
-        state: adjust
-        light_data:
-          brightness: 120
-      - time: sunset - 00:30:00
-        state: adjust
-        light_data:
-          brightness: 140
-      - time: sunset + 00:30:00
-        state: adjust
-        light_data:
-          brightness: 110
-      - time: '21:00:00'
-        state: turn_off
-
-      light_modes:
-        - mode: nightNathaniel
-          state: turn_off
-
-      lux_constraint: 10000
-      room_lux_constraint: 100
-      conditions:
-        - "self.ADapi.get_tracker_state('person.nathaniel') == 'home' or self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
-
-    - lights:
-      - switch.nattlys_nathaniel
-      #- fan.mi_air_purifier_nathaniel #Mi Air Purifier
-
-      automations:
-      - time: '00:00:00'
-        state: turn_on
-      - time: '09:00:00'
-        state: turn_off
-      - time: '20:00:00'
-        state: turn_on
-
-      motionlights:
-        state: turn_on
-
-      light_modes:
-        - mode: nightNathaniel
-          state: manual
-        - mode: night
-          state: manual
-
-      conditions:
-        - "self.ADapi.get_tracker_state('person.nathaniel') == 'home'"
-
-############################## LYS OLIVERS ROM    ##############################
-lys_oliver:
-  module: lightwand
-  class: Room
-  log: lights_log
-  #json_path: /homeassistant/db/Lightwand/
-  OutLuxZigbee: OutdoorHueLux
-  RoomLuxZwave: OLLI_Multisensor_illuminance
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
-  zwave_motion_sensors:
-    - motion_sensor: OLLI_Multisensor
+    - motion_sensor: Multisensor
       delay: 360
       motion_constraints: "self.now_is_between('06:30:00', '23:30:00') "
   presence:
-    - tracker: person.oliver
+    - tracker: person.kid
       tracker_constraints: "self.now_is_between('06:30:00', '23:00:00') "
+
   mediaplayers:
-    - mediaplayer: binary_sensor.makrell587
-      mode: oliver_pc
+    - mediaplayer: binary_sensor.xboxGamerTag
+      mode: kid_pc
   Lights:
     - lights:
-      - light.huegradient_oliverstorhylle
+      - light.huegradient_light
 
       automations:
       - time: '06:30:00'
@@ -1223,11 +813,12 @@ lys_oliver:
           brightness: 255
           effect: colorloop
       - time: '22:00:00'
+        fixed: True # Locks time from beeing moved of deleted 
         state: turn_on
         light_data:
           brightness: 80
           effect: fireplace
-      - time: '22:10:00'
+      - time: '22:10:00' # Starts dimming down at 22:10 with dimrate
         state: turn_on
         dimrate: 2
         light_data:
@@ -1235,18 +826,16 @@ lys_oliver:
           effect: fireplace
 
       light_modes:
-        - mode: nightOliver
+        - mode: nightKid
           state: turn_off
         - mode: presence
           state: turn_on
 
       lux_constraint: 12000
       room_lux_constraint: 100
-      conditions:
-        - "self.ADapi.get_tracker_state('person.oliver') == 'home'"
 
     - lights:
-      - light.0x086bd7fffe5d394a # Zigbee dimmer Olivers rom
+      - light.0x086bd7fffe5d394a
 
       motionlights:
       - time: '00:00:00'
@@ -1271,19 +860,17 @@ lys_oliver:
           brightness: 30
 
       light_modes:
-        - mode: oliver_pc
+        - mode: kid_pc
           state: turn_off
-        - mode: nightOliver
+        - mode: nightKid
           state: turn_off
 
       lux_constraint: 12000
       room_lux_constraint: 100
       lux_turn_off: 12000
-      conditions:
-        - "self.ADapi.get_tracker_state('person.oliver') == 'home'"
 
     - lights:
-      - switch.olli_senglys
+      - switch.bedside_light
       - switch.smart_switch_7_current_value_4
       automations:
       - time: '06:50:00'
@@ -1291,11 +878,9 @@ lys_oliver:
       - time: '23:30:00'
         state: turn_off
       light_modes:
-        - mode: nightOliver
-          state: turn_off
-        - mode: night
-          state: turn_off
-        - mode: oliver_pc
+        - mode: nightKid # Night mode for room
+          state: manual
+        - mode: kid_pc
           state: turn_off
         - mode: presence
           state: turn_on
@@ -1303,10 +888,8 @@ lys_oliver:
       lux_constraint: 4000
       room_lux_constraint: 30
       lux_turn_off: 4000
-      conditions:
-        - "self.ADapi.get_tracker_state('person.oliver') == 'home'"
 
-############################## Lights gaming tv  ##############################
+############################## Lights gaming area  ##############################
 
 lys_gaming_krok:
   module: lightwand
@@ -1314,14 +897,14 @@ lys_gaming_krok:
   log: lights_log
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
+  rain_sensor: sensor.netatmo_rain
   mediaplayers:
     - mediaplayer: media_player.ue55d6500
       mode: gaming
   ToggleLights:
     - lights:
       - switch.0x04cf8cdf3c89e75d # Aqara smart plug Gaming krok
-      toggle: 3 # On toggles to get desired dim
+      toggle: 2 # On toggles to get desired dim
       num_dim_steps: 3 # Number of dim steps in bulb
 
       light_modes:
@@ -1342,8 +925,8 @@ utelys:
   log: lights_log
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
-
+  rain_sensor: sensor.netatmo_rain
+  exclude_from_custom: True
   presence:
     - tracker: device_tracker.truls_location_tracker
       delay: 900
@@ -1378,7 +961,7 @@ utelys:
         light_data:
           brightness: 60
       - time: sunset + 00:15:00
-        orLater: '21:00:00'
+        orLater: '20:00:00'
         light_data:
           brightness: 50
       - time: sunset + 00:45:00
@@ -1413,57 +996,6 @@ utelys:
       lux_turn_on: 50
       lux_turn_off: 60
 
-    - lights:
-      - light.utelys_inngang
-
-      automations:
-      - time: '00:00:00'
-        light_data:
-          brightness: 30
-      - time: '06:30:00'
-        light_data:
-          brightness: 160
-      - time: '07:30:00'
-        orLater: 'sunrise + 00:10:00'
-        light_data:
-          brightness: 200
-      - time: sunrise + 01:10:00
-        light_data:
-          brightness: 140
-      - time: sunset - 01:00:00
-        light_data:
-          brightness: 160
-      - time: sunset - 00:20:00
-        light_data:
-          brightness: 200
-      - time: sunset + 00:20:00
-        orLater: '21:00:00'
-        light_data:
-          brightness: 180
-      - time: sunset + 00:40:00
-        light_data:
-          brightness: 140
-      - time: sunset + 01:00:00
-        light_data:
-          brightness: 80
-
-      light_modes:
-        - mode: presence
-          light_data:
-            brightness: 250
-        - mode: decor
-          light_data:
-            brightness: 250
-            transition: 3
-        - mode: away
-          state: lux_controlled
-        - mode: wash
-          state: lux_controlled
-
-      lux_constraint: 60
-      lux_turn_on: 50
-      lux_turn_off: 60
-
 
 utelys_inngang_leil:
   module: lightwand
@@ -1472,7 +1004,7 @@ utelys_inngang_leil:
   #json_path: /homeassistant/db/Lightwand/
   OutLuxZigbee: OutdoorHueLux
   RoomLuxZigbee: LEIL_OutdoorHueLux
-  rain_sensor: sensor.netatmo_kvernabekkvegen_59_stue_regnsensor_rain
+  rain_sensor: sensor.netatmo_rain
   exclude_from_custom: True
   zigbee_motion_sensors:
     - motion_sensor: LEIL_OutdoorHueLux

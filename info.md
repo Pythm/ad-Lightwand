@@ -63,6 +63,8 @@ If 'orLater' is later than 'time' it will shift all times following the same tim
 
 You can in prevent shifts and deletions with a 'fixed: True' under time that locks time from beeing moved of deleted. I only use this to make sure the lights for the children turns off at bedtime even when sun sets after.
 
+Use dimrate to set brightness transition over time. -/+ 1 brightness pr x minutes.
+
 ### Motion behaviour
 Configure <b>motionlights</b> to change light based on motion sensors in room. Easiest configuration is
 
@@ -115,7 +117,7 @@ Sorted by priority if more than one mediaplayer is defined in room. Can be any s
 You can use Lux sensors to control or constrain lights. Optionally you can provide if statement to be meet for light to turn on at normal/morning/motion mode or with automations defined. Inherits Appdaemon Api as ADapi.
 
 ### Get started
-Easisest to start off with is to copy this example. There is a lot of list/dictionaries that needs to be correctly indented. And remember: All sections and configurations are optional, so you use only what is applicable
+Easisest to start off with is to copy this example and update with your sensors and lights and build from that. There is a lot of list/dictionaries that needs to be correctly indented. And remember: All sections and configurations are optional, so you use only what is applicable.
 
 ## App configuration
 

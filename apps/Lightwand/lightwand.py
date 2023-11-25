@@ -3,6 +3,10 @@
     FIXME:
     - if 'motion_constraints' becomes true when motion sensor is detecting motion, light will not be updated until motion is redetected
 
+    History:
+    v1.0.2
+    - Updated with the possibility to dim lights 1 brightness at every x minutes with dimrate.
+
     @Pythm / https://github.com/Pythm
 """
 
@@ -504,7 +508,7 @@ class Light:
                         automation['time'] = automation['orLater']
                 elif timeToAdd > datetime.timedelta(minutes = 0) :
                     if 'fixed' in automation :
-                        continue
+                        timeToAdd = datetime.timedelta(minutes = 0)
                     newtime = self.ADapi.parse_datetime(automation['time']) + timeToAdd
                     automation['time'] = str(newtime.time())
 
@@ -518,6 +522,20 @@ class Light:
 
             for num in reversed(automationsToDelete) :
                 del self.automations[num]
+
+                brightness = 0
+                for automation in self.automations :
+                    if 'dimrate' in automation :
+                        if 'light_data' in automation :
+                            if 'brightness' in automation['light_data'] :
+                                timeDate = self.ADapi.parse_datetime(automation['time'])
+                                while brightness > automation['light_data']['brightness'] :
+                                    brightness -= 1
+                                    timeDate += datetime.timedelta(minutes = automation['dimrate'])
+                                    self.automations.append({'time':  str(timeDate), 'light_data': {'brightness': brightness}})
+                    if 'light_data' in automation :
+                        if 'brightness' in automation['light_data'] :
+                            brightness = automation['light_data']['brightness']
 
             for automation in self.automations :
                 if not 'state' in automation :
@@ -547,7 +565,7 @@ class Light:
                             automation['time'] = automation['orLater']
                     elif timeToAdd > datetime.timedelta(minutes = 0) :
                         if 'fixed' in automation :
-                            continue
+                            timeToAdd = datetime.timedelta(minutes = 0)
                         newtime = self.ADapi.parse_datetime(automation['time']) + timeToAdd
                         automation['time'] = str(newtime.time())
 
@@ -560,6 +578,20 @@ class Light:
                             automationsToDelete.append(num)
                 for num in reversed(automationsToDelete) :
                     del self.motionlight[num]
+
+                brightness = 0
+                for automation in self.motionlight :
+                    if 'dimrate' in automation :
+                        if 'light_data' in automation :
+                            if 'brightness' in automation['light_data'] :
+                                timeDate = self.ADapi.parse_datetime(automation['time'])
+                                while brightness > automation['light_data']['brightness'] :
+                                    brightness -= 1
+                                    timeDate += datetime.timedelta(minutes = automation['dimrate'])
+                                    self.motionlight.append({'time':  str(timeDate), 'light_data': {'brightness': brightness}})
+                    if 'light_data' in automation :
+                        if 'brightness' in automation['light_data'] :
+                            brightness = automation['light_data']['brightness']
 
                 for automation in self.motionlight :
                     if not 'state' in automation :
@@ -589,7 +621,7 @@ class Light:
                             automation['time'] = automation['orLater']
                     elif timeToAdd > datetime.timedelta(minutes = 0) :
                         if 'fixed' in automation :
-                            continue
+                            timeToAdd = datetime.timedelta(minutes = 0)
                         newtime = self.ADapi.parse_datetime(automation['time']) + timeToAdd
                         automation['time'] = str(newtime.time())
 
@@ -602,6 +634,20 @@ class Light:
                             automationsToDelete.append(num)
                 for num in reversed(automationsToDelete) :
                     del mode['automations'][num]
+
+                brightness = 0
+                for automation in mode['automations'] :
+                    if 'dimrate' in automation :
+                        if 'light_data' in automation :
+                            if 'brightness' in automation['light_data'] :
+                                timeDate = self.ADapi.parse_datetime(automation['time'])
+                                while brightness > automation['light_data']['brightness'] :
+                                    brightness -= 1
+                                    timeDate += datetime.timedelta(minutes = automation['dimrate'])
+                                    mode['automations'].append({'time':  str(timeDate), 'light_data': {'brightness': brightness}})
+                    if 'light_data' in automation :
+                        if 'brightness' in automation['light_data'] :
+                            brightness = automation['light_data']['brightness']
 
                 for automation in mode['automations'] :
                     if not 'state' in automation :
