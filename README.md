@@ -2,96 +2,188 @@
 an Appdaemon app for extensive control of lights based on time of day with mode event in addition to motion, presence, lux, rain, and media player sensors.
 
 ## Installation
-Download the `Lightwand` directory from inside the `apps` directory here to your Appdaemon `apps` directory, then add configuration to a yaml file to enable the `Lightwand` module. See configuration below or my lightwand.yaml file for examples.
+Download the `Lightwand` directory from inside the `apps` directory to your Appdaemon `apps` directory, then add configuration to a .yaml or .toml file to enable the `Lightwand` module. Minimum required is
+```yaml
+nameyourRoom:
+  module: lightwand
+  class: Room
+  Lights:
+    - lights:
+      - light.yourLight
+```
 
-## App usage and tips to configure
-All sections and configurations are optional, so you use only what is applicable.
-Each app contains one 'Room' with all of the sensors you want to use for that room and define all the lights to automate the way you want.
-
-### Mode change events
-This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with 'normal' mode as default setting. See my ModeManagement example code if you want to automate some default away/morning/night modes. https://github.com/Pythm/ad-ModeManagement
-
-Options is to call new mode from another app with:
-
-    self.fire_event("MODE_CHANGE", mode = 'your_mode_name')
-
-Or define scripts in Home Assistant and activate with automation/in lovelace to trigger an event:
-
-    day:
-      alias: "Day"
-      sequence:
-        - event: MODE_CHANGE
-          event_data:
-            mode: 'normal'
-
-
-I have chosen this approach because I also base some other automations on mode change. E.g. calling 'dinner' mode from iPhone with ios_event will also send a notification to childrens phones and tablets.
-<br>
-<br>
-When a event with "MODE_CHANGE" is triggered, it will check thru all defined modes for all lights in the app/Room.
-<br>- If mode is defined in room and in light it will update light with attributes defined in mode
-<br>- If mode is not defined in light but is present in room, light will revert to normal mode
-<br>- If mode is not defined in room, the lights will keep existing mode. The idea here is if you want to have something other than usual for livingroom and still have night setting in kid's bedrooms.
-
-There are some predefined mode names that behaves differently and does different things:
-<br>All mode names except <b>custom</b> can be defined in 'light_modes' with your own configuration.
-<br>Mode names with a default <b>off</b> : 'away', 'off', 'night'
-<br>Mode names with default <b>full brightness</b> : 'fire', 'wash'
-You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
-
-<b>Presence trackers</b> will trigger 'presence' when new == 'home' and sets 'away' if all trackers defined in room is not 'home'. When presence is detected it will go to 'normal' if old state is 'away' and 'presence' is not defined in 'light_mode'
-
-Other modes with additional behaviour: <b>morning</b>, <b>night*</b>
-<br>morning behaves as 'normal' mode with conditions and Lux constraints. Useful for some extra light in morning during workdays.
-<br>When 'morning' mode is triggered, mode will be set to 'normal' if not defined in room and after media player turns off.
-<br>In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'. All modes starting with 'night' will disable motion detection. 
-
-When <b>custom</b> mode is triggered it will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights. Be aware that it does not do any mediaplayer/motion or lux detection either.
-<br>- Use 'exclude_from_custom: True' in configuration to exclude the room from custom mode. Can be useful for rooms you forget to adjust light like outdoor lights and kid's bedroom.
-<br><br>
-You can define an Home Assistant input_text in one of the apps/rooms to display current LightMode in Lovelace. It will allways update with latest mode even if mode is not present in room.
-
-### Default light behaviour
-is configured with automations for each set of light and is activated with mode <b>normal</b>. If you only want lux control on/off you do not need to set up any automations. Both Lux constraint and conditions need to be meet before lights turns on in normal mode.
-
-Automations is based on 'time' that can be both time with sunrise/sunset +- or fixed time. App sorts thru and deletes automations that are earlier than previous time when both time with sunset and fixed time is given in automations in cases where both time with sunrise/sunset and fixed time is given. I live quite far North so sunrise/sunset varies a lot and might be a bigger problem here than other places. In addition to 'time' you can also specify 'orLater' to have more accurate control of when lights changes depending on season. E.g.
-
-    - time: '08:00:00'
-      orLater: 'sunrise + 00:15:00'
-
-If 'orLater' is later than 'time' it will shift all times following the same timedelta as here until a new 'orLater' is defined.
-
-You can in prevent shifts and deletions with a 'fixed: True' under time that locks time from beeing moved of deleted. I only use this to make sure the lights for the children turns off at bedtime even when sun sets after.
-
-Use dimrate to set brightness transition over time. -/+ 1 brightness pr x minutes.
-
-### Motion behaviour
-Configure <b>motionlights</b> to change light based on motion sensors in room. Easiest configuration is
-
-    motionlights:
-      state: turn_on
-
-to have the light turn on if lux constraints and conditions are met.
-If light is dimmable you can provide offset to 'state: turn_on' to increase or decrease brightness compared to 'light_data' in automation for normal light. You can also define light_data here or even a new set of automations with times same as automations for normal mode if you want different brightness etc during the day. 
-<br>- motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
-<br>- If media players is on or night* mode is active motion detection is deactivated.
+## App usage and configuration
+> [!TIP]
+> All sections and configurations are optional, so you use only what is applicable.
+> Each app contains one 'Room' with all of the sensors you want to use for that room and define all the lights to automate the way you want.
 
 ### Lights
-<b>All lights</b> for the room is configured under <b>Lights</b> or optionally <b>ToggleLights</b> if you have lights/bulbs that dim with toggle. There you can configure multiple <b>-lights</b> that contains a list of the lights you want to configure with the same settings and automations, motionlights, light_modes, lux on/off/constraints and conditions
+<b>All lights</b> for the room is configured under <b>Lights</b> or optionally <b>ToggleLights</b> if you have lights/bulbs that dim with toggle. There you can configure multiple <b>-lights</b> that contains a list of the lights and switches you want to configure with the same settings including automations, motions, modes, lux on/off/constraints and conditions
 
 ToggleLights is configured with a number in 'toggle' on how many times to turn on light to get wanted dim instead of light_data for dimmable lights.
+
+### Mode change events
+> [!IMPORTANT]
+> This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with 'normal' mode as default setting.
+
+To set mode from another appdaemon app simply use:
+> self.fire_event("MODE_CHANGE", mode = 'your_mode_name')
+
+Or define scripts in Home Assistant and activate with automation or in lovelace:
+
+```yaml
+day:
+  alias: "your_mode_name"
+  sequence:
+    - event: MODE_CHANGE
+      event_data:
+        mode: 'your_mode_name'
+```
+See my [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
+
+### Mode names
+> [!IMPORTANT]
+> When an event with "MODE_CHANGE" is triggered, it will check thru all defined modes for all lights in the app/Room.
+> <br>- If mode is defined in room and for light it will update light with state/data defined in mode
+> <br>- If mode is not defined in light but is present in room, light will be set to normal mode
+> <br>- If mode is not defined in room, the lights will keep existing mode
+
+There are some predefined mode names that behaves and does different things:
+<br>All mode names except <b>'custom'</b> can be defined in 'light_modes' with your own configuration.
+<br>Mode names that defaults to off: 'away' 'off' 'night'
+<br>Mode names with default full brightness: 'fire' 'wash'
+You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
+
+Other modes with additional behaviour: 'morning' 'night*' 'off'
+<br>'morning' behaves as 'normal' mode with conditions and Lux constraints. Useful for some extra light in morning during workdays.
+<br>When 'morning' mode is triggered, mode will be set to 'normal' if not defined in room and after media players is turned off.
+<br>In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'. All modes starting with 'night' in addition to 'off' will disable motion detection. 
+
+An example on what to use modes for:
+
+```yaml
+      light_modes:
+        - mode: morning
+          light_data: # Define specific light attributes for given mode
+            brightness: 220
+            transition: 3
+            color_temp: 427
+        - mode: decor
+          state: turn_on # Turns on regardless of Lux constraints or defined conditions
+          offset: -20 # Optional offset from brightness defined in normal mode
+        - mode: tv
+          state: turn_off
+        - mode: away
+          state: lux_controlled # Follows Lux Turn on/off
+        - mode: nightKid
+          state: manual # Disable all automation until next mode
+        - mode: night
+          automations: # Define own automation for mode. Lux constraints and defined conditions must be meet.
+          - time: '00:00:00'
+          - time: '03:00:00'
+            state: turn_off
+          - time: '23:00:00'
+```
+
+'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
+> [!NOTE]
+> 'custom' does not do any mediaplayer, motion or lux control.
+
+
+> 'exclude_from_custom: True' 
+in configuration will exclude the room from custom mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom.
+
+### Defining light behaviour
+is configured with automations for each set of light and is activated with mode 'normal'. If you only want lux control on/off you do not need to set up any automations.
+> [!NOTE]
+> Both Lux constraint and conditions need to be meet before lights turns on in normal automation.
+
+Automations is based on 'time' that can be both time with sunrise/sunset +- or fixed time. App sorts thru and deletes automations that are earlier than previous time when both time with sunset and fixed time is given in automations in cases where both time with sunrise/sunset and fixed time is given. I live quite far North so sunrise/sunset varies a lot and might be a bigger problem here than other places.
+
+```yaml
+      automations:
+      - time: '08:00:00'
+        orLater: 'sunrise + 00:15:00'
+      - time: '20:00:00'
+        fixed: True
+```
+
+Optionally in addition to 'time' you can also specify 'orLater' to have more accurate control of when lights changes depending on season.
+If 'orLater' is later than 'time' it will shift all times following the same timedelta as here until a new 'orLater' is defined.
+
+You can in prevent shifts and deletions with a 'fixed: True' under time that locks time from beeing moved of deleted. I use this to make sure the lights for the children turns off at bedtime even when sun sets after.
+
+### Motion behaviour
+Configure <b>motionlights</b> to change light based on motion sensors in room. A minimum configuration is
+
+```yaml
+  motion_sensors:
+    - motion_sensor: sensor.yourMotionSensor
+  Lights:
+    - lights:
+      - light.kitchen
+      motionlights:
+        state: turn_on
+```
+
+to have the light turn on if lux constraints and conditions are met.
+If light is dimmable you can provide offset to 'state: turn_on' to increase or decrease brightness compared to 'light_data' in automation for normal light. Insted of 'state' you can define 'light_data' here, or even a new set of automations with times if you want different brightness etc during the day.
+
+<br>- motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
+<br>- If media players is on or off / night* mode is active motion detection is deactivated.
+
+```yaml
+      motionlights:
+      - time: '00:00:00'
+        light_data:
+          brightness: 3
+      - time: '06:50:00'
+        light_data:
+          brightness: 160
+      - time: '08:30:00'
+        orLater: 'sunrise + 00:15:00'
+        light_data:
+          brightness: 180
+      - time: 'sunrise + 01:30:00'
+        light_data:
+          brightness: 120
+      - time: '20:00:00'
+        orLater: 'sunset + 00:30:00'
+        dimrate: 2
+        light_data:
+          brightness: 3
+```
+
+### Presence trackers
+will trigger 'presence' mode when new == 'home' and sets 'away' if all trackers defined in room is not 'home'. When presence is detected it will go to 'normal' if old state is 'away' and 'presence' is not defined in 'light_mode'. Trackers will not change mode unless it is normal or away.
+
+```yaml
+  presence:
+    - tracker: person.wife
+      tracker_constraints: "self.now_is_between('06:30:00', '23:00:00') "
+```
+
+> [!TIP]
+> Tracker will set mode as away when not home but there is no restrictions on calling new modes or normal when away. To keep light off when person is not home you can define conditions for light.
+
+```yaml
+      conditions:
+        - "self.ADapi.get_tracker_state('person.wife') == 'home'"
+```
 
 ### Configure automations and motionlights
 Each defined time can have a <b>state</b> and/or a <b>light_data</b>
 <br><br>
-<b>state</b> defines behavior. No need to define state in time for the times you want light to turn on, or based on lux constraints and conditions if any restrictions is defined.
-<br>- turn_off: Turns off light at given time. Can also be defined in motionlights to turn off and keep light off after given time until next time. E.g. turn off at kid's bedroom at 21:00.
+<b>state</b> defines behavior. No need to define state in time for lux constraints and conditions.
+<br>- turn_off: light at given time. Can also be defined in motionlights to turn off and keep light off after given time until next time. E.g. turn off at kid's bedroom at 21:00.
 <br>- adjust: Does not turn on or off light but adjusts light_data at given time. Turn on/off with other modes or manual switch. Not applicable for motion.
 
 <b>light_data</b> contains a set of attributes to be set to light: brightness, transition, color_temp, rgb_color, effect, etc. All attributes are optional.
-<br><br>
-Some considerations when writing your automations:
-<br>If '00:00:00' is not defined a 'turn_off' state will be default at midnight if other times is configured in automations or motionlights in defined for lights.
+
+Use dimrate to set brightness transition over time. -/+ 1 brightness pr x minutes counting down from previous brightness until brightness is met.
+
+> [!NOTE]
+> If '00:00:00' is not defined a 'turn_off' state will be default at midnight if other times is configured in automations or motionlights in defined for lights.
 
 ### Configure modes
 You can create as many modes in <b>light_mode</b> as you are able to have the time to configure and they can be defined with automations for different light settings during the day, light_data for one fits all setting or with a simple state: turn_on, lux_controlled, turn_off or manual.
@@ -115,6 +207,10 @@ Sorted by priority if more than one mediaplayer is defined in room. Can be any s
 
 ### Conditions and constraints
 You can use Lux sensors to control or constrain lights. Optionally you can provide if statement to be meet for light to turn on at normal/morning/motion mode or with automations defined. Inherits Appdaemon Api as ADapi.
+
+### Tips and tricks
+> [!TIP]
+> You can define an Home Assistant input_text in one of the apps/rooms to display current LightMode in Lovelace. It will allways update with latest mode even if mode is not present in room.
 
 ### Get started
 Easisest to start off with is to copy this example and update with your sensors and lights and build from that. There is a lot of list/dictionaries that needs to be correctly indented. And remember: All sections and configurations are optional, so you use only what is applicable.

@@ -4,7 +4,7 @@ kjokkenlys:
   module: lightwand
   class: Room
   log: lights_log
-  #json_path: /homeassistant/db/Lightwand/
+  #json_path: /conf/persistent/Lightwand/
   OutLuxZigbee: OutdoorHueLux
   RoomLuxZwave: KITCH_FibaroSensor
   rain_sensor: sensor.netatmo_rain
@@ -19,7 +19,7 @@ kjokkenlys:
       motion_constraints: "self.now_is_between('06:50:00', '23:00:00') and self.get_tracker_state('person.camilla_nordvik_2') == 'home' or self.get_state('switch.espresso') == 'on' "
   Lights:
     - lights:
-      - light.kjokkenlys
+      - light.kitchen
 
       automations: # Define some light for normal automation when motion is not detected/constrained.
       - time: '00:00:00'
@@ -85,7 +85,7 @@ kjokkenlys:
           state: turn_off
 
     - lights:
-      - switch.lys_kjokkenvindu
+      - switch.light_kitchenwindow
       # Decor light in window. No need to input automations or motion when lux controlled.
 
       light_modes:
@@ -153,8 +153,6 @@ stuelys:
     - lights:
       - light.ledstrip1
       - light.ledstrip2
-      - light.ledstrip_tvstue_east
-      - light.ledstrip_tvstue_north
 
       automations:
       - time: '00:00:00'
@@ -569,10 +567,9 @@ stuelys:
 
     - lights:
       - switch.stue_stikk_1_south
-      #- switch.stue_stikk_5_west
 
       automations:
-      - time: '06:50:00' # No need to specify other than time to get lux control
+      - time: '06:50:00' # No need to specify other than time to get lux control in automation
       - time: '22:00:00'
         state: turn_off
 
@@ -593,8 +590,7 @@ stuelys:
       lux_turn_on: 400
       lux_turn_off: 600
       conditions:
-        #- "self.ADapi.now_is_between('06:50:00', '22:00:00')"
-        - "self.ADapi.get_tracker_state('person.camilla_nordvik_2') == 'home'"
+        - "self.ADapi.get_tracker_state('person.wife') == 'home'"
 
     - lights:
       - light.stue_spisebord
