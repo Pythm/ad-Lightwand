@@ -191,11 +191,12 @@ class Room(hass.Hass):
             self.listen_state(self.media_on, mediaplayer['mediaplayer'], new = 'on', old = 'off', mode = mediaplayer['mode'])
             self.listen_state(self.media_off, mediaplayer['mediaplayer'], new = 'off', old = 'on', duration = 33, mode = mediaplayer['mode'])
 
-        for mediaplayer in self.mediaplayers :
-            if self.get_state(mediaplayer['mediaplayer']) == 'on' :
-                for light in self.roomlight :
-                    light.setLightMode(lightmode = mediaplayer['mode'])
-                continue
+        if self.LIGHT_MODE == 'normal' :
+            for mediaplayer in self.mediaplayers :
+                if self.get_state(mediaplayer['mediaplayer']) == 'on' :
+                    for light in self.roomlight :
+                        light.setLightMode(lightmode = mediaplayer['mode'])
+                    continue
 
 
         # Checks new mode events and updates lights if mode is valid for room
