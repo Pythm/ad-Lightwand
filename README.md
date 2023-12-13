@@ -27,7 +27,9 @@ ToggleLights is configured with a number in 'toggle' on how many times to turn o
 > This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with 'normal' mode as default setting.
 
 To set mode from another appdaemon app simply use:
-> self.fire_event("MODE_CHANGE", mode = 'your_mode_name')
+```python
+self.fire_event("MODE_CHANGE", mode = 'your_mode_name')
+```
 
 Or define scripts in Home Assistant and activate with automation or in lovelace:
 
@@ -50,16 +52,22 @@ See my [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code
 
 There are some predefined mode names that behaves and does different things:
 <br>All mode names except <b>'custom'</b> can be defined in 'light_modes' with your own configuration.
-<br>Mode names that defaults to off: 'away' 'off' 'night'
-<br>Mode names with default full brightness: 'fire' 'wash'
-You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
+<br>Mode names that defaults to off:
+<br>- 'away'
+<br>- 'off'
+<br>- 'night'
+<br>Mode names with default full brightness:
+<br>- 'fire'
+<br>- 'wash'
+<br> You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
 
-Other modes with additional behaviour: 'morning' 'night*' 'off'
-<br>'morning' behaves as 'normal' mode with conditions and Lux constraints. Useful for some extra light in morning during workdays.
+Other modes with additional behaviour:
+<br>- 'morning' behaves as 'normal' mode with conditions and Lux constraints. Useful for some extra light in morning during workdays.
 <br>When 'morning' mode is triggered, mode will be set to 'normal' if not defined in room and after media players is turned off.
-<br>In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'. All modes starting with 'night' in addition to 'off' will disable motion detection. 
+<br>- 'night*' and 'off'. In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'.
+<br>All modes starting with 'night' in addition to 'off' will disable motion detection. 
 
-An example on what to use modes for:
+An example :
 
 ```yaml
       light_modes:
@@ -89,8 +97,9 @@ An example on what to use modes for:
 > [!NOTE]
 > 'custom' does not do any mediaplayer, motion or lux control.
 
-
-> 'exclude_from_custom: True' 
+```yaml
+'exclude_from_custom: True'
+```
 in configuration will exclude the room from custom mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom.
 
 ### Defining light behaviour
@@ -129,9 +138,6 @@ Configure <b>motionlights</b> to change light based on motion sensors in room. A
 to have the light turn on if lux constraints and conditions are met.
 If light is dimmable you can provide offset to 'state: turn_on' to increase or decrease brightness compared to 'light_data' in automation for normal light. Insted of 'state' you can define 'light_data' here, or even a new set of automations with times if you want different brightness etc during the day.
 
-<br>- motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
-<br>- If media players is on or off / night* mode is active motion detection is deactivated.
-
 ```yaml
       motionlights:
       - time: '00:00:00'
@@ -153,6 +159,11 @@ If light is dimmable you can provide offset to 'state: turn_on' to increase or d
         light_data:
           brightness: 3
 ```
+> [!NOTE]
+> motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
+> <br>If media players is on or night* / off mode is active motion detection is deactivated.
+
+
 
 ### Presence trackers
 will trigger 'presence' mode when new == 'home' and sets 'away' if all trackers defined in room is not 'home'. When presence is detected it will go to 'normal' if old state is 'away' and 'presence' is not defined in 'light_mode'. Trackers will not change mode unless it is normal or away.
