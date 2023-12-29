@@ -1,6 +1,7 @@
 # Lightwand by Pythm
 an Appdaemon app for extensive control of lights via [Home Assistant](https://www.home-assistant.io/) or MQTT. Set light data based on time of day or use Mode Change event in Home Assistant to set your light, in addition to motion, presence, lux, rain, and media player sensors.
 
+![Picture is generated with AI](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)
 
 ## Installation
 Download the `Lightwand` directory from inside the `apps` directory to your [Appdaemon](https://appdaemon.readthedocs.io/en/latest/) `apps` directory, then add configuration to a .yaml or .toml file to enable the `Lightwand` module. Minimum required in your configuration is:
