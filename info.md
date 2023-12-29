@@ -20,8 +20,9 @@ nameyourRoom:
 
 
 ## Lights
-<b>All lights</b> for the room is configured as either <b>MQTTLights</b> to control lights directly via MQTT or <b>Lights</b> as Home Assistant lights/switches. Optionally as Home Assistant switches you can configure <b>ToggleLights</b> if you have lights/bulbs that dim with toggle.
-<br>You can configure multiple <b>-lights</b> as lists of the lights / switches you want to configure, with the same settings including automations, motions, modes, lux on/off/constraints and conditions.
+All lights for the room is configured as either <b>MQTTLights</b> to control lights directly via MQTT or <b>Lights</b> as Home Assistant lights/switches. Optionally as Home Assistant switches you can configure <b>ToggleLights</b> if you have lights/bulbs that dim with toggle.
+<br>
+<br><br>Each of the different light types can have multiple <b>-lights</b> as lists with different settings. Each setting can have a lists of the lights / switches with the same configuration.  
 
 ### MQTTLights
 Tested with [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is in step 1-255.
@@ -84,27 +85,33 @@ There are some predefined mode names that behaves and does different things:
 <br>Mode names with default full brightness:
 <br>- 'fire'
 <br>- 'wash'
-<br> You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
+
+> [!TIP]
+> You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
 
 Other modes with additional behaviour:
 <br>- 'morning' behaves as 'normal' mode with conditions and Lux constraints. Useful for some extra light in morning during workdays.
 <br>When 'morning' mode is triggered, mode will be set to 'normal' if not defined in room and after media players is turned off.
-<br>- 'night*' and 'off'. In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'.
+<br>- 'night*' and 'off'
+<br>In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'.
 <br>All modes starting with 'night' in addition to 'off' will disable motion detection. 
 <br>
-<br>'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
-> [!NOTE]
-> 'custom' does not do any mediaplayer, motion or lux control.
+<br>'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights. An option for each room is to use
 
 ```yaml
   exclude_from_custom: True
 ```
-in configuration will exclude the room from custom and wash mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom.
+
+in configuration. This will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom.
+
+> [!NOTE]
+> 'custom' does not do any automation at all like mediaplayer, motion or lux control.
+
 
 ## Defining times for lights
-is configured with automations for each set of light and is activated with mode 'normal'. If you only want lux control on/off you do not need to set up any automations.
+Automations contains a set of times for each set of light and is activated with mode 'normal'. If you only want lux control on/off you do not need to set up any automations.
 > [!NOTE]
-> Both Lux constraint and conditions need to be meet before lights turns on in normal automation.
+> Both Lux constraint and your conditions need to be meet before lights turns on in normal automation.
 
 Automations is based on 'time' that can be both time with sunrise/sunset +- or fixed time. App deletes automations that have a time that are earlier than previous automation time. Useful when both time with sunset and fixed time is given in automations.
 
