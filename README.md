@@ -16,13 +16,12 @@ nameyourRoom:
 ## App usage and configuration
 > [!TIP]
 > All sections and configurations except the minimum above are optional, so you use only what is applicable.
-> Each app contains one 'Room' with all of the sensors you want to use for that room and define all the lights to automate.
+> Each app contains one `Room` with all of the sensors you want to use for that room and define all the lights to automate.
 
 
 ## Lights
-All lights for the room is configured as either <b>MQTTLights</b> to control lights directly via MQTT or <b>Lights</b> as Home Assistant lights/switches. Optionally as Home Assistant switches you can configure <b>ToggleLights</b> if you have lights/bulbs that dim with toggle.
-<br>
-<br><br>Each of the different light types can have multiple <b>-lights</b> as lists with different settings. Each setting can have a lists of the lights / switches with the same configuration.  
+All lights for the room is configured as either `MQTTLights` to control lights directly via MQTT or `Lights` as Home Assistant lights/switches. Optionally as Home Assistant switches you can configure `ToggleLights` if you have lights/bulbs that dim with toggle.
+Each of the different light types can have multiple <b>-lights</b> as lists with the lights / switches. Each set containing the same settings including automations, motions, modes, lux on/off/constraints and conditions.
 
 ### MQTTLights
 Tested with [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is in step 1-255.
@@ -43,7 +42,7 @@ I do not see any advantages yet to control Zwave via Mqtt rather than via Home A
 Is configured with Lights and can control switches and lights. Use entity-id including type as name. Check your entity in Home Assistant for what your light supports as data like brightness, transition, rgb, etc.
 
 ### ToggleLights
-ToggleLights is Home Assistant switch entities. Toggles are configured with a number 'toggle' on how many times to turn on light to get wanted dim instead of light_data for dimmable lights. Input 'num_dim_steps' as number of dim steps in bulb.
+ToggleLights is Home Assistant switch entities. Toggles are configured with a `toggle` number on how many times to turn on light to get wanted dim instead of light_data for dimmable lights. Input `num_dim_steps` as number of dim steps in bulb.
 
 
 ## Mode change events
@@ -113,12 +112,12 @@ Automations contains a set of times for each set of light and is activated with 
 > [!NOTE]
 > Both Lux constraint and your conditions need to be meet before lights turns on in normal automation.
 
-Automations is based on 'time' that can be both time with sunrise/sunset +- or fixed time. App deletes automations that have a time that are earlier than previous automation time. Useful when both time with sunset and fixed time is given in automations.
+Automations is based on time that can be both time with sunrise/sunset +- or fixed time. App deletes automations that have a time that are earlier than previous automation time. Useful when both time with sunset and fixed time is given in automations.
 
-Optionally in addition to 'time' you can also specify 'orLater' to have more accurate control of when lights changes depending on season.
-If 'orLater' is later than 'time' it will shift all times following the same timedelta as here until a new 'orLater' is defined.
+Optionally in addition to `time` you can also specify `orLater` to have more accurate control of when lights changes depending on season.
+If orLater is later than time it will shift all times following the same timedelta as here until a new orLater is defined.
 
-You can in prevent shifts and deletions with a 'fixed: True' under time that locks time from beeing moved of deleted. I use this to make sure the lights for the children turns off at bedtime even when sun sets after.
+You can in prevent shifts and deletions with a `fixed`: True under time that locks time from beeing moved of deleted. I use this to make sure the lights for the children turns off at bedtime even when sun sets after.
 
 ```yaml
       automations:
@@ -129,7 +128,7 @@ You can in prevent shifts and deletions with a 'fixed: True' under time that loc
 ```
 
 ## Motion behaviour
-Configure <b>motionlights</b> to change light based on motion sensors in room. A minimum configuration to have the light turn on if lux constraints and conditions are met is:
+Configure `motionlights` to change light based on motion sensors in room. A minimum configuration to have the light turn on if lux constraints and conditions are met is:
 
 ```yaml
   motion_sensors:
@@ -141,7 +140,7 @@ Configure <b>motionlights</b> to change light based on motion sensors in room. A
         state: turn_on
 ```
 
-If light is dimmable you can provide offset to 'state: turn_on' to increase or decrease brightness compared to 'light_data' in automation for normal light. Insted of 'state' you can define 'light_data', or even input your automations here with times if you want different brightness etc during the day for motion lights.
+If light is dimmable you can provide `offset` to increase or decrease brightness compared to `light_data` in automation for normal light. Insted of `state` you can define `light_data`, or even input your `automations` here with times if you want different brightness etc during the day for motion lights.
 
 ```yaml
       motionlights:
@@ -170,29 +169,30 @@ If light is dimmable you can provide offset to 'state: turn_on' to increase or d
 
 ### Configure automations and motionlights
 Each defined time can have a <b>state</b> and/or a <b>light_data</b>
-<br>
-<br><b>state</b> defines behavior. No need to define state in time for lux constraints and conditions.
-<br>- turn_off: light at given time. Can also be defined in motionlights to turn off and keep light off after given time until next time. E.g. turn off at kid's bedroom at 21:00.
-<br>- adjust: Does not turn on or off light but adjusts light_data at given time. Turn on/off with other modes or manual switch. Not applicable for motion.
+
+<b>state</b> defines behavior. No need to define state in time for lux constraints and conditions.
+  - turn_off: light at given time. Can also be defined in motionlights to turn off and keep light off after given time until next time. E.g. turn off at kid's bedroom at 21:00.
+  - adjust: Does not turn on or off light but adjusts light_data at given time. Turn on/off with other modes or manual switch. Not applicable for motion.
 
 <b>light_data</b> contains a set of attributes to be set to light: brightness, transition, color_temp, rgb_color, effect, etc. All attributes are optional.
 
-Use dimrate to set brightness transition over time. -/+ 1 brightness pr x minutes counting down from previous brightness until brightness is met.
+Use `dimrate` to set brightness transition over time. -/+ 1 brightness pr x minutes counting down from previous brightness until brightness is met.
 
 > [!NOTE]
-> If '00:00:00' is not defined a 'turn_off' state will be default at midnight if other times is configured in automations or motionlights is defined for lights.
+> If '00:00:00' is not defined a turn_off state will be default at midnight if other times is configured in automations or motionlights is defined for lights.
 
 ### Configure modes
 You can create as many modes in <b>light_mode</b> as you are able to have the time to configure and they can be defined with automations for different light settings during the day, light_data for one fits all setting or with a simple state: turn_on, lux_controlled, turn_off or manual.
-<br>'automations' is configured and functions the same as automations for normal with lux and conditions constraints.
-<br>'light_data' can be used if you only want one setting to turn on light with given data. This is Lux constrained but Conditions do not need to be met.
-<br>'state' defines behaviour as in normal automation and can be turn_on, lux_controlled, turn_off or manual.
-<br>- 'turn_on' turns on light regardless of Lux and Conditions
-<br>- 'lux_controlled' only turns/keeps light on if lux is below lux_constraint
-<br>- 'turn_off' Turns off light
-<br>- 'manual' Completly manual on/off/brightness etc.
-<br>
-<br>'offset' can be provided to state 'lux_controlled' or 'turn_on' to increase or decrease brightness based on 'light_data' in normal automation.
+
+`automations` is configured and functions the same as automations for normal with lux and conditions constraints.
+`light_data` can be used if you only want one setting to turn on light with given data. This is Lux constrained but Conditions do not need to be met.
+`state` defines behaviour as in normal automation and can be turn_on, lux_controlled, turn_off or manual.
+  - `turn_on` turns on light regardless of Lux and Conditions
+  - `lux_controlled` only turns/keeps light on if lux is below lux_constraint
+  - `turn_off` Turns off light
+  - `manual` Completly manual on/off/brightness etc.
+
+`offset` can be provided to state lux_controlled or turn_on to increase or decrease brightness based on light_data in normal automation.
 
 An example :
 
@@ -224,9 +224,9 @@ An example :
 MQTT sensor names are full topics for targets excluding /set, case sensitive. App will subscribe to MQTT topics. Home Assistant sensors uses entity-id as sensor name.
 
 ### Motion Sensors and Presence trackers
-You can define time after sensor no longer detects motion before it turns light back with <b>'delay'</b> in seconds, and define constraints to each sensor as an if statement that must be true for motion to activate. Inherits Appdaemon API to self.
+You can define time after sensor no longer detects motion before it turns light back with `delay` in seconds, and define constraints to each sensor as an if statement that must be true for motion to activate. Inherits Appdaemon API to self.
 
-Trackers will trigger 'presence' mode when new == 'home' and sets 'away' if all trackers defined in room is not 'home'. When presence is detected it will go to 'normal' if old state is 'away' and 'presence' is not defined in 'light_mode'. Trackers will not change mode unless it is normal or away.
+Trackers will trigger 'presence' mode when new == home and sets 'away' mode if all trackers defined in room is not home. When presence is detected it will go to 'normal' mode if old state is 'away' and 'presence' is not defined in light_mode. Trackers will not change mode unless it is normal or away.
 
 ```yaml
   motion_sensors:
@@ -244,7 +244,7 @@ Trackers will trigger 'presence' mode when new == 'home' and sets 'away' if all 
 > Tracker will set mode as away when not home but there is no restrictions on calling new modes or normal when away.
 
 ### Media players
-Sorted by priority if more than one mediaplayer is defined in room. Can be any sensor or switch with on/off state. Define name of mode for each sensor and define light attributes in 'light_modes'. Media mode will set light and keep as media mode when motion is detected as well as morning, normal and night* modes are called. Calling any other modes will set light to the new mode. If any of the morning, normal or night* modes is called when media is on, media mode will be active again.
+Sorted by priority if more than one mediaplayer is defined in room. Can be any sensor or switch with on/off state. Define name of mode for each sensor and define light attributes in light_modes. Media mode will set light and keep as media mode when motion is detected as well as morning, normal and night* modes are called. Calling any other modes will set light to the new mode. If any of the morning, normal or night* modes is called when media is on, media mode will be active again.
 
 ```yaml
   mediaplayers:
@@ -288,7 +288,7 @@ You can define any statement you want so I have not figured out a better way tha
 Define a path to store json files with 'json_path' for persistent storage. This will store current mode for room and outdoor lux, room lux, and if lights is on for lights that has adjust/manual states and MQTT lights. Toggle lights will store current toggles.
 
 ## Namespace
-If you have defined a namespace for MQTT other than default you need to define your namespace with 'MQTT_namespace'. Same for HASS you need to define your namespace with 'HASS_namespace'.
+If you have defined a namespace for MQTT other than default you need to define your namespace with `MQTT_namespace`. Same for HASS you need to define your namespace with `HASS_namespace`.
 
 # Get started
 Easisest to start off with is to copy this example and update with your sensors and lights and build from that. There is a lot of list/dictionaries that needs to be correctly indented. And remember: All sections and configurations are optional, so you use only what is applicable.
