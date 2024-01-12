@@ -1,17 +1,16 @@
 """ Lightwand by Pythm
 
-v1.1.0
-- Added support for controlling lights directly over MQTT
-- Added namespace for both HASS and MQTT plugin. Both has 'default' as default name.
-- Subscribes to MQTT topic in cases where your MQTT plugin needs to subscribe
-- added 'listen_sensors' to change lighting based on state change
-- Bugfixes and optimalization
-- Added some comments on code
+v1.1.1
+    - Fixed Toggle light when setting brighter light.
+    - Fixed light turning on when motion detected when night and mode turned to day
+    - Bugfixes and optimalization
+    - Do not initialize mqtt plugin unless mqtt sensors/lights is defined
+    - Do not set light if new light_data is equal to old light_data
 
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 import hassapi as hass
 import datetime
@@ -23,7 +22,7 @@ class Room(hass.Hass):
 
     def initialize(self):
 
-        self.mqtt = self.get_plugin_api("MQTT")
+        self.mqtt = None
 
         self.roomlight:list = []
         
@@ -70,6 +69,8 @@ class Room(hass.Hass):
             self.all_motion_sensors.update({motion_sensor['motion_sensor'] : False})
 
         MQTT_motion_sensors = self.args.get('MQTT_motion_sensors', {})
+        if not self.mqtt :
+            self.mqtt = self.get_plugin_api("MQTT")
         for motion_sensor in MQTT_motion_sensors :
             self.mqtt.mqtt_subscribe(motion_sensor['motion_sensor'])
             self.mqtt.listen_event(self.MQTT_motion_event, "MQTT_MESSAGE", topic = motion_sensor['motion_sensor'], namespace = MQTT_namespace, motion_sensor = motion_sensor)
@@ -86,6 +87,8 @@ class Room(hass.Hass):
             lux_sensor = self.args['OutLux_sensor']
             self.listen_state(self.out_lux_state, lux_sensor, namespace = HASS_namespace)
         if 'OutLuxMQTT' in self.args :
+            if not self.mqtt :
+                self.mqtt = self.get_plugin_api("MQTT")
             out_lux_sensor = self.args['OutLuxMQTT']
             self.mqtt.mqtt_subscribe(out_lux_sensor)
             self.mqtt.listen_event(self.out_lux_event_MQTT, "MQTT_MESSAGE", topic = out_lux_sensor, namespace = MQTT_namespace)
@@ -94,6 +97,8 @@ class Room(hass.Hass):
             lux_sensor = self.args['OutLux_sensor_2']
             self.listen_state(self.out_lux_state2, lux_sensor, namespace = HASS_namespace)
         if 'OutLuxMQTT_2' in self.args :
+            if not self.mqtt :
+                self.mqtt = self.get_plugin_api("MQTT")
             out_lux_sensor = self.args['OutLuxMQTT_2']
             self.mqtt.mqtt_subscribe(out_lux_sensor)
             self.mqtt.listen_event(self.out_lux_event_MQTT2, "MQTT_MESSAGE", topic = out_lux_sensor, namespace = MQTT_namespace)
@@ -102,6 +107,8 @@ class Room(hass.Hass):
             lux_sensor = self.args['RoomLux_sensor']
             self.listen_state(self.room_lux_state, lux_sensor, namespace = HASS_namespace)
         if 'RoomLuxMQTT' in self.args :
+            if not self.mqtt :
+                self.mqtt = self.get_plugin_api("MQTT")
             room_lux_sensor_zigbee = self.args['RoomLuxMQTT']
             self.mqtt.mqtt_subscribe(room_lux_sensor_zigbee)
             self.mqtt.listen_event(self.room_lux_event_MQTT, "MQTT_MESSAGE", topic = room_lux_sensor_zigbee, namespace = MQTT_namespace)
@@ -137,7 +144,7 @@ class Room(hass.Hass):
             self.OUT_LUX = float(lightwand_data['out_lux'])
             self.ROOM_LUX = float(lightwand_data['room_lux'])
 
-            # Configuration of Zigbee MQTT Lights
+            # Configuration of MQTT Lights
         lights = self.args.get('MQTTLights', [])
         for l in lights :
             light = MQTTLights(self,
@@ -256,12 +263,12 @@ class Room(hass.Hass):
                     if self.handle != None :
                         if self.timer_running(self.handle) :
                             for light in self.roomlight :
-                                light.setMotion()
+                                light.setMotion(lightmode = self.LIGHT_MODE)
                             return
                     for sens in self.all_motion_sensors :
                         if self.all_motion_sensors[sens] :
                             for light in self.roomlight :
-                                light.setMotion()
+                                light.setMotion(lightmode = self.LIGHT_MODE)
                             return
                 for light in self.roomlight :
                     light.setLightMode(lightmode = self.LIGHT_MODE)
@@ -282,7 +289,7 @@ class Room(hass.Hass):
         motion_data = json.loads(data['payload'])
         sensor = kwargs['motion_sensor']
 
-        """ Test your zigbee settings. Uncomment line below to get logging when motion detected """
+        """ Test your MQTT settings. Uncomment line below to get logging when motion detected """
         #self.log(f"Motion detected: {sensor} Motion Data: {motion_data}") # FOR TESTING ONLY
 
         if 'occupancy' in motion_data :
@@ -310,7 +317,7 @@ class Room(hass.Hass):
 
         if self.check_mediaplayers_off() :
             for light in self.roomlight :
-                light.setMotion()
+                light.setMotion(lightmode = self.LIGHT_MODE)
         if self.handle != None :
             if self.timer_running(self.handle) :
                 try :
@@ -384,7 +391,7 @@ class Room(hass.Hass):
         for sens in self.all_motion_sensors :
             if self.all_motion_sensors[sens] :
                 for light in self.roomlight :
-                    light.setMotion()
+                    light.setMotion(lightmode = self.LIGHT_MODE)
                 return
 
         if self.check_mediaplayers_off() :
@@ -601,6 +608,7 @@ class Light:
         self.isON = None
         self.manualHandler = None
         self.brightness:int = 0
+        self.current_light_data = {}
 
         string:str = self.lights[0]
         if string[:6] == 'light.' :
@@ -934,23 +942,31 @@ class Light:
             self.turn_off_lights()
 
 
-    def setMotion(self):
+    def setMotion(self, lightmode = 'None'):
         """ Sets motion lights when motion is detected insted of using setModeLight
         """
+
+        if lightmode == 'None' :
+            lightmode = self.lightmode
+
         if self.motionlight :
             if not self.checkOnConditions() or not self.checkLuxConstraints() :
                 return
 
-                # Custom mode will break any automation and keep light as is
-                # Do not do motion mode if current mode is starting with night or is off
-            string:str = self.lightmode
-            if string[:5] == 'night' or self.lightmode == 'off' or self.lightmode == 'custom' :
-                self.motion = False
+            """ Custom mode will break any automation and keep light as is
+                Do not do motion mode if current mode is starting with night or is off
+            """
+            if lightmode == 'off' or lightmode == 'custom' :
                 return
+            string:str = lightmode
+            if string[:5] == 'night' :
+                if not 'night' in self.motionlight :
+                    self.motion = False
+                    return
 
                 # Do not adjust if current mode's state is manual.
             for mode in self.light_modes :
-                if self.lightmode == mode['mode'] :
+                if lightmode == mode['mode'] :
                     if 'state' in mode :
                         if 'manual' in mode['state'] :
                             return
@@ -996,9 +1012,8 @@ class Light:
         target_num2 = self.find_time(automation = self.automations)
 
         if (automations[target_num]['state'] == 'adjust' and self.isON) or \
-            (automations[target_num]['state'] != 'adjust' and automations[target_num]['state'] != 'turn_off') or \
-            (automations[target_num]['state'] != 'adjust' and self.motion) :
-            """ Only 'adjust' lights if already on, or if not turn off or if motion.
+            (automations[target_num]['state'] != 'adjust' and automations[target_num]['state'] != 'turn_off') :
+            """ Only 'adjust' lights if already on, or if not turn off.
             """
 
             if not 'light_data' in automations[target_num] and 'light_data' in self.automations[target_num2] :
@@ -1021,10 +1036,10 @@ class Light:
                     elif offset != 0 :
                         brightness_offset = math.ceil(int(target_light[target_num]['light_data']['brightness']) + offset)
                         if brightness_offset > 0 :
-                            if brightness_offset <= 255 :
+                            if brightness_offset < 255 :
                                 target_light_data.update({'brightness' : brightness_offset})
                             else :
-                                target_light_data.update({'brightness' : 255})
+                                target_light_data.update({'brightness' : 254})
                         else :
                             target_light_data.update({'brightness' : 1})
 
@@ -1085,7 +1100,7 @@ class Light:
         newbrightness:int = math.ceil(originalBrightness - (timedifference * automation[target_num]['dimrate']))
 
         if 'brightness' in automation[target_num]['light_data'] :
-            if newbrightness < automation[target_num]['light_data']['brightness'] or newbrightness > automation[target_num-1]['light_data']['brightness']:
+            if newbrightness < automation[target_num]['light_data']['brightness'] or newbrightness > automation[target_num-1]['light_data']['brightness'] :
                 return automation[target_num]['light_data']['brightness']
             if not self.dimHandler :
                 runtime = datetime.datetime.now() + datetime.timedelta(minutes = 1)
@@ -1169,20 +1184,23 @@ class Light:
     """ Functions to rewrite in child """
 
     def turn_on_lights(self, light_data = {}):
-        self.isON = True
-        for light in self.lights :
-            self.ADapi.turn_on(light, **light_data)
+        if self.current_light_data != light_data or not self.isON :
+            self.isON = True
+            self.current_light_data = light_data
+            for light in self.lights :
+                self.ADapi.turn_on(light, **light_data)
 
     def turn_on_lights_at_max(self):
         self.isON = True
         for light in self.lights :
             string:str = self.lights[0]
             if string[:6] == 'light.' :
-                self.ADapi.turn_on(light, brightness = 255)
+                self.ADapi.turn_on(light, brightness = 254)
             if string[:7] == 'switch.' :
                 self.ADapi.turn_on(light)
 
     def turn_off_lights(self):
+        self.current_light_data = {}
         self.isON = False
         for light in self.lights :
             self.ADapi.turn_off(light)
@@ -1270,6 +1288,9 @@ class MQTTLights(Light):
             except (ValueError, TypeError) :
                 self.brightness = 0
             self.isON = self.brightness != 0
+            if 'brightness' in self.current_light_data :
+                if self.current_light_data['brightness'] != self.brightness :
+                    self.current_light_data = {}
 
         elif 'value' in lux_data :
             if type(lux_data['value']) == bool :
@@ -1281,6 +1302,10 @@ class MQTTLights(Light):
                     self.isON = True
                 elif lux_data['value'] == 0 :
                     self.isON = False
+                
+                if 'value' in self.current_light_data :
+                    if self.current_light_data['value'] != self.brightness :
+                        self.current_light_data = {}
 
         elif 'state' in lux_data :
             self.isON = lux_data['state'] == 'ON'
@@ -1297,27 +1322,26 @@ class MQTTLights(Light):
 
     def turn_on_lights(self, light_data = {}):
 
-        for light in self.lights :
-            if 'zigbee2mqtt' in light :
-                if not self.isON and not light_data :
-                    light_data.update({"state" : "ON"})
-                if 'brightness' in light_data and self.isON :
-                    if light_data['brightness'] == self.brightness :
+        if self.current_light_data != light_data or not self.isON :
+            self.current_light_data = light_data
+
+            for light in self.lights :
+                if 'zigbee2mqtt' in light :
+                    if not self.isON and not light_data :
+                        light_data.update({"state" : "ON"})
+
+                if 'switch_multilevel' in light :
+                    if not self.isON :
+                        light_data.update({"ON" : True})
+
+                elif 'switch_binary' in light :
+                    if not self.isON :
+                        light_data.update({"ON" : True})
+                    if 'value' in light_data and self.isON :
                         continue
-            if 'switch_multilevel' in light :
-                if not self.isON :
-                    light_data.update({"ON" : True})
-                if 'value' in light_data and self.isON :
-                    if light_data['value'] == self.brightness :
-                        continue
-            elif 'switch_binary' in light :
-                if not self.isON :
-                    light_data.update({"ON" : True})
-                if 'value' in light_data and self.isON :
-                    continue
-            payload = json.dumps(light_data)
-            self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = payload, namespace = self.MQTT_namespace)
-            self.isON = True
+                payload = json.dumps(light_data)
+                self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = payload, namespace = self.MQTT_namespace)
+                self.isON = True
 
     def turn_on_lights_at_max(self):
         light_data:dict = {}
@@ -1327,7 +1351,7 @@ class MQTTLights(Light):
 
         for light in self.lights :
             if 'zigbee2mqtt' in light :
-                light_data.update({"brightness" : 255})
+                light_data.update({"brightness" : 254})
             elif 'switch_multilevel' in light :
                 light_data.update({"value" : 99})
 
@@ -1336,6 +1360,7 @@ class MQTTLights(Light):
             self.isON = True
 
     def turn_off_lights(self):
+        self.current_light_data = {}
         if self.isON :
             for light in self.lights :
                 self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = "OFF", namespace = self.MQTT_namespace)
@@ -1476,10 +1501,12 @@ class Toggle(Light):
                 return
             elif self.current_toggle > self.toggle_lightbulb :
                 self.current_toggle -= self.fullround_toggle
-
+            sec = 1
             while self.current_toggle < 1 :
-                self.ADapi.run_in(self.toggle_light, self.current_toggle)
+                self.ADapi.run_in(self.toggle_light, sec)
                 self.current_toggle += 1
+                sec += 1
+
                 # Persistent toggle
             if self.usePersistentStorage :
                 with open(self.JSON_PATH, 'r') as json_read :
@@ -1497,10 +1524,11 @@ class Toggle(Light):
                 return
             elif self.current_toggle > self.toggle_lightbulb :
                 self.current_toggle -= self.fullround_toggle
-
+            sec = 1
             while self.current_toggle < self.toggle_lightbulb :
-                self.ADapi.run_in(self.toggle_light, self.current_toggle)
+                self.ADapi.run_in(self.toggle_light, sec)
                 self.current_toggle += 1
+                sec += 1
         else :
             self.turn_off_lights()
             self.current_toggle = 0
@@ -1515,22 +1543,31 @@ class Toggle(Light):
                 json.dump(lightwand_data, json_write, indent = 4)
 
 
-    def setMotion(self):
+    def setMotion(self, lightmode = 'None'):
+        """ Sets motion lights when motion is detected insted of using setModeLight
+        """
+
+        if lightmode == 'None' :
+            lightmode = self.lightmode
+
         if self.motionlight :
             if not self.checkOnConditions() or not self.checkLuxConstraints() :
                 return
-                # Custom mode will break any automation and keep light as is
-            if self.lightmode == 'custom' :
-                return
 
-                # Do not do motion mode if current mode is starting with night or off
-            string:str = self.lightmode
-            if string[:5] == 'night' or self.lightmode == 'off' :
+            """ Custom mode will break any automation and keep light as is
+                Do not do motion mode if current mode is starting with night or is off
+            """
+            if lightmode == 'off' or lightmode == 'custom' :
                 return
+            string:str = lightmode
+            if string[:5] == 'night' :
+                if not 'night' in self.motionlight :
+                    self.motion = False
+                    return
 
                 # Do not adjust if current mode's state is manual.
             for mode in self.light_modes :
-                if self.lightmode == mode['mode'] :
+                if lightmode == mode['mode'] :
                     if 'state' in mode :
                         if 'manual' in mode['state'] :
                             return
@@ -1541,10 +1578,11 @@ class Toggle(Light):
                 return
             elif self.current_toggle > self.toggle_lightbulb :
                 self.current_toggle -= self.fullround_toggle
-
+            sec = 1
             while self.current_toggle < self.toggle_lightbulb :
-                self.ADapi.run_in(self.toggle_light, self.current_toggle)
+                self.ADapi.run_in(self.toggle_light, sec)
                 self.current_toggle += 1
+                sec += 1
 
                 # Persistent toggle
             if self.usePersistentStorage :
