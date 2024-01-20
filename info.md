@@ -485,3 +485,50 @@ your_room_name:
         - "self.ADapi.get_tracker_state('person.kid') == 'home'"
         - "self.ADapi.now_is_between('06:50:00', '23:30:00')"
 ```
+
+### Key definitions for defining app
+key | optional | type | default | introduced in | description
+-- | -- | -- | -- | -- | --
+`module` | False | string | | v1.0.0 | The module name of the app.
+`class` | False | string | | v1.0.0 | The name of the Class.
+`HASS_namespace` | True | string | default | v1.1.0 | HASS namespace
+`MQTT_namespace` | True | string | default | v1.1.0 | MQTT namespace
+`exclude_from_custom` | True | bool | False | v1.0.0 | Exclude the room from custom mode
+`json_path` | True | string | | v1.0.0 | Use Json for persistency when restarted. Adds 'your_room_name' + '.json' to the json_path
+`rain_sensor` | True | sensor | | v1.0.0 | HA sensor for detection of rain. If rain is detected, it will raise lux constraint by * 1.5
+`OutLux_sensor` | True | sensor | | v1.0.0 | Sensor for Lux detection
+`OutLuxMQTT` | True | MQTT sensor | | v1.0.0 | Lux detection via MQTT
+`OutLux_sensor_2` | True | sensor | | v1.0.3 | Secondary Sensor for Lux detection
+`OutLuxMQTT_2` | True | MQTT sensor | | v1.0.3 | Secondary Lux detection via MQTT
+`RoomLuxMQTT` | True | string | | v1.0.0 | MQTT lux sensor for lux control and constraint
+`RoomLux_sensor` | True | string | | v1.0.0 | HA Lux sensor for lux control and constraint
+`mediaplayers` | True | list | | v1.0.0 | Media players sorted by priority if more than one mediaplayer is defined
+`motion_sensors` | True | list | | v1.0.0 | HA Motion sensors
+`MQTT_motion_sensors` | True | list | | v1.0.0 | MQTT motion sensors
+`presence` | True | list | | v1.0.0 | HA Presence detection
+`Lights` | True | list | | v1.0.0 | HA lights
+`MQTTLights` | True | list | | v1.1.0 | MQTT lights
+`ToggleLights` | True | list | | v1.0.0 | Use ToggleLights instead of Lights for bulbs/lights that dim with toggle
+`listen_sensors` | True | list | | v1.1.0 | List of sensors to listen to state change for updating light
+
+### Key definitions to add to motion and presence sensors
+key | optional | type | default | introduced in | description
+-- | -- | -- | -- | -- | --
+`motion_sensor` | True | sensor | | v1.0.0 | Motion sensor
+`delay` | True | int | 60 | v1.0.0 | Input delay in seconds before light turns back from motion to current mode
+`motion_constraints` | True | string | | v1.0.0 | if statement that must be true for motion to activate. Inherits Appdaemon API to self
+
+### Key definitions to add to Lights
+key | optional | type | default | introduced in | description
+-- | -- | -- | -- | -- | --
+`lights` | True | list | | v1.0.0 | list of lights
+`automations` | True | list | | v1.0.0 | Configure default light behaviour for 'normal' mode with automations
+`motionlights` | True | list | | v1.0.0 | Configure default light behaviour for motion detected
+`light_modes` | True | list | | v1.0.0 | Name of mode. Define light modes to change light accordingly
+`lux_constraint` | True | int | | v1.0.0 | Outdoor lux constraint
+`lux_turn_on` | True | int | | v1.0.0 | Outdoor lux to turn on light if below
+`lux_turn_off` | True | int | | v1.0.0 | Outdoor lux to turn off light if above
+`room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint
+`room_lux_turn_on` | True | int | | v1.0.0 | Room lux to turn on light if below
+`room_lux_turn_off` | True | int | | v1.0.0 | Room lux to turn off light if above
+`conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi

@@ -1,16 +1,12 @@
 """ Lightwand by Pythm
 
-v1.1.1
-    - Fixed Toggle light when setting brighter light.
-    - Fixed light turning on when motion detected when night and mode turned to day
-    - Bugfixes and optimalization
-    - Do not initialize mqtt plugin unless mqtt sensors/lights is defined
-    - Do not set light if new light_data is equal to old light_data
+v1.1.2 
+    - Bugfixes
 
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 import hassapi as hass
 import datetime
@@ -120,8 +116,12 @@ class Room(hass.Hass):
             new_rain_amount = self.get_state(rain_sensor)
             try :
                 self.RAIN = float(new_rain_amount)
+            except ValueError as ve :
+                self.RAIN:float = 0.0
+                self.log(f"Not able to set Rain amount. Exception: {ve}", level = 'DEBUG')
             except Exception as e :
-                self.log(f"Not able to set Rain amount. Exception: {e}", level = 'DEBUG')
+                self.RAIN:float = 0.0
+                self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
 
             # Persistent storage for storing mode and lux data
         self.usePersistentStorage = False
@@ -529,13 +529,11 @@ class Room(hass.Hass):
         try :
             if self.RAIN != float(new) :
                 self.RAIN = float(new)
-                for light in self.roomlight :
-                    light.rain_amount = self.RAIN
         except Exception as e :
             self.log(f"Rain amount unavailable. Exception : {e}", level = 'DEBUG')
             self.RAIN = 0.0
-            for light in self.roomlight :
-                light.rain_amount = self.RAIN
+        for light in self.roomlight :
+            light.rain_amount = self.RAIN
 
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs):
@@ -1012,7 +1010,8 @@ class Light:
         target_num2 = self.find_time(automation = self.automations)
 
         if (automations[target_num]['state'] == 'adjust' and self.isON) or \
-            (automations[target_num]['state'] != 'adjust' and automations[target_num]['state'] != 'turn_off') :
+            (automations[target_num]['state'] != 'adjust' and automations[target_num]['state'] != 'turn_off') :#or \
+            #(automations[target_num]['state'] != 'adjust' and self.motion) :
             """ Only 'adjust' lights if already on, or if not turn off.
             """
 
@@ -1329,11 +1328,15 @@ class MQTTLights(Light):
                 if 'zigbee2mqtt' in light :
                     if not self.isON and not light_data :
                         light_data.update({"state" : "ON"})
-
+                #    if 'brightness' in light_data and self.isON :
+                #        if light_data['brightness'] == self.brightness :
+                #            continue
                 if 'switch_multilevel' in light :
                     if not self.isON :
                         light_data.update({"ON" : True})
-
+                #    if 'value' in light_data and self.isON :
+                #        if light_data['value'] == self.brightness :
+                #            continue
                 elif 'switch_binary' in light :
                     if not self.isON :
                         light_data.update({"ON" : True})
