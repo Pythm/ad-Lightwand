@@ -463,6 +463,7 @@ your_room_name:
       - switch.toggle_bulb
       toggle: 2 # On toggles to get desired dim
       num_dim_steps: 3 # Number of dim steps in bulb
+      toggle_speed: 0.8 # Set time in seconds between each toggle
       light_modes:
         - mode: night
           toggle: 3
@@ -532,3 +533,4 @@ key | optional | type | default | introduced in | description
 `room_lux_turn_on` | True | int | | v1.0.0 | Room lux to turn on light if below
 `room_lux_turn_off` | True | int | | v1.0.0 | Room lux to turn off light if above
 `conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi
+`toggle_speed` | True | float | 1 | v1.1.4 | Set time in seconds between each toggle. Supports sub second with 0.x

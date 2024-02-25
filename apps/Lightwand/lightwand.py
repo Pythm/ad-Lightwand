@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 
 import hassapi as hass
 import datetime
@@ -143,7 +143,6 @@ class Room(hass.Hass):
         if 'rain_sensor' in self.args:
             rain_sensor = self.args['rain_sensor']
             self.listen_state(self.update_rain_amount, rain_sensor,
-                constrain_state=lambda x: float(x) > 0,
                 namespace = HASS_namespace
             )
             new_rain_amount = self.get_state(rain_sensor)
@@ -238,6 +237,7 @@ class Room(hass.Hass):
                 conditions = l.get('conditions', {'True'}),
                 toggle = l.get('toggle',3),
                 num_dim_steps = l.get('num_dim_steps',3),
+                toggle_speed = l.get('toggle_speed',1),
                 json_path = self.JSON_PATH,
                 usePersistentStorage = self.usePersistentStorage,
                 HASS_namespace = HASS_namespace
@@ -509,9 +509,16 @@ class Room(hass.Hass):
 
         # Lux / weather
     def out_lux_state(self, entity, attribute, old, new, kwargs):
-        if self.outLux1 != float(new):
-            self.outLux1 = float(new)
-
+        try:
+            if self.outLux1 != float(new):
+                self.outLux1 = float(new)
+        except ValueError as ve:
+            self.log(f"Not able to get new outlux. ValueError: {ve}", level = 'DEBUG')
+        except TypeError as te:
+            self.log(f"Not able to get new outlux. TypeError: {te}", level = 'DEBUG')
+        except Exception as e:
+            self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
+        else:
             self.newOutLux()
 
 
@@ -648,21 +655,29 @@ class Room(hass.Hass):
 
 
     def update_rain_amount(self, entity, attribute, old, new, kwargs):
-        try:
-            if self.RAIN != float(new):
+        if new != old:
+            try:
                 self.RAIN = float(new)
-        except Exception as e:
-            self.log(f"Rain amount unavailable. Exception: {e}", level = 'DEBUG')
-            self.RAIN = 0.0
-        for light in self.roomlight:
-            light.rain_amount = self.RAIN
+            except ValueError as ve:
+                self.log(f"Rain amount unavailable. ValueError: {ve}", level = 'DEBUG')
+                self.RAIN = 0.0
+            except TypeError as te:
+                self.log(f"Rain amount unavailable. TypeError: {te}", level = 'DEBUG')
+                self.RAIN = 0.0
+            except Exception as e:
+                self.log(f"Not able to get new rain amount. Exception: {e}", level = 'WARNING')
+                self.RAIN = 0.0
+            
+            for light in self.roomlight:
+                light.rain_amount = self.RAIN
 
 
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs):
         if self.LIGHT_MODE == 'morning':
             self.LIGHT_MODE = 'normal'
-        self.check_mediaplayers_off()
+        if self.LIGHT_MODE != 'night':
+            self.check_mediaplayers_off()
 
 
     def media_off(self, entity, attribute, old, new, kwargs):
@@ -752,12 +767,21 @@ class Light:
         if string[:7] == 'switch.':
             self.isON = self.ADapi.get_state(self.lights[0]) == 'on' 
 
+        # Helpers to check if conditions to turn on/off light has changed
+        self.wereMotion = False
+        self.prev_checkOnConditions = None
+        self.prev_checkLuxConstraints = None
+
 
         if self.automations:
             """ Set up automations with times defined and check data
             """
             test_time = self.ADapi.parse_time('00:00:00')
-            if test_time != self.ADapi.parse_time(self.automations[0]['time']):
+            if not 'time' in self.automations[0]:
+                self.automations[0].update(
+                    {'time': '00:00:00'}
+                )
+            elif test_time != self.ADapi.parse_time(self.automations[0]['time']):
                 self.automations.insert(0,
                     {'time': '00:00:00', 'state': 'turn_off'}
                 )
@@ -821,7 +845,11 @@ class Light:
             """
             if type(self.motionlight) == list:
                 test_time = self.ADapi.parse_time('00:00:00')
-                if test_time != self.ADapi.parse_time(self.motionlight[0]['time']):
+                if not 'time' in self.motionlight[0]:
+                    self.motionlight[0].update(
+                        {'time': '00:00:00'}
+                    )
+                elif test_time != self.ADapi.parse_time(self.motionlight[0]['time']):
                     self.motionlight.insert(0,
                         {'time': '00:00:00', 'state': 'turn_off'}
                     )
@@ -870,7 +898,11 @@ class Light:
             """
             if 'automations' in mode:
                 test_time = self.ADapi.parse_time('00:00:00')
-                if test_time != self.ADapi.parse_time(mode['automations'][0]['time']):
+                if not 'time' in mode['automations'][0]:
+                    mode['automations'][0].update(
+                        {'time': '00:00:00'}
+                    )
+                elif test_time != self.ADapi.parse_time(mode['automations'][0]['time']):
                     mode['automations'].insert(0,
                         {'time': '00:00:00', 'state': 'turn_off'}
                     )
@@ -970,6 +1002,8 @@ class Light:
         """ Updates light with new data based on times given in configuration
         """
         if not self.motion:
+            self.prev_checkOnConditions = None
+            self.prev_checkLuxConstraints = None
             self.setLightMode()
         elif type(self.motionlight) == list:
             target_num = self.find_time(automation = self.motionlight)
@@ -1021,6 +1055,24 @@ class Light:
     def setLightMode(self, lightmode = 'None'):
         """ The main function/logic to handle turning on / off lights based on mode selected.
         """
+        # Checking if anything has changed.
+        if (
+            (lightmode == self.lightmode
+            or lightmode == 'None')
+            and not self.wereMotion
+            and self.prev_checkOnConditions == self.checkOnConditions()
+            and self.prev_checkLuxConstraints == self.checkLuxConstraints()
+        ):
+            return
+        elif (
+            self.wereMotion
+            and not self.motion
+        ):
+            self.wereMotion = False
+        
+        self.prev_checkOnConditions = self.checkOnConditions()
+        self.prev_checkLuxConstraints = self.checkLuxConstraints()
+
         if lightmode != self.lightmode:
             if self.dimHandler:
                 if self.ADapi.timer_running(self.dimHandler):
@@ -1177,6 +1229,7 @@ class Light:
                             return
 
             self.motion = True
+            self.wereMotion = True
             if type(self.motionlight) == list:
                 self.setLightAutomation(automations = self.motionlight)
 
@@ -1245,6 +1298,12 @@ class Light:
                 # Brightness 0-255 for HA and Zigbee2mqtt control
                 if 'brightness' in target_light[target_num]['light_data']:
 
+                    if (
+                        self.motion
+                        and self.brightness -2 >= int(target_light_data['brightness'] + offset)
+                    ):
+                        return
+                    
                     if 'dimrate' in target_light[target_num]:
                         newbrightness = self.findBrightnessWhenDimRate(automation = target_light) + offset
                         target_light_data.update(
@@ -1266,12 +1325,6 @@ class Light:
                             target_light_data.update(
                                 {'brightness' : 1}
                             )
-
-                    elif (
-                        self.motion
-                        and self.brightness > target_light_data['brightness']
-                    ):
-                        return
                     
                     self.turn_on_lights(light_data = target_light_data)
 
@@ -1408,6 +1461,8 @@ class Light:
             self.brightness = int(new)
         except TypeError:
             self.brightness = 0
+        except Exception as e:
+            self.ADapi.log(f"Error getting new brightness: {new}. Exception: {e}", level = 'WARNING')
 
 
         #Updates persistent storage for lights with adjust/manual modes
@@ -1565,15 +1620,19 @@ class MQTTLights(Light):
         #    self.ADapi.log(f"{data['topic']} Color in lux: {lux_data['color']}")
 
         if 'brightness' in lux_data:
-            try:
-                self.brightness = int(lux_data['brightness'])
-            except (ValueError, TypeError):
+            self.isON = lux_data['state'] == 'ON'
+            if not self.isON:
                 self.brightness = 0
+                self.current_light_data = {}
+            else:
+                try:
+                    self.brightness = int(lux_data['brightness'])
+                except (ValueError, TypeError):
+                    self.brightness = 0
 
-            self.isON = self.brightness != 0
-            if 'brightness' in self.current_light_data:
-                if self.current_light_data['brightness'] != self.brightness:
-                    self.current_light_data = {}
+                if 'brightness' in self.current_light_data:
+                    if self.current_light_data['brightness'] != self.brightness:
+                        self.current_light_data = {}
 
         elif 'value' in lux_data:
             if type(lux_data['value']) == bool:
@@ -1701,6 +1760,7 @@ class Toggle(Light):
         conditions,
         toggle,
         num_dim_steps,
+        toggle_speed,
         json_path,
         usePersistentStorage,
         HASS_namespace
@@ -1710,6 +1770,10 @@ class Toggle(Light):
         self.current_toggle = 0
         self.toggle_lightbulb = toggle * 2 - 1
         self.fullround_toggle = num_dim_steps * 2
+        try:
+            self.toggle_speed = float(toggle_speed)
+        except(ValueError, TypeError):
+            self.toggle_speed = 1
 
             # Persistent storage
         if usePersistentStorage:
@@ -1779,13 +1843,14 @@ class Toggle(Light):
 
                     elif self.current_toggle > toggle_bulb:
                         self.current_toggle -= self.fullround_toggle
-                    sec = 1
+                    sec = 0.1
 
                     while self.current_toggle < toggle_bulb:
                         self.ADapi.run_in(self.toggle_light, sec)
                         self.current_toggle += 1
-                        sec += 1
-                    
+                        sec += self.toggle_speed
+
+
                 elif 'state' in mode:
                     if 'turn_off' in mode['state']:
                         # Turns off light
@@ -1835,12 +1900,13 @@ class Toggle(Light):
 
             elif self.current_toggle > self.toggle_lightbulb:
                 self.current_toggle -= self.fullround_toggle
-            sec = 1
+            sec = 0.1
 
             while self.current_toggle < 1:
                 self.ADapi.run_in(self.toggle_light, sec)
                 self.current_toggle += 1
-                sec += 1
+                sec += self.toggle_speed
+
 
                 # Persistent toggle
             if self.usePersistentStorage:
@@ -1848,7 +1914,7 @@ class Toggle(Light):
                     lightwand_data = json.load(json_read)
 
                 lightwand_data[self.lights[0]].update(
-                    {"toggle" : self.current_toggle}
+                    {"toggle" : 1}
                 )
                 with open(self.JSON_PATH, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
@@ -1864,12 +1930,12 @@ class Toggle(Light):
 
             elif self.current_toggle > self.toggle_lightbulb:
                 self.current_toggle -= self.fullround_toggle
-            sec = 1
+            sec = 0.1
 
             while self.current_toggle < self.toggle_lightbulb:
                 self.ADapi.run_in(self.toggle_light, sec)
                 self.current_toggle += 1
-                sec += 1
+                sec += self.toggle_speed
 
         else:
             self.turn_off_lights()
@@ -1881,7 +1947,7 @@ class Toggle(Light):
                 lightwand_data = json.load(json_read)
 
             lightwand_data[self.lights[0]].update(
-                {"toggle" : self.current_toggle}
+                {"toggle" : self.toggle_lightbulb}
             )
             with open(self.JSON_PATH, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
@@ -1924,25 +1990,30 @@ class Toggle(Light):
 
             self.motion = True
 
-            if self.current_toggle == self.toggle_lightbulb:
-                return
 
-            elif self.current_toggle > self.toggle_lightbulb:
-                self.current_toggle -= self.fullround_toggle
-            sec = 1
+            if 'toggle' in self.motionlight[0]:
+                # Turns on light regardless of Lux and Conditions
+                toggle_bulb = self.motionlight[0]['toggle'] * 2 - 1
 
-            while self.current_toggle < self.toggle_lightbulb:
-                self.ADapi.run_in(self.toggle_light, sec)
-                self.current_toggle += 1
-                sec += 1
+                if self.current_toggle == toggle_bulb:
+                    return
 
-                # Persistent toggle
-            if self.usePersistentStorage:
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
+                elif self.current_toggle > toggle_bulb:
+                    self.current_toggle -= self.fullround_toggle
+                sec = 0.1
 
-                lightwand_data[self.lights[0]].update(
-                    {"toggle" : self.current_toggle}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
+                while self.current_toggle < toggle_bulb:
+                    self.ADapi.run_in(self.toggle_light, sec)
+                    self.current_toggle += 1
+                    sec += self.toggle_speed
+
+                    # Persistent toggle
+                if self.usePersistentStorage:
+                    with open(self.JSON_PATH, 'r') as json_read:
+                        lightwand_data = json.load(json_read)
+
+                    lightwand_data[self.lights[0]].update(
+                        {"toggle" : self.current_toggle}
+                    )
+                    with open(self.JSON_PATH, 'w') as json_write:
+                        json.dump(lightwand_data, json_write, indent = 4)
