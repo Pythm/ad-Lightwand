@@ -4,7 +4,9 @@ an Appdaemon app for extensive control of lights via [Home Assistant](https://ww
 ![Picture is generated with AI](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)
 
 ## Installation
-Download the `Lightwand` directory from inside the `apps` directory to your [Appdaemon](https://appdaemon.readthedocs.io/en/latest/) `apps` directory, then add configuration to a .yaml or .toml file to enable the `Lightwand` module. Minimum required in your configuration is:
+1. Download the `Lightwand` directory from inside the `apps` directory here to your [Appdaemon](https://appdaemon.readthedocs.io/en/latest/) `apps` directory.
+2. Add the configuration to a .yaml or .toml file to enable the `Lightwand` module. Minimum required in your configuration is:
+
 ```yaml
 nameyourRoom:
   module: lightwand
@@ -25,19 +27,18 @@ All lights for the room is configured as either `MQTTLights` to control lights d
 Each of the different light types can have multiple <b>-lights</b> as lists with the lights / switches. Each set containing the same settings including automations, motions, modes, lux on/off/constraints and conditions.
 
 ### MQTTLights
-Tested with [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is in step 1-255.
+Tested with [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is set in range 1-255.
 <br>
 <br>Is beeing testet with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). I will only test switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
 <br>
 <br>Mqtt light names are full topics for targets excluding /set, case sensitive.
 <br>Zigbee2mqtt should be something like: zigbee2mqtt/YourLightName
 <br>Zwave could be something like: zwave/YourLightName/switch_multilevel/endpoint_1/targetValue
-<br>App will subscribe to MQTT topics.
+<br>App will set up subscription to MQTT topics.
 
 > [!TIP]
 > I recommend [MQTT Explorer](https://mqtt-explorer.com/) or similar to find Zwave topic.
 
-I do not see any advantages yet to control Zwave via Mqtt rather than via Home Assistant but the option is there
 
 ### Home Assistant Lights
 Is configured with Lights and can control switches and lights. Use entity-id including type as name. Check your entity in Home Assistant for what your light supports as data like brightness, transition, rgb, etc.
@@ -67,7 +68,7 @@ day:
         mode: 'your_mode_name'
 ```
 
-See my [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
+Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
 
 ### Mode names
 > [!IMPORTANT]
@@ -109,16 +110,17 @@ in configuration. This will exclude the room from 'custom' mode and 'wash' mode.
 
 
 ## Defining times for lights
-Automations contains a set of times for each set of light and is activated with mode 'normal'. If you only want lux control on/off you do not need to set up any automations.
+Automations contains a set of times for each set of light and is activated with mode 'normal'. If you only want lux control on/off, you do not need to set up any time automations.
 > [!NOTE]
 > Both Lux constraint and your conditions need to be meet before lights turns on in normal automation.
 
-Automations is based on time that can be both time with sunrise/sunset +- or fixed time. App deletes automations that have a time that are earlier than previous automation time. Useful when both time with sunset and fixed time is given in automations.
+Automations is based on time that can be both time with sunrise/sunset +- or clock-based time.
 
-Optionally in addition to `time` you can also specify `orLater` to have more accurate control of when lights changes depending on season.
-If orLater is later than time it will shift all times following the same timedelta as here until a new orLater is defined.
+Optionally in addition to `time`, you can also specify `orLater` to combine solar-based time and clock-based time to have more accurate control of when lights changes depending on season. If `orLater` is defined, it will shift all times following with the same timedelta as long as not fixed is defined, or not changed from sunrise to sunset time.
 
-You can in prevent shifts and deletions with a `fixed`: True under time that locks time from beeing moved of deleted. I use this to make sure the lights for the children turns off at bedtime even when sun sets after.
+App deletes automations that have a time that are earlier than previous automation time if a time with solar-based and clock-based time is mixed in automations and the `orLater` is not used.
+
+You can in prevent shifts and deletions with a `fixed`: True, which locks the time from being moved or deleted. I use this to make sure the lights in children's rooms turn off at bedtime, even when the sun sets after.
 
 ```yaml
       automations:
@@ -126,7 +128,12 @@ You can in prevent shifts and deletions with a `fixed`: True under time that loc
         orLater: 'sunrise + 00:15:00'
       - time: '20:00:00'
         fixed: True
+        state: turn_off
 ```
+
+> [!TIP]
+> There are ready logs commented out with # to easily log changes to times done by the app. Search code for: `Check if your times are acting as planned. Uncomment line below to get logging on time change`. Just uncomment the log line to see what changes the app does to your timing.
+
 
 ## Motion behaviour
 Configure `motionlights` to change light based on motion sensors in room. A minimum configuration to have the light turn on if lux constraints and conditions are met is:
@@ -168,16 +175,16 @@ If light is dimmable you can provide `offset` to increase or decrease brightness
 > motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
 > <br>If media players is on or night* / off mode is active motion lighting is deactivated.
 
-### Configure automations and motionlights
-Each defined time can have a <b>state</b> and/or a <b>light_data</b>
+### Configure Automations and Motion Lights
+Each defined time can have a **state** and/or a **light_data**.
 
-<b>state</b> defines behavior. No need to define state in time for lux constraints and conditions.
-  - turn_off: light at given time. Can also be defined in motionlights to turn off and keep light off after given time until next time. E.g. turn off at kid's bedroom at 21:00.
-  - adjust: Does not turn on or off light but adjusts light_data at given time. Turn on/off with other modes or manual switch. Not applicable for motion.
+<b>State</b> defines behavior. No need to define state in time for lux constraints and conditions.
+- turn_off: Light at the given time. Can also be defined in motion lights to turn off and keep the light off after the given time until the next time. E.g., turn off at kids' bedroom at 21:00.
+- adjust: Does not turn on or off the light but adjusts `light_data` at the given time. Turn on/off with other modes or manual switch. Not applicable for motion.
 
-<b>light_data</b> contains a set of attributes to be set to light: brightness, transition, color_temp, rgb_color, effect, etc. All attributes are optional.
+<b>Light data</b> contains a set of attributes to be set to the light, such as brightness, transition, color temperature, RGB color, effect, etc. Light data must have either brightness (HA or Zigbee2Mqtt) or value (zwaveJsUi). Other attributes are optional.
 
-Use `dimrate` to set brightness transition over time. -/+ 1 brightness pr x minutes counting down from previous brightness until brightness is met.
+Use `dimrate` to set brightness transition -/+ 1 brightness per x minutes. Dimming from previous dictionary brightness until brightness is met.
 
 > [!NOTE]
 > If '00:00:00' is not defined a turn_off state will be default at midnight if other times is configured in automations or motionlights is defined for lights.
@@ -244,8 +251,11 @@ Trackers will trigger 'presence' mode when new == home and sets 'away' mode if a
 > [!TIP]
 > Tracker will set mode as away when not home but there is no restrictions on calling new modes or normal when away.
 
-### Media players
-Sorted by priority if more than one mediaplayer is defined in room. Can be any sensor or switch with on/off state. Define name of mode for each sensor and define light attributes in light_modes. Media mode will set light and keep as media mode when motion is detected as well as morning, normal and night* modes are called. Calling any other modes will set light to the new mode. If any of the morning, normal or night* modes is called when media is on, media mode will be active again.
+### Media Players
+Sorted by priority if more than one media player is defined in a room. Can be any sensor or switch with an on/off state. Define the name of the mode for each sensor and define light attributes in `light_modes`. The "media mode" will set the light and keep it as the media mode when motion is detected, as well as during morning, normal, and night* modes. Calling any other modes will set the light to the new mode. If any of the morning, normal, or night* modes are called when the media is on, the media mode will be active again.
+
+> [!TIP]
+> Input `delay` option when a TV reports a 'on' state shortly after being turned off and then reported a 'off' state again to avoid lights dimming up and down and up again.
 
 ```yaml
   mediaplayers:
@@ -253,6 +263,7 @@ Sorted by priority if more than one mediaplayer is defined in room. Can be any s
       mode: pc
     - mediaplayer: media_player.tv
       mode: tv
+      delay: 33
 ```
 
 ### Weather sensors
