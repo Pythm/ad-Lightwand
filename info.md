@@ -1,5 +1,5 @@
 # Lightwand by Pythm
-an Appdaemon app for extensive control of lights via [Home Assistant](https://www.home-assistant.io/) or MQTT. Set light data based on time of day or use Mode Change event in Home Assistant to set your light, in addition to motion, presence, lux, rain, and media player sensors.
+an Appdaemon app for extensive control of lights via [Home Assistant](https://www.home-assistant.io/) or MQTT. Set light data based on time of day or use Mode Change event in Home Assistant to set your light, in addition to lux, rain and multiple motion, presence, and media player sensors.
 
 ![Picture is generated with AI](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)
 
@@ -27,9 +27,9 @@ All lights for the room is configured as either `MQTTLights` to control lights d
 Each of the different light types can have multiple <b>-lights</b> as lists with the lights / switches. Each set containing the same settings including automations, motions, modes, lux on/off/constraints and conditions.
 
 ### MQTTLights
-Tested with [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is set in range 1-255.
+Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is set in range 1-255.
 <br>
-<br>Is beeing testet with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). I will only test switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
+<br>Can be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
 <br>
 <br>Mqtt light names are full topics for targets excluding /set, case sensitive.
 <br>Zigbee2mqtt should be something like: zigbee2mqtt/YourLightName
@@ -68,7 +68,8 @@ day:
         mode: 'your_mode_name'
 ```
 
-Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
+> [!TIP]
+> Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
 
 ### Mode names
 > [!IMPORTANT]
@@ -95,15 +96,10 @@ Other modes with additional behaviour:
 <br>When 'morning' mode is triggered, mode will be set to 'normal' if not defined in room and after media players is turned off.
 <br>- 'night*' and 'off'
 <br>In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'.
-<br>All modes starting with 'night' in addition to 'off' will disable motion detection. 
+<br>All modes starting with 'night' in addition to 'off' will disable motion detection.
+<br>Set room in off mode with 'off_' + app name.
 <br>
-<br>'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights. An option for each room is to use
-
-```yaml
-  exclude_from_custom: True
-```
-
-in configuration. This will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom.
+<br>'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
 
 > [!NOTE]
 > 'custom' does not do any automation at all like mediaplayer, motion or lux control.
@@ -114,9 +110,7 @@ Automations contains a set of times for each set of light and is activated with 
 > [!NOTE]
 > Both Lux constraint and your conditions need to be meet before lights turns on in normal automation.
 
-Automations is based on time that can be both time with sunrise/sunset +- or clock-based time.
-
-Optionally in addition to `time`, you can also specify `orLater` to combine solar-based time and clock-based time to have more accurate control of when lights changes depending on season. If `orLater` is defined, it will shift all times following with the same timedelta as long as not fixed is defined, or not changed from sunrise to sunset time.
+Automations are based on time, which can be either solar-based (using sunrise/sunset times) or clock-based. Optionally, in addition to `time`, you can also specify `orLater` to combine solar and clock-based times for more accurate control over when lights change depending on the season. If `orLater` is defined, it will shift all subsequent times by the same timedelta as long as not fixed or changed from sunrise to sunset time. In the example under with clock-based time at 08:00:00 and a solar-based time at sunrise + 00:15:00 defined with `orLater`, the clock-based time at 20:00 will shift by the same amount as the time difference between 08:00 and sunrise + 15 minutes. However, if you use a sunset time instead, the timeshift will stop at the first sunset time. A new timeshift is introduced every time `orLater` is used.
 
 App deletes automations that have a time that are earlier than previous automation time if a time with solar-based and clock-based time is mixed in automations and the `orLater` is not used.
 
@@ -148,8 +142,9 @@ Configure `motionlights` to change light based on motion sensors in room. A mini
         state: turn_on
 ```
 
-If light is dimmable you can provide `offset` to increase or decrease brightness compared to `light_data` in automation for normal light. Insted of `state` you can define `light_data`, or even input your `automations` here with times if you want different brightness etc during the day for motion lights.
+If light is dimmable you can provide `offset` to increase compared to `light_data` in automation for normal light. Insted of `state` you can define `light_data`, or even input your `automations` here with times if you want different brightness etc during the day for motion lights.
 
+Automations example:
 ```yaml
       motionlights:
       - time: '00:00:00'
@@ -174,6 +169,13 @@ If light is dimmable you can provide `offset` to increase or decrease brightness
 > [!NOTE]
 > motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
 > <br>If media players is on or night* / off mode is active motion lighting is deactivated.
+
+State with offset example:
+```yaml
+      motionlights:
+        state: turn_on
+        offset: 35
+```
 
 ### Configure Automations and Motion Lights
 Each defined time can have a **state** and/or a **light_data**.
@@ -200,7 +202,7 @@ You can create as many modes in <b>light_mode</b> as you are able to have the ti
   - `turn_off` Turns off light
   - `manual` Completly manual on/off/brightness etc.
 
-`offset` can be provided to state lux_controlled or turn_on to increase or decrease brightness based on light_data in normal automation.
+`offset` can be provided to state lux_controlled or turn_on to increase or (-) decrease brightness based on light_data in normal automation.
 
 An example :
 
@@ -277,6 +279,14 @@ You can configure two outdoor lux sensors with the second ending with '_2' and i
   rain_sensor: sensor.netatmo_rain
 ```
 
+### Custom options
+Create a list of `options` with choises to make for each room.
+> [!TIP]
+>  Enable motion detection during `night` mode with `night_motion`
+
+> [!TIP]
+> `exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom.
+
 ### Conditions and constraints
 You can use Lux sensors to control or constrain lights. Optionally you can provide IF statements to be meet for light to turn on at normal/morning/motion mode or with automations defined. Inherits Appdaemon Api as ADapi.
 <br>I use this on some of the lights in my livingroom and kitchen for when my wife is not home but without using the presence sensor because I do not want to set my rooms as away.
@@ -331,8 +341,10 @@ your_room_name:
   listen_sensors:
     - person.wife
 
-  # Exclude the room from custom mode
-  exclude_from_custom: True
+  # Exclude the room from custom mode or allow motion detection during night
+  options:
+    - exclude_from_custom
+    - night_motion
 
   # Motion sensors.
   # Input delay in seconds before light turns back from motion to 'mode' light
@@ -505,7 +517,7 @@ key | optional | type | default | introduced in | description
 `class` | False | string | | v1.0.0 | The name of the Class.
 `HASS_namespace` | True | string | default | v1.1.0 | HASS namespace
 `MQTT_namespace` | True | string | default | v1.1.0 | MQTT namespace
-`exclude_from_custom` | True | bool | False | v1.0.0 | Exclude the room from custom mode
+`options` | True | list | False | v1.1.5 | Can contain exclude_from_custom to exclude the room from custom mode, and night_motion to allow motion detection during night
 `json_path` | True | string | | v1.0.0 | Use Json for persistency when restarted. Adds 'your_room_name' + '.json' to the json_path
 `rain_sensor` | True | sensor | | v1.0.0 | HA sensor for detection of rain. If rain is detected, it will raise lux constraint by * 1.5
 `OutLux_sensor` | True | sensor | | v1.0.0 | Sensor for Lux detection
@@ -514,10 +526,10 @@ key | optional | type | default | introduced in | description
 `OutLuxMQTT_2` | True | MQTT sensor | | v1.0.3 | Secondary Lux detection via MQTT
 `RoomLuxMQTT` | True | string | | v1.0.0 | MQTT lux sensor for lux control and constraint
 `RoomLux_sensor` | True | string | | v1.0.0 | HA Lux sensor for lux control and constraint
-`mediaplayers` | True | list | | v1.0.0 | Media players sorted by priority if more than one mediaplayer is defined
-`motion_sensors` | True | list | | v1.0.0 | HA Motion sensors
-`MQTT_motion_sensors` | True | list | | v1.0.0 | MQTT motion sensors
-`presence` | True | list | | v1.0.0 | HA Presence detection
+`mediaplayers` | True | dict | | v1.0.0 | Media players sorted by priority if more than one mediaplayer is defined
+`motion_sensors` | True | dict | | v1.0.0 | HA Motion sensors
+`MQTT_motion_sensors` | True | dict | | v1.0.0 | MQTT motion sensors
+`presence` | True | dict | | v1.0.0 | HA Presence detection
 `Lights` | True | list | | v1.0.0 | HA lights
 `MQTTLights` | True | list | | v1.1.0 | MQTT lights
 `ToggleLights` | True | list | | v1.0.0 | Use ToggleLights instead of Lights for bulbs/lights that dim with toggle
@@ -534,9 +546,9 @@ key | optional | type | default | introduced in | description
 key | optional | type | default | introduced in | description
 -- | -- | -- | -- | -- | --
 `lights` | True | list | | v1.0.0 | list of lights
-`automations` | True | list | | v1.0.0 | Configure default light behaviour for 'normal' mode with automations
-`motionlights` | True | list | | v1.0.0 | Configure default light behaviour for motion detected
-`light_modes` | True | list | | v1.0.0 | Name of mode. Define light modes to change light accordingly
+`automations` | True | dict | | v1.0.0 | Configure default light behaviour for 'normal' mode with automations
+`motionlights` | True | dict | | v1.0.0 | Configure default light behaviour for motion detected
+`light_modes` | True | dict | | v1.0.0 | Name of mode. Define light modes to change light accordingly
 `lux_constraint` | True | int | | v1.0.0 | Outdoor lux constraint
 `lux_turn_on` | True | int | | v1.0.0 | Outdoor lux to turn on light if below
 `lux_turn_off` | True | int | | v1.0.0 | Outdoor lux to turn off light if above

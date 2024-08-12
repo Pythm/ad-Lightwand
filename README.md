@@ -29,7 +29,7 @@ Each of the different light types can have multiple <b>-lights</b> as lists with
 ### MQTTLights
 Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is set in range 1-255.
 <br>
-<br>Is beeing testet with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). I will only test switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
+<br>Can be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
 <br>
 <br>Mqtt light names are full topics for targets excluding /set, case sensitive.
 <br>Zigbee2mqtt should be something like: zigbee2mqtt/YourLightName
@@ -68,7 +68,8 @@ day:
         mode: 'your_mode_name'
 ```
 
-Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
+> [!TIP]
+> Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
 
 ### Mode names
 > [!IMPORTANT]
@@ -95,7 +96,8 @@ Other modes with additional behaviour:
 <br>When 'morning' mode is triggered, mode will be set to 'normal' if not defined in room and after media players is turned off.
 <br>- 'night*' and 'off'
 <br>In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'.
-<br>All modes starting with 'night' in addition to 'off' will disable motion detection. 
+<br>All modes starting with 'night' in addition to 'off' will disable motion detection.
+<br>Set room in off mode with 'off_' + app name.
 <br>
 <br>'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
 

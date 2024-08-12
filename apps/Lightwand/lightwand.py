@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.5"
+__version__ = "1.1.6"
 
 import hassapi as hass
 import datetime
@@ -71,19 +71,24 @@ class Room(hass.Hass):
                 {motion_sensor['motion_sensor'] : False}
             )
 
-        MQTT_motion_sensors:list = self.args.get('MQTT_motion_sensors', {})
-        if not self.mqtt:
-            self.mqtt = self.get_plugin_api("MQTT")
-        for motion_sensor in MQTT_motion_sensors:
-            self.mqtt.mqtt_subscribe(motion_sensor['motion_sensor'])
-            self.mqtt.listen_event(self.MQTT_motion_event, "MQTT_MESSAGE",
-                topic = motion_sensor['motion_sensor'],
-                namespace = MQTT_namespace,
-                motion_sensor = motion_sensor
-            )
-            self.all_motion_sensors.update(
-                {motion_sensor['motion_sensor'] : False}
-            )
+
+        if 'MQTT_motion_sensors' in self.args:
+            MQTT_motion_sensors:list = self.args['MQTT_motion_sensors']
+            if not self.mqtt:
+                self.mqtt = self.get_plugin_api("MQTT")
+            for motion_sensor in MQTT_motion_sensors:
+                self.mqtt.mqtt_subscribe(motion_sensor['motion_sensor'])
+                self.mqtt.listen_event(self.MQTT_motion_event, "MQTT_MESSAGE",
+                    topic = motion_sensor['motion_sensor'],
+                    namespace = MQTT_namespace,
+                    motion_sensor = motion_sensor
+                )
+                self.all_motion_sensors.update(
+                    {motion_sensor['motion_sensor'] : False}
+                )
+
+
+        self.bed_sensors:list = self.args.get('bed_sensors', [])
 
 
             # Weather sensors
@@ -309,9 +314,22 @@ class Room(hass.Hass):
             ):
                 return
 
+
+        """ Check if old light mode is night and bed is occupied."""
+        string:str = self.LIGHT_MODE
+        if string[:5] == 'night':
+            inBed = False
+            for bed_sensor in self.bed_sensors:
+                if self.get_state(bed_sensor) == 'on':
+                    self.listen_state(self.out_of_bed, bed_sensor, new = 'off', oneshot = True)
+                    inBed = True
+            if inBed:
+                return
+
         if (
             data['mode'] in self.all_modes
             or data['mode'] == 'morning'
+            or data['mode'] == 'off_' + str(self.name)
         ):
             self.LIGHT_MODE = data['mode']
             if data['mode'] == 'morning':
@@ -333,7 +351,7 @@ class Room(hass.Hass):
                 if (
                     (string[:5] != 'night'
                     or self.night_motion)
-                    and self.LIGHT_MODE != 'off'
+                    and string[:3] != 'off'
                 ):
                     """ Checks if motion and motion timer has ended to set new lightmode.
                         If mode is 'night*' or 'off' it will set via normal setLigthMode directly
@@ -418,7 +436,7 @@ class Room(hass.Hass):
             if (
                 (string[:5] != 'night'
                 or self.night_motion)
-                and self.LIGHT_MODE != 'off'
+                and string[:3] != 'off'
             ):
                 for light in self.roomlight:
                     light.setMotion(lightmode = self.LIGHT_MODE)
@@ -449,6 +467,15 @@ class Room(hass.Hass):
             self.handle = self.run_in(self.MotionEnd, int(sensor['delay']))
         else:
             self.handle = self.run_in(self.MotionEnd, 60)
+
+
+    def out_of_bed(self, entity, attribute, old, new, kwargs) -> None:
+        for bed_sensor in self.bed_sensors:
+            if self.get_state(bed_sensor) == 'on':
+                return
+        self.LIGHT_MODE = 'normal'
+        for light in self.roomlight:
+            light.setLightMode(lightmode = self.LIGHT_MODE)
 
 
     def presence_change(self, entity, attribute, old, new, kwargs) -> None:
@@ -1200,6 +1227,7 @@ class Light:
         if (
             lightmode == 'away'
             or lightmode == 'off'
+            or lightmode == 'off_' + str(self.ADapi.name)
             or lightmode == 'night'
         ):
             self.lightmode = lightmode
@@ -1238,7 +1266,17 @@ class Light:
         else:
             self.lightmode = lightmode
 
+            # Do not adjust if current mode's state is manual.
+        for mode in self.light_modes:
+            if lightmode == mode['mode']:
+                if 'state' in mode:
+                    if 'manual' in mode['state']:
+                        return
+
         if self.motionlight:
+            self.motion = True
+            self.wereMotion = True
+
             if (
                 not self.checkOnConditions()
                 or not self.checkLuxConstraints()
@@ -1262,15 +1300,6 @@ class Light:
             #        return
 
 
-                # Do not adjust if current mode's state is manual.
-            for mode in self.light_modes:
-                if lightmode == mode['mode']:
-                    if 'state' in mode:
-                        if 'manual' in mode['state']:
-                            return
-
-            self.motion = True
-            self.wereMotion = True
             if type(self.motionlight) == list:
                 self.setLightAutomation(automations = self.motionlight)
 
@@ -1298,10 +1327,6 @@ class Light:
                         """ Sets light with brightness defined in automations
                         """
                         self.setLightAutomation(automations = self.motionlight)
-
-                    elif not self.isON:
-                        self.turn_on_lights()
-
 
 
     def setLightAutomation(self, automations:list, offset:int = 0 ) -> None:
@@ -1966,6 +1991,7 @@ class Toggle(Light):
         if (
             lightmode == 'away'
             or lightmode == 'off'
+            or lightmode == 'off_' + str(self.ADapi.name)
             or lightmode == 'night'
         ):
             self.lightmode = lightmode
