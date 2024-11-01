@@ -253,7 +253,7 @@ Trackers will trigger 'presence' mode when new == home and sets 'away' mode if a
 > [!TIP]
 > Tracker will set mode as away when not home but there is no restrictions on calling new modes or normal when away.
 
-With `bed_sensor` light will wait until bed is exited to turn on in room when night ended
+With `bed_sensor` light mode will stay at nigth mode until bed is exited, to then turn on normal operations when bed is exited.
 
 ### Media Players
 Sorted by priority if more than one media player is defined in a room. Can be any sensor or switch with an on/off state. Define the name of the mode for each sensor and define light attributes in `light_modes`. The "media mode" will set the light and keep it as the media mode when motion is detected, as well as during morning, normal, and night* modes. Calling any other modes will set the light to the new mode. If any of the morning, normal, or night* modes are called when the media is on, the media mode will be active again.

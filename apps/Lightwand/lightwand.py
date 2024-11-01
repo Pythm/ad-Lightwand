@@ -3,9 +3,9 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.6"
+__version__ = "1.1.7"
 
-import hassapi as hass
+import appdaemon.plugins.hass.hassapi as hass
 import datetime
 import json
 import csv
@@ -318,13 +318,18 @@ class Room(hass.Hass):
         """ Check if old light mode is night and bed is occupied."""
         string:str = self.LIGHT_MODE
         if string[:5] == 'night':
-            inBed = False
-            for bed_sensor in self.bed_sensors:
-                if self.get_state(bed_sensor) == 'on':
-                    self.listen_state(self.out_of_bed, bed_sensor, new = 'off', oneshot = True)
-                    inBed = True
-            if inBed:
-                return
+            newmode_string:str = data['mode']
+            if (
+                newmode_string[:5] != 'night'
+                and newmode_string[:3] != 'off'
+            ):
+                inBed = False
+                for bed_sensor in self.bed_sensors:
+                    if self.get_state(bed_sensor) == 'on':
+                        self.listen_state(self.out_of_bed, bed_sensor, new = 'off', oneshot = True)
+                        inBed = True
+                if inBed:
+                    return
 
         if (
             data['mode'] in self.all_modes
@@ -405,7 +410,7 @@ class Room(hass.Hass):
                     {sensor['motion_sensor'] : True}
                 )
                 self.newMotion(sensor = sensor)
-            else:
+            elif self.all_motion_sensors[sensor['motion_sensor']]:
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : False}
                 )
@@ -423,7 +428,7 @@ class Room(hass.Hass):
                 self.oldMotion(sensor = sensor)
 
 
-    def newMotion(self, sensor:dict) -> None:
+    def newMotion(self, sensor) -> None:
         """ Motion detected. Checks constraints given in motion and setMotion
         """
         if 'motion_constraints' in sensor:
@@ -450,7 +455,7 @@ class Room(hass.Hass):
                 self.handle = None
 
 
-    def oldMotion(self, sensor:dict) -> None:
+    def oldMotion(self, sensor) -> None:
         """ Motion no longer detected in sensor. Checks other sensors in room and starts countdown to turn off light
         """
         for sens in self.all_motion_sensors:
@@ -474,6 +479,11 @@ class Room(hass.Hass):
             if self.get_state(bed_sensor) == 'on':
                 return
         self.LIGHT_MODE = 'normal'
+        for sens in self.all_motion_sensors:
+            if self.all_motion_sensors[sens]:
+                for light in self.roomlight:
+                    light.setMotion(lightmode = self.LIGHT_MODE)
+                return
         for light in self.roomlight:
             light.setLightMode(lightmode = self.LIGHT_MODE)
 
@@ -858,7 +868,7 @@ class Light:
         if self.motionlight and not self.automations:
             # Sets a valid state turn off in automation when motionlight turns on light for when motion ends
             self.automations = [{'time': '00:00:00', 'state': 'turn_off'}]
-            self.automations_original = [{'time': '00:00:00', 'state': 'turn_off'}]
+            self.automations_original = copy.deepcopy(self.automations)
 
         self.ADapi.run_daily(self.rundaily_Automation_Adjustments, '00:01:00')
 
@@ -1156,7 +1166,6 @@ class Light:
                 or not self.checkLuxConstraints()
             ):
                 lightmode = 'normal'
-                return
 
         if lightmode == 'custom':
             # Custom mode will break any automation and keep light as is
@@ -1291,14 +1300,6 @@ class Light:
                 or lightmode == 'custom'
             ):
                 return
-            
-            #string:str = lightmode
-            #if string[:5] == 'night':
-            #    if not 'night' in self.motionlight:
-            #        # Do not do any motion when night if not specified
-            #        self.motion = False
-            #        return
-
 
             if type(self.motionlight) == list:
                 self.setLightAutomation(automations = self.motionlight)
