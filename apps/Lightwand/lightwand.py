@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.7"
+__version__ = "1.1.8"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -264,6 +264,7 @@ class Room(hass.Hass):
 
             # Media players for setting mediaplayer mode
         for mediaplayer in self.mediaplayers:
+            delay = mediaplayer.get('delay', 0)
             self.listen_state(self.media_on, mediaplayer['mediaplayer'],
                 new = 'on',
                 old = 'off',
@@ -273,7 +274,7 @@ class Room(hass.Hass):
             self.listen_state(self.media_off, mediaplayer['mediaplayer'],
                 new = 'off',
                 old = 'on',
-                duration = 33,
+                duration = delay,
                 namespace = HASS_namespace,
                 mode = mediaplayer['mode']
             )
@@ -742,8 +743,10 @@ class Room(hass.Hass):
         if self.check_mediaplayers_off():
             for sens in self.all_motion_sensors:
                 if self.all_motion_sensors[sens]:
-                    self.newMotion(sensor = sens)
+                    for light in self.roomlight:
+                        light.setMotion(lightmode = self.LIGHT_MODE)
                     return
+
             for light in self.roomlight:
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
@@ -837,6 +840,20 @@ class Light:
         if self.automations:
             self.automations_original = copy.deepcopy(self.automations)
             self.checkTimesinAutomations(self.automations)
+
+            string:str = self.lights[0]
+            for automation in self.automations:
+                if (
+                    'adjust' in automation['state']
+                    and not self.manualHandler
+                ):
+                    if (
+                        string[:6] == 'light.'
+                        or string[:7] == 'switch.'
+                    ):
+                        self.manualHandler = self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
+                            namespace = HASS_namespace
+                        )
 
         self.motions_original:list = []
         if self.motionlight:
