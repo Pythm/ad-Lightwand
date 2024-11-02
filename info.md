@@ -267,7 +267,7 @@ Sorted by priority if more than one media player is defined in a room. Can be an
       mode: pc
     - mediaplayer: media_player.tv
       mode: tv
-      delay: 33
+      delay: 0
 ```
 
 ### Weather sensors
