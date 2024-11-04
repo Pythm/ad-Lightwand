@@ -26,7 +26,7 @@ nameyourRoom:
 All lights for the room is configured as either `MQTTLights` to control lights directly via MQTT or `Lights` as Home Assistant lights/switches. Optionally as Home Assistant switches you can configure `ToggleLights` if you have lights/bulbs that dim with toggle.
 Each of the different light types can have multiple <b>-lights</b> as lists with the lights / switches. Each set containing the same settings including automations, motions, modes, lux on/off/constraints and conditions.
 
-### MQTTLights
+#### MQTTLights
 Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is set in range 1-255.
 <br>
 <br>Can be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
@@ -40,12 +40,13 @@ Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control 
 > I recommend [MQTT Explorer](https://mqtt-explorer.com/) or similar to find Zwave topic.
 
 
-### Home Assistant Lights
+#### Home Assistant Lights
 Is configured with Lights and can control switches and lights. Use entity-id including type as name. Check your entity in Home Assistant for what your light supports as data like brightness, transition, rgb, etc.
 
-### ToggleLights
+#### ToggleLights
 ToggleLights is Home Assistant switch entities. Toggles are configured with a `toggle` number on how many times to turn on light to get wanted dim instead of light_data for dimmable lights. Input `num_dim_steps` as number of dim steps in bulb.
-
+<br>
+<br>
 
 ## Mode change events
 > [!IMPORTANT]
@@ -74,22 +75,27 @@ day:
 ### Mode names
 > [!IMPORTANT]
 > When an event with "MODE_CHANGE" is triggered, it will check thru all defined modes for all lights in the app/Room.
-> <br>- If mode is defined in room and for light it will update light with state/data defined in mode
-> <br>- If mode is not defined in light but is present in room, light will be set to normal mode
-> <br>- If mode is not defined in room, the lights will keep existing mode
+> <br>- If mode is defined in room and for light it will update light with state/data defined in mode.
+> <br>- If mode is not defined in light but is present in room, light will be set to normal mode.
+> <br>- If mode is not defined in room, the lights will keep existing mode.
 
-There are some predefined mode names that behaves and does different things:
-<br>All mode names except <b>'custom'</b> can be defined in 'light_modes' with your own configuration.
+##### Predefined mode names 
+
+All mode names except <b>'custom'</b> can be defined in 'light_modes' with your own configuration.
+
+> [!NOTE]
+> Setting mode to 'custom' stops all automation like mediaplayer, motion or lux control.
+
+The predefined mode names with default turn on/off:
+
 <br>Mode names that defaults to off:
-<br>- 'away'
-<br>- 'off'
-<br>- 'night'
+<br>- `away`
+<br>- `off`
+<br>- `night`
 <br>Mode names with default full brightness:
-<br>- 'fire'
-<br>- 'wash'
-
-> [!TIP]
-> You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
+<br>- `fire`
+<br>- `wash`
+<br>
 
 Other modes with additional behaviour:
 <br>- 'morning' behaves as 'normal' mode with conditions and Lux constraints. Useful for some extra light in morning during workdays.
@@ -101,11 +107,15 @@ Other modes with additional behaviour:
 <br>
 <br>'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
 
-> [!NOTE]
-> 'custom' does not do any automation at all like mediaplayer, motion or lux control.
+> [!TIP]
+> You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
 
 
-## Defining times for lights
+## Automating lights
+Setting up automation is configured by time with a state and/or light data.
+
+
+### Defining times
 Automations contains a set of times for each set of light and is activated with mode 'normal'. If you only want lux control on/off, you do not need to set up any time automations.
 > [!NOTE]
 > Both Lux constraint and your conditions need to be meet before lights turns on in normal automation.
@@ -126,10 +136,27 @@ You can in prevent shifts and deletions with a `fixed`: True, which locks the ti
 ```
 
 > [!TIP]
-> There are ready logs commented out with # to easily log changes to times done by the app. Search code for: `Check if your times are acting as planned. Uncomment line below to get logging on time change`. Just uncomment the log line to see what changes the app does to your timing.
+> There are ready logs inn the python file commented out with # to easily log changes to times done by the app. Search code for: `Check if your times are acting as planned. Uncomment line below to get logging on time change`. Just uncomment the log line to see what changes the app does to your timing.
+
+### Chosing between state and light_data
+Each defined time can have a **state** and/or a **light_data**.
+
+<b>State</b> defines behavior.
+- turn_off: Turns off light at the given time. Can also be defined in motion lights to turn off and keep the light off after the given time until the next time. E.g., turn off at kids' bedroom at 21:00.
+- adjust: Does not turn on or off the light but adjusts `light_data` at the given time. Turn on/off with other modes or manual switch. Not applicable for motion.
+
+<b>Light data</b> contains a set of attributes to be set to the light, such as brightness, transition, color temperature, RGB color, effect, etc. Light data must have either brightness (HA or Zigbee2Mqtt) or value (zwaveJsUi). Other attributes are optional.
+
+Use `dimrate` to set brightness transition -/+ 1 brightness per x minutes. Dimming from previous timed brightness until brightness is met.
+
+> [!NOTE]
+> If '00:00:00' is not defined a turn_off state will be default at midnight if other times is configured in automations or motionlights for lights.
+
+If you only provide time in automation, the state will be set to `none` and the light will turn on if conditions are met. However, if you do not provide any light data it will not adjust anything.
+If you do not provide time you must specify state.
 
 
-## Motion behaviour
+### Motion behaviour
 Configure `motionlights` to change light based on motion sensors in room. A minimum configuration to have the light turn on if lux constraints and conditions are met is:
 
 ```yaml
@@ -142,7 +169,7 @@ Configure `motionlights` to change light based on motion sensors in room. A mini
         state: turn_on
 ```
 
-If light is dimmable you can provide `offset` to increase compared to `light_data` in automation for normal light. Insted of `state` you can define `light_data`, or even input your `automations` here with times if you want different brightness etc during the day for motion lights.
+You can provide `offset` to dimmable lights to increase compared to `light_data` in automation for normal light. Insted of `state` you can define `light_data`, or even input your `automations` here with times if you want different brightness during the day for motion lights.
 
 Automations example:
 ```yaml
@@ -177,22 +204,9 @@ State with offset example:
         offset: 35
 ```
 
-### Configure Automations and Motion Lights
-Each defined time can have a **state** and/or a **light_data**.
 
-<b>State</b> defines behavior. No need to define state in time for lux constraints and conditions.
-- turn_off: Light at the given time. Can also be defined in motion lights to turn off and keep the light off after the given time until the next time. E.g., turn off at kids' bedroom at 21:00.
-- adjust: Does not turn on or off the light but adjusts `light_data` at the given time. Turn on/off with other modes or manual switch. Not applicable for motion.
-
-<b>Light data</b> contains a set of attributes to be set to the light, such as brightness, transition, color temperature, RGB color, effect, etc. Light data must have either brightness (HA or Zigbee2Mqtt) or value (zwaveJsUi). Other attributes are optional.
-
-Use `dimrate` to set brightness transition -/+ 1 brightness per x minutes. Dimming from previous dictionary brightness until brightness is met.
-
-> [!NOTE]
-> If '00:00:00' is not defined a turn_off state will be default at midnight if other times is configured in automations or motionlights is defined for lights.
-
-### Configure modes
-You can create as many modes in <b>light_mode</b> as you are able to have the time to configure and they can be defined with automations for different light settings during the day, light_data for one fits all setting or with a simple state: turn_on, lux_controlled, turn_off or manual.
+### Configure mode light
+You can create as many modes in <b>light_mode</b> as you are able to have the time to configure, and they can be defined with automations for different light settings during the day, light_data for one fits all setting or with a simple state: turn_on, lux_controlled, turn_off or manual.
 
 `automations` is configured and functions the same as automations for normal with lux and conditions constraints.
 `light_data` can be used if you only want one setting to turn on light with given data. This is Lux constrained but Conditions do not need to be met.
