@@ -1246,6 +1246,7 @@ class Light:
                     # Turns on light regardless of Lux and Conditions. Offset can be provided to increase or decrease lighting in mode
                     if (
                         'turn_on' in mode['state']
+                        or 'none' in mode['state']
                         or 'lux_controlled' in mode['state']
                     ):
                         if 'lux_controlled' in mode['state']:
@@ -1361,7 +1362,10 @@ class Light:
 
                 # Defines more simple on/off with possibility to have offset off normal automation
             elif 'state' in self.motionlight:
-                if 'turn_on' in self.motionlight['state']:
+                if (
+                    'turn_on' in self.motionlight['state']
+                    or 'none' in self.motionlight['state']
+                ):
                     if (
                         'offset' in self.motionlight
                         and self.automations
