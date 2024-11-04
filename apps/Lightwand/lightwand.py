@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.8"
+__version__ = "1.1.9"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -22,6 +22,7 @@ class Room(hass.Hass):
         
         self.LIGHT_MODE:str = 'normal'
         self.all_modes:list = ['normal', 'away', 'off', 'night', 'custom', 'fire', 'wash']
+        self.getOutOfBedMode:str = 'normal'
         self.ROOM_LUX:float = 0.0
         self.OUT_LUX:float = 0.0
         self.RAIN:float = 0.0
@@ -68,7 +69,7 @@ class Room(hass.Hass):
                 motion_sensor = motion_sensor
             )
             self.all_motion_sensors.update(
-                {motion_sensor['motion_sensor'] : False}
+                {motion_sensor['motion_sensor'] : self.get_state(motion_sensor['motion_sensor']) == 'on'}
             )
 
 
@@ -279,7 +280,8 @@ class Room(hass.Hass):
                 mode = mediaplayer['mode']
             )
 
-            # Sets light to mediaplayer if on
+            # Sets lights at startup
+        mediaIsOn:bool = False
         if (
             self.LIGHT_MODE == 'normal'
             or self.LIGHT_MODE == 'night'
@@ -288,8 +290,11 @@ class Room(hass.Hass):
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
                     for light in self.roomlight:
                         light.setLightMode(lightmode = mediaplayer['mode'])
+                    mediaIsOn = True
                     break
-
+        
+        if not mediaIsOn:
+            self.reactToChange()
     
         """ This listens to events fired as MODE_CHANGE with data beeing mode = 'yourmode'
             self.fire_event('MODE_CHANGE', mode = 'normal')
@@ -318,25 +323,27 @@ class Room(hass.Hass):
 
         """ Check if old light mode is night and bed is occupied."""
         string:str = self.LIGHT_MODE
+        inBed = False
         if string[:5] == 'night':
             newmode_string:str = data['mode']
             if (
                 newmode_string[:5] != 'night'
                 and newmode_string[:3] != 'off'
             ):
-                inBed = False
                 for bed_sensor in self.bed_sensors:
                     if self.get_state(bed_sensor) == 'on':
                         self.listen_state(self.out_of_bed, bed_sensor, new = 'off', oneshot = True)
                         inBed = True
-                if inBed:
-                    return
 
         if (
             data['mode'] in self.all_modes
             or data['mode'] == 'morning'
             or data['mode'] == 'off_' + str(self.name)
         ):
+            if inBed:
+                self.getOutOfBedMode = data['mode']
+                return
+
             self.LIGHT_MODE = data['mode']
             if data['mode'] == 'morning':
                 if not 'morning' in self.all_modes:
@@ -479,14 +486,8 @@ class Room(hass.Hass):
         for bed_sensor in self.bed_sensors:
             if self.get_state(bed_sensor) == 'on':
                 return
-        self.LIGHT_MODE = 'normal'
-        for sens in self.all_motion_sensors:
-            if self.all_motion_sensors[sens]:
-                for light in self.roomlight:
-                    light.setMotion(lightmode = self.LIGHT_MODE)
-                return
-        for light in self.roomlight:
-            light.setLightMode(lightmode = self.LIGHT_MODE)
+        self.LIGHT_MODE = self.getOutOfBedMode
+        self.reactToChange()
 
 
     def presence_change(self, entity, attribute, old, new, kwargs) -> None:
@@ -499,9 +500,7 @@ class Room(hass.Hass):
                 if not condition_statement:
                     if self.LIGHT_MODE == 'away':
                         self.LIGHT_MODE = 'normal'
-                        if self.check_mediaplayers_off():
-                            for light in self.roomlight:
-                                light.setLightMode(lightmode = self.LIGHT_MODE)
+                        self.reactToChange()
                     return
 
             if self.handle != None:
@@ -533,9 +532,7 @@ class Room(hass.Hass):
         elif old == 'home':
             for tracker in self.presence:
                 if self.get_state(tracker['tracker']) == 'home':
-                    if self.check_mediaplayers_off():
-                        for light in self.roomlight:
-                            light.setLightMode(lightmode = self.LIGHT_MODE)
+                    self.reactToChange()
                     return
             self.LIGHT_MODE = 'away'
 
@@ -555,13 +552,19 @@ class Room(hass.Hass):
     def state_changed(self, entity, attribute, old, new, kwargs) -> None:
         """ Update light settings when state of a HA entity is updated
         """
-        for sens in self.all_motion_sensors:
-            if self.all_motion_sensors[sens]:
-                for light in self.roomlight:
-                    light.setMotion(lightmode = self.LIGHT_MODE)
-                return
+        self.reactToChange()
+    
+
+    def reactToChange(self):
 
         if self.check_mediaplayers_off():
+
+            for sens in self.all_motion_sensors:
+                if self.all_motion_sensors[sens]:
+                    for light in self.roomlight:
+                        light.setMotion(lightmode = self.LIGHT_MODE)
+                    return
+
             for light in self.roomlight:
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
@@ -599,16 +602,27 @@ class Room(hass.Hass):
             or self.outLux1 >= self.outLux2
         ):
             self.OUT_LUX = self.outLux1
+
+            ismotion:bool = False
+            for sens in self.all_motion_sensors:
+                if self.all_motion_sensors[sens]:
+                    ismotion = True
         
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
                 if light.lux_turn_off:
                     if self.OUT_LUX > light.lux_turn_off:
-                        light.setLightMode()
+                        if ismotion:
+                            light.setMotion()
+                        else:
+                            light.setLightMode()
 
                 if light.lux_turn_on:
                     if self.OUT_LUX < light.lux_turn_on:
-                        light.setLightMode()
+                        if ismotion:
+                            light.setMotion()
+                        else:
+                            light.setLightMode()
 
                 # Persistent storage
             if self.usePersistentStorage:
@@ -649,15 +663,26 @@ class Room(hass.Hass):
         ):
             self.OUT_LUX = self.outLux2
         
+            ismotion:bool = False
+            for sens in self.all_motion_sensors:
+                if self.all_motion_sensors[sens]:
+                    ismotion = True
+        
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
                 if light.lux_turn_off:
                     if self.OUT_LUX > light.lux_turn_off:
-                        light.setLightMode()
+                        if ismotion:
+                            light.setMotion()
+                        else:
+                            light.setLightMode()
 
                 if light.lux_turn_on:
                     if self.OUT_LUX < light.lux_turn_on:
-                        light.setLightMode()
+                        if ismotion:
+                            light.setMotion()
+                        else:
+                            light.setLightMode()
 
                 # Persistent storage
             if self.usePersistentStorage:
@@ -692,15 +717,26 @@ class Room(hass.Hass):
 
 
     def newRoomLux(self) -> None:
+        ismotion:bool = False
+        for sens in self.all_motion_sensors:
+            if self.all_motion_sensors[sens]:
+                ismotion = True
+
         for light in self.roomlight:
             light.roomLux = self.ROOM_LUX
             if light.room_lux_turn_off:
                 if self.ROOM_LUX > light.room_lux_turn_off:
-                    light.setLightMode()
+                    if ismotion:
+                        light.setMotion()
+                    else:
+                        light.setLightMode()
 
             if light.room_lux_turn_on:
                 if self.ROOM_LUX < light.room_lux_turn_on:
-                    light.setLightMode()
+                    if ismotion:
+                        light.setMotion()
+                    else:
+                        light.setLightMode()
 
             # Persistent storage
         if self.usePersistentStorage:
@@ -740,15 +776,8 @@ class Room(hass.Hass):
 
 
     def media_off(self, entity, attribute, old, new, kwargs) -> None:
-        if self.check_mediaplayers_off():
-            for sens in self.all_motion_sensors:
-                if self.all_motion_sensors[sens]:
-                    for light in self.roomlight:
-                        light.setMotion(lightmode = self.LIGHT_MODE)
-                    return
-
-            for light in self.roomlight:
-                light.setLightMode(lightmode = self.LIGHT_MODE)
+        
+        self.reactToChange()
 
 
     def check_mediaplayers_off(self) -> bool:
@@ -1788,7 +1817,7 @@ class MQTTLights(Light):
                 """
                 self.ADapi.log(
                     f"New value lux data for {self.lights[0]} is not bool or int and has not been programmed yet. "
-                    "Please make a pull request at https://github.com/Pythm/ad-Lightwand "
+                    "Please issue a request at https://github.com/Pythm/ad-Lightwand "
                     f"and provide what MQTT brigde and light type you are trying to control, in addition to the data sent from broker: {lux_data}"
                 )
 
@@ -1800,7 +1829,7 @@ class MQTTLights(Light):
             """
             self.ADapi.log(
                 f"Unknown data for {self.lights[0]}. This has not been programmed yet. "
-                "Please make a pull request at https://github.com/Pythm/ad-Lightwand "
+                "Please issue a request at https://github.com/Pythm/ad-Lightwand "
                 f"and provide what MQTT brigde and light type you are trying to control, in addition to the data sent from broker: {lux_data}"
             )
 
