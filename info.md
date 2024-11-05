@@ -194,8 +194,10 @@ Automations example:
           brightness: 3
 ```
 > [!NOTE]
-> motionlights will not turn down brightness in case other modes sets brightness higher e.g. <b>wash</b>.
+> When motion is active the light will not dim down. Motion detected will also not turn down brightness to set motion, in case other modes sets brightness higher e.g. <b>wash</b> active and set to 255 and motion only set to 125, light will stay at 255 brightness.
 > <br>If media players is on or night* / off mode is active motion lighting is deactivated.
+
+
 
 State with offset example:
 ```yaml
@@ -321,6 +323,14 @@ You can define any statement you want so I have not figured out a better way tha
       room_lux_turn_on: 80
       room_lux_turn_off: 100
 ```
+
+## Manual changes to lights
+If you manage to configure every light to your liking, normal automation should be sufficient for day-to-day use without intervention. However, there are days when you'll need something else. To avoid creating a mode for every possible scenario, I've tried to keep the automations so that if you set or adjust lights manually, they will stay until:
+-Motion inclusive given delay has ended
+-Lux levels go from below to above lux constraint. They will remain on if turned on when lux is above.
+-Mode is changed
+-Time automation is executed when conditions are met (e.g., if lux is above the constraint, automation will not execute)
+
 
 ### Persistent storage
 Define a path to store json files with 'json_path' for persistent storage. This will store current mode for room and outdoor lux, room lux, and if lights is on for lights that has adjust/manual states and MQTT lights. Toggle lights will store current toggles.

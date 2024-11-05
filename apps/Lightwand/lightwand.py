@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.9"
+__version__ = "1.1.10"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -264,6 +264,7 @@ class Room(hass.Hass):
             )
 
             # Media players for setting mediaplayer mode
+        mediaIsOn:bool = False
         for mediaplayer in self.mediaplayers:
             delay = mediaplayer.get('delay', 0)
             self.listen_state(self.media_on, mediaplayer['mediaplayer'],
@@ -279,18 +280,20 @@ class Room(hass.Hass):
                 namespace = HASS_namespace,
                 mode = mediaplayer['mode']
             )
+            if self.get_state(mediaplayer['mediaplayer']) == 'on':
+                mediaIsOn = True
 
             # Sets lights at startup
-        mediaIsOn:bool = False
+        
         if (
             self.LIGHT_MODE == 'normal'
             or self.LIGHT_MODE == 'night'
+            and mediaIsOn
         ):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
                     for light in self.roomlight:
                         light.setLightMode(lightmode = mediaplayer['mode'])
-                    mediaIsOn = True
                     break
         
         if not mediaIsOn:
@@ -374,12 +377,18 @@ class Room(hass.Hass):
                     if self.handle != None:
                         if self.timer_running(self.handle):
                             for light in self.roomlight:
-                                light.setMotion(lightmode = self.LIGHT_MODE)
+                                if light.motionlight:
+                                    light.setMotion(lightmode = self.LIGHT_MODE)
+                                else:
+                                    light.setLightMode(lightmode = self.LIGHT_MODE)
                             return
                     for sens in self.all_motion_sensors:
                         if self.all_motion_sensors[sens]:
                             for light in self.roomlight:
-                                light.setMotion(lightmode = self.LIGHT_MODE)
+                                if light.motionlight:
+                                    light.setMotion(lightmode = self.LIGHT_MODE)
+                                else:
+                                    light.setLightMode(lightmode = self.LIGHT_MODE)
                             return
 
                 for light in self.roomlight:
@@ -452,7 +461,8 @@ class Room(hass.Hass):
                 and string[:3] != 'off'
             ):
                 for light in self.roomlight:
-                    light.setMotion(lightmode = self.LIGHT_MODE)
+                    if light.motionlight:
+                        light.setMotion(lightmode = self.LIGHT_MODE)
 
         if self.handle != None:
             if self.timer_running(self.handle):
@@ -562,7 +572,10 @@ class Room(hass.Hass):
             for sens in self.all_motion_sensors:
                 if self.all_motion_sensors[sens]:
                     for light in self.roomlight:
-                        light.setMotion(lightmode = self.LIGHT_MODE)
+                        if light.motionlight:
+                            light.setMotion(lightmode = self.LIGHT_MODE)
+                        else:
+                            light.setLightMode(lightmode = self.LIGHT_MODE)
                     return
 
             for light in self.roomlight:
@@ -613,15 +626,23 @@ class Room(hass.Hass):
                 if light.lux_turn_off:
                     if self.OUT_LUX > light.lux_turn_off:
                         if ismotion:
-                            light.setMotion()
-                        else:
+                            if light.motionlight:
+                                light.setMotion()
+                        elif (
+                            not ismotion 
+                            or not light.motionlight
+                        ):
                             light.setLightMode()
 
                 if light.lux_turn_on:
                     if self.OUT_LUX < light.lux_turn_on:
                         if ismotion:
-                            light.setMotion()
-                        else:
+                            if light.motionlight:
+                                light.setMotion()
+                        elif (
+                            not ismotion 
+                            or not light.motionlight
+                        ):
                             light.setLightMode()
 
                 # Persistent storage
@@ -673,15 +694,23 @@ class Room(hass.Hass):
                 if light.lux_turn_off:
                     if self.OUT_LUX > light.lux_turn_off:
                         if ismotion:
-                            light.setMotion()
-                        else:
+                            if light.motionlight:
+                                light.setMotion()
+                        elif (
+                            not ismotion 
+                            or not light.motionlight
+                        ):
                             light.setLightMode()
 
                 if light.lux_turn_on:
                     if self.OUT_LUX < light.lux_turn_on:
                         if ismotion:
-                            light.setMotion()
-                        else:
+                            if light.motionlight:
+                                light.setMotion()
+                        elif (
+                            not ismotion 
+                            or not light.motionlight
+                        ):
                             light.setLightMode()
 
                 # Persistent storage
@@ -727,15 +756,23 @@ class Room(hass.Hass):
             if light.room_lux_turn_off:
                 if self.ROOM_LUX > light.room_lux_turn_off:
                     if ismotion:
-                        light.setMotion()
-                    else:
+                        if light.motionlight:
+                            light.setMotion()
+                    elif (
+                        not ismotion 
+                        or not light.motionlight
+                    ):
                         light.setLightMode()
 
             if light.room_lux_turn_on:
                 if self.ROOM_LUX < light.room_lux_turn_on:
                     if ismotion:
-                        light.setMotion()
-                    else:
+                        if light.motionlight:
+                            light.setMotion()
+                    elif (
+                        not ismotion 
+                        or not light.motionlight
+                    ):
                         light.setLightMode()
 
             # Persistent storage
