@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -371,7 +371,10 @@ class Room(hass.Hass):
                 {sensor['motion_sensor'] : True}
             )
             self.newMotion()
-        elif new == 'off':
+        elif (
+            new == 'off'
+            and self.all_motion_sensors[sensor['motion_sensor']]
+            ):
             self.all_motion_sensors.update(
                 {sensor['motion_sensor'] : False}
             )
@@ -411,7 +414,10 @@ class Room(hass.Hass):
                     {sensor['motion_sensor'] : True}
                 )
                 self.newMotion()
-            elif motion_data['value'] == 0:
+            elif (
+                motion_data['value'] == 0
+                and self.all_motion_sensors[sensor['motion_sensor']]
+            ):
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : False}
                 )
