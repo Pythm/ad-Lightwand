@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.1.10"
+__version__ = "1.2.0"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -180,6 +180,9 @@ class Room(hass.Hass):
             self.LIGHT_MODE = lightwand_data['mode']
             self.OUT_LUX = float(lightwand_data['out_lux'])
             self.ROOM_LUX = float(lightwand_data['room_lux'])
+            for light in self.roomlight:
+                light.roomLux = self.ROOM_LUX
+                light.outLux = self.OUT_LUX
 
             # Configuration of MQTT Lights
         lights = self.args.get('MQTTLights', [])
@@ -189,11 +192,7 @@ class Room(hass.Hass):
                 light_modes = l.get('light_modes', []),
                 automations = l.get('automations', None),
                 motionlight = l.get('motionlights', None),
-                lux_turn_on = l.get('lux_turn_on', None),
-                lux_turn_off = l.get('lux_turn_off', None),
                 lux_constraint = l.get('lux_constraint', None),
-                room_lux_turn_on = l.get('room_lux_turn_on', None),
-                room_lux_turn_off = l.get('room_lux_turn_off', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
                 json_path = self.JSON_PATH,
@@ -211,11 +210,7 @@ class Room(hass.Hass):
                 light_modes = l.get('light_modes', []),
                 automations = l.get('automations', None),
                 motionlight = l.get('motionlights', None),
-                lux_turn_on = l.get('lux_turn_on', None),
-                lux_turn_off = l.get('lux_turn_off', None),
                 lux_constraint = l.get('lux_constraint', None),
-                room_lux_turn_on = l.get('room_lux_turn_on', None),
-                room_lux_turn_off = l.get('room_lux_turn_off', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
                 json_path = self.JSON_PATH,
@@ -232,11 +227,7 @@ class Room(hass.Hass):
                 light_modes = l.get('light_modes', []),
                 automations = l.get('automations', None),
                 motionlight = l.get('motionlights', None),
-                lux_turn_on = l.get('lux_turn_on', None),
-                lux_turn_off = l.get('lux_turn_off', None),
                 lux_constraint = l.get('lux_constraint', None),
-                room_lux_turn_on = l.get('room_lux_turn_on', None),
-                room_lux_turn_off = l.get('room_lux_turn_off', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
                 toggle = l.get('toggle',3),
@@ -362,37 +353,7 @@ class Room(hass.Hass):
                 with open(self.JSON_PATH, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
 
-            if self.check_mediaplayers_off():
-                string:str = self.LIGHT_MODE
-                if (
-                    (string[:5] != 'night'
-                    or self.night_motion)
-                    and string[:3] != 'off'
-                ):
-                    """ Checks if motion and motion timer has ended to set new lightmode.
-                        If mode is 'night*' or 'off' it will set via normal setLigthMode directly
-                        to set night and off light settings regardless off motion.
-                        Else it will set new lightmode via setMotion if motion is active
-                    """
-                    if self.handle != None:
-                        if self.timer_running(self.handle):
-                            for light in self.roomlight:
-                                if light.motionlight:
-                                    light.setMotion(lightmode = self.LIGHT_MODE)
-                                else:
-                                    light.setLightMode(lightmode = self.LIGHT_MODE)
-                            return
-                    for sens in self.all_motion_sensors:
-                        if self.all_motion_sensors[sens]:
-                            for light in self.roomlight:
-                                if light.motionlight:
-                                    light.setMotion(lightmode = self.LIGHT_MODE)
-                                else:
-                                    light.setLightMode(lightmode = self.LIGHT_MODE)
-                            return
-
-                for light in self.roomlight:
-                    light.setLightMode(lightmode = self.LIGHT_MODE)
+            self.reactToChange()
    
 
         # Motion and presence
@@ -402,10 +363,14 @@ class Room(hass.Hass):
         sensor = kwargs['motion_sensor']
 
         if new == 'on':
+            if 'motion_constraints' in sensor:
+                condition_statement = eval(sensor['motion_constraints'])
+                if not condition_statement:
+                    return
             self.all_motion_sensors.update(
                 {sensor['motion_sensor'] : True}
             )
-            self.newMotion(sensor = sensor)
+            self.newMotion()
         elif new == 'off':
             self.all_motion_sensors.update(
                 {sensor['motion_sensor'] : False}
@@ -423,10 +388,14 @@ class Room(hass.Hass):
 
         if 'occupancy' in motion_data:
             if motion_data['occupancy']:
+                if 'motion_constraints' in sensor:
+                    condition_statement = eval(sensor['motion_constraints'])
+                    if not condition_statement:
+                        return
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : True}
                 )
-                self.newMotion(sensor = sensor)
+                self.newMotion()
             elif self.all_motion_sensors[sensor['motion_sensor']]:
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : False}
@@ -434,10 +403,14 @@ class Room(hass.Hass):
                 self.oldMotion(sensor = sensor)
         elif 'value' in motion_data:
             if motion_data['value'] == 8:
+                if 'motion_constraints' in sensor:
+                    condition_statement = eval(sensor['motion_constraints'])
+                    if not condition_statement:
+                        return
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : True}
                 )
-                self.newMotion(sensor = sensor)
+                self.newMotion()
             elif motion_data['value'] == 0:
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : False}
@@ -445,14 +418,9 @@ class Room(hass.Hass):
                 self.oldMotion(sensor = sensor)
 
 
-    def newMotion(self, sensor) -> None:
+    def newMotion(self) -> None:
         """ Motion detected. Checks constraints given in motion and setMotion
         """
-        if 'motion_constraints' in sensor:
-            condition_statement = eval(sensor['motion_constraints'])
-            if not condition_statement:
-                return
-
         if self.check_mediaplayers_off():
             string:str = self.LIGHT_MODE
             if (
@@ -469,7 +437,10 @@ class Room(hass.Hass):
                 try:
                     self.cancel_timer(self.handle)
                 except Exception as e:
-                    self.log(f"Was not able to stop timer for {sensor['motion_sensor']}: {e}", level = 'DEBUG')
+                    self.log(
+                        f"Was not able to stop timer when motion detected for {self.handle}: {e}",
+                        level = 'DEBUG'
+                    )
                 self.handle = None
 
 
@@ -568,15 +539,29 @@ class Room(hass.Hass):
     def reactToChange(self):
 
         if self.check_mediaplayers_off():
+            string:str = self.LIGHT_MODE
+            if (
+                (string[:5] != 'night'
+                or self.night_motion)
+                and string[:3] != 'off'
+            ):
+                if self.handle != None:
+                    if self.timer_running(self.handle):
+                        for light in self.roomlight:
+                            if light.motionlight:
+                                light.setMotion(lightmode = self.LIGHT_MODE)
+                            else:
+                                light.setLightMode(lightmode = self.LIGHT_MODE)
+                        return
 
-            for sens in self.all_motion_sensors:
-                if self.all_motion_sensors[sens]:
-                    for light in self.roomlight:
-                        if light.motionlight:
-                            light.setMotion(lightmode = self.LIGHT_MODE)
-                        else:
-                            light.setLightMode(lightmode = self.LIGHT_MODE)
-                    return
+                for sens in self.all_motion_sensors:
+                    if self.all_motion_sensors[sens]:
+                        for light in self.roomlight:
+                            if light.motionlight:
+                                light.setMotion(lightmode = self.LIGHT_MODE)
+                            else:
+                                light.setLightMode(lightmode = self.LIGHT_MODE)
+                        return
 
             for light in self.roomlight:
                 light.setLightMode(lightmode = self.LIGHT_MODE)
@@ -616,34 +601,9 @@ class Room(hass.Hass):
         ):
             self.OUT_LUX = self.outLux1
 
-            ismotion:bool = False
-            for sens in self.all_motion_sensors:
-                if self.all_motion_sensors[sens]:
-                    ismotion = True
-        
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
-                if light.lux_turn_off:
-                    if self.OUT_LUX > light.lux_turn_off:
-                        if ismotion:
-                            if light.motionlight:
-                                light.setMotion()
-                        elif (
-                            not ismotion 
-                            or not light.motionlight
-                        ):
-                            light.setLightMode()
-
-                if light.lux_turn_on:
-                    if self.OUT_LUX < light.lux_turn_on:
-                        if ismotion:
-                            if light.motionlight:
-                                light.setMotion()
-                        elif (
-                            not ismotion 
-                            or not light.motionlight
-                        ):
-                            light.setLightMode()
+            self.reactToChange()
 
                 # Persistent storage
             if self.usePersistentStorage:
@@ -683,35 +643,10 @@ class Room(hass.Hass):
             or self.outLux2 >= self.outLux1
         ):
             self.OUT_LUX = self.outLux2
-        
-            ismotion:bool = False
-            for sens in self.all_motion_sensors:
-                if self.all_motion_sensors[sens]:
-                    ismotion = True
-        
+
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
-                if light.lux_turn_off:
-                    if self.OUT_LUX > light.lux_turn_off:
-                        if ismotion:
-                            if light.motionlight:
-                                light.setMotion()
-                        elif (
-                            not ismotion 
-                            or not light.motionlight
-                        ):
-                            light.setLightMode()
-
-                if light.lux_turn_on:
-                    if self.OUT_LUX < light.lux_turn_on:
-                        if ismotion:
-                            if light.motionlight:
-                                light.setMotion()
-                        elif (
-                            not ismotion 
-                            or not light.motionlight
-                        ):
-                            light.setLightMode()
+            self.reactToChange()
 
                 # Persistent storage
             if self.usePersistentStorage:
@@ -746,34 +681,9 @@ class Room(hass.Hass):
 
 
     def newRoomLux(self) -> None:
-        ismotion:bool = False
-        for sens in self.all_motion_sensors:
-            if self.all_motion_sensors[sens]:
-                ismotion = True
-
         for light in self.roomlight:
             light.roomLux = self.ROOM_LUX
-            if light.room_lux_turn_off:
-                if self.ROOM_LUX > light.room_lux_turn_off:
-                    if ismotion:
-                        if light.motionlight:
-                            light.setMotion()
-                    elif (
-                        not ismotion 
-                        or not light.motionlight
-                    ):
-                        light.setLightMode()
-
-            if light.room_lux_turn_on:
-                if self.ROOM_LUX < light.room_lux_turn_on:
-                    if ismotion:
-                        if light.motionlight:
-                            light.setMotion()
-                    elif (
-                        not ismotion 
-                        or not light.motionlight
-                    ):
-                        light.setLightMode()
+        self.reactToChange()
 
             # Persistent storage
         if self.usePersistentStorage:
@@ -839,11 +749,7 @@ class Light:
         light_modes,
         automations,
         motionlight,
-        lux_turn_on,
-        lux_turn_off,
         lux_constraint,
-        room_lux_turn_on,
-        room_lux_turn_off,
         room_lux_constraint,
         conditions,
         json_path,
@@ -857,11 +763,7 @@ class Light:
         self.light_modes:list = light_modes
         self.automations = automations
         self.motionlight = motionlight
-        self.lux_turn_on = lux_turn_on
-        self.lux_turn_off = lux_turn_off
         self.lux_constraint = lux_constraint
-        self.room_lux_turn_on = room_lux_turn_on
-        self.room_lux_turn_off = room_lux_turn_off
         self.room_lux_constraint = room_lux_constraint
         self.conditions:list = conditions
         self.JSON_PATH:str = json_path
@@ -896,8 +798,8 @@ class Light:
 
         # Helpers to check if conditions to turn on/off light has changed
         self.wereMotion:bool = False
-        self.prev_checkOnConditions:bool = None
-        self.prev_checkLuxConstraints:bool = None
+        self.current_OnCondition:bool = None
+        self.current_LuxCondition:bool = None
 
 
         """ Set up automations with times defined and check data
@@ -1158,8 +1060,8 @@ class Light:
         """ Updates light with new data based on times given in configuration
         """
         if not self.motion:
-            self.prev_checkOnConditions = None
-            self.prev_checkLuxConstraints = None
+            self.current_OnCondition = None
+            self.current_LuxCondition = None
             self.setLightMode()
         elif type(self.motionlight) == list:
             target_num = self.find_time(automation = self.motionlight)
@@ -1196,13 +1098,13 @@ class Light:
 
 
     def checkLuxConstraints(self) -> bool:
-        if self.lux_constraint:
+        if self.lux_constraint != None:
             if self.rain_amount > 1:
                 if self.outLux >= self.lux_constraint * 1.5:
                     return False
             elif self.outLux >= self.lux_constraint:
                 return False
-        if self.room_lux_constraint:
+        if self.room_lux_constraint != None:
             if self.roomLux >= self.room_lux_constraint:
                 return False
         return True
@@ -1215,8 +1117,8 @@ class Light:
         if (
             (lightmode == self.lightmode
             or lightmode == 'None')
-            and self.prev_checkOnConditions == self.checkOnConditions()
-            and self.prev_checkLuxConstraints == self.checkLuxConstraints()
+            and self.current_OnCondition == self.checkOnConditions()
+            and self.current_LuxCondition == self.checkLuxConstraints()
         ):
             if self.motionlight:
                 if not self.wereMotion:
@@ -1227,8 +1129,8 @@ class Light:
                 # Nothing has changed.
                 return
         
-        self.prev_checkOnConditions = self.checkOnConditions()
-        self.prev_checkLuxConstraints = self.checkLuxConstraints()
+        self.current_OnCondition = self.checkOnConditions()
+        self.current_LuxCondition = self.checkLuxConstraints()
 
         if lightmode != self.lightmode:
             if self.dimHandler:
@@ -1245,8 +1147,8 @@ class Light:
         if lightmode == 'morning':
             # Only do morning mode if Lux and conditions are valid
             if (
-                not self.checkOnConditions()
-                or not self.checkLuxConstraints()
+                not self.current_OnCondition
+                or not self.current_LuxCondition
             ):
                 lightmode = 'normal'
 
@@ -1263,8 +1165,8 @@ class Light:
                 if 'automations' in mode:
                     # Automation sets light according to time of day with Lux and Conditions constraints
                     if (
-                        self.checkLuxConstraints()
-                        and self.checkOnConditions()
+                        self.current_LuxCondition
+                        and self.current_OnCondition
                     ):
                         self.setLightAutomation(automations = mode['automations'])
                     elif self.isON:
@@ -1273,7 +1175,7 @@ class Light:
 
                 elif 'light_data' in mode:
                     # Turns on light with given data. Lux constrained but Conditions do not need to be met
-                    if self.checkLuxConstraints():
+                    if self.current_LuxCondition:
                         self.turn_on_lights(light_data = mode['light_data'])
                     elif self.isON:
                         self.turn_off_lights()
@@ -1287,7 +1189,7 @@ class Light:
                         or 'lux_controlled' in mode['state']
                     ):
                         if 'lux_controlled' in mode['state']:
-                            if not self.checkLuxConstraints():
+                            if not self.current_LuxCondition:
                                 if self.isON:
                                     self.turn_off_lights()
                                 return
@@ -1340,8 +1242,8 @@ class Light:
             # Mode is normal or not valid for light. Checks Lux and Conditions constraints and does defined automations for light
         self.lightmode = 'normal'
         if (
-            self.checkOnConditions()
-            and self.checkLuxConstraints()
+            self.current_OnCondition
+            and self.current_LuxCondition
         ):
             if self.automations:
                 self.setLightAutomation(automations = self.automations)
@@ -1750,11 +1652,7 @@ class MQTTLights(Light):
         light_modes,
         automations,
         motionlight,
-        lux_turn_on,
-        lux_turn_off,
         lux_constraint,
-        room_lux_turn_on,
-        room_lux_turn_off,
         room_lux_constraint,
         conditions,
         json_path,
@@ -1780,11 +1678,7 @@ class MQTTLights(Light):
             light_modes = light_modes,
             automations = automations,
             motionlight = motionlight,
-            lux_turn_on = lux_turn_on,
-            lux_turn_off = lux_turn_off,
             lux_constraint = lux_constraint,
-            room_lux_turn_on = room_lux_turn_on,
-            room_lux_turn_off = room_lux_turn_off,
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
             json_path = json_path,
@@ -1968,11 +1862,7 @@ class Toggle(Light):
         light_modes,
         automations,
         motionlight,
-        lux_turn_on,
-        lux_turn_off,
         lux_constraint,
-        room_lux_turn_on,
-        room_lux_turn_off,
         room_lux_constraint,
         conditions,
         toggle,
@@ -2021,11 +1911,7 @@ class Toggle(Light):
             light_modes = light_modes,
             automations = automations,
             motionlight = motionlight,
-            lux_turn_on = lux_turn_on,
-            lux_turn_off = lux_turn_off,
             lux_constraint = lux_constraint,
-            room_lux_turn_on = room_lux_turn_on,
-            room_lux_turn_off = room_lux_turn_off,
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
             json_path = json_path,

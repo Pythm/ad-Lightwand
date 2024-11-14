@@ -235,7 +235,7 @@ An example :
         - mode: tv
           state: turn_off
         - mode: away
-          state: lux_controlled # Follows Lux Turn on/off
+          state: lux_controlled # Follows Lux to turn on/off
         - mode: nightKid
           state: manual # Disable all automation when this mode is active
         - mode: night
@@ -317,11 +317,7 @@ You can define any statement you want so I have not figured out a better way tha
       conditions:
         - "self.ADapi.get_tracker_state('person.wife') == 'home'"
       lux_constraint: 12000
-      lux_turn_on: 10000
-      lux_turn_off: 12000
       room_lux_constraint: 100
-      room_lux_turn_on: 80
-      room_lux_turn_off: 100
 ```
 
 ## Manual changes to lights
@@ -523,11 +519,7 @@ your_room_name:
       # Lux turn on will send a new update to light if new lux detected is below set target
       # Lux turn off will send a new update to light if new lux detected is above set target
       lux_constraint: 12000
-      lux_turn_on: 10000
-      lux_turn_off: 12000
       room_lux_constraint: 100
-      room_lux_turn_on: 80
-      room_lux_turn_off: 100
 
       # Conditions as if statement to be meet for light to turn on at normal/morning/motion mode or with automations defined
       # Inherits Appdaemon Api as ADapi.
@@ -577,10 +569,6 @@ key | optional | type | default | introduced in | description
 `motionlights` | True | dict | | v1.0.0 | Configure default light behaviour for motion detected
 `light_modes` | True | dict | | v1.0.0 | Name of mode. Define light modes to change light accordingly
 `lux_constraint` | True | int | | v1.0.0 | Outdoor lux constraint
-`lux_turn_on` | True | int | | v1.0.0 | Outdoor lux to turn on light if below
-`lux_turn_off` | True | int | | v1.0.0 | Outdoor lux to turn off light if above
 `room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint
-`room_lux_turn_on` | True | int | | v1.0.0 | Room lux to turn on light if below
-`room_lux_turn_off` | True | int | | v1.0.0 | Room lux to turn off light if above
 `conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi
 `toggle_speed` | True | float | 1 | v1.1.4 | Set time in seconds between each toggle. Supports sub second with 0.x
