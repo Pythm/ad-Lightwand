@@ -50,7 +50,7 @@ ToggleLights is Home Assistant switch entities. Toggles are configured with a `t
 
 ## Mode change events
 > [!IMPORTANT]
-> This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with 'normal' mode as default setting.
+> This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with `normal` mode as default setting.
 > The use of events in Appdaemon and Home Assistant is well documented in [Appdaemon docs - Events](https://appdaemon.readthedocs.io/en/latest/APPGUIDE.html#events)
 
 To set mode from another appdaemon app simply use:
@@ -88,24 +88,26 @@ All mode names except <b>'custom'</b> can be defined in 'light_modes' with your 
 
 The predefined mode names with default turn on/off:
 
-<br>Mode names that defaults to off:
-<br>- `away`
-<br>- `off`
-<br>- `night`
-<br>Mode names with default full brightness:
-<br>- `fire`
-<br>- `wash`
-<br>
+Mode names that defaults to off:
+- `away`
+- `off`
+- `night`
+Mode names with default full brightness:
+- `fire`
+- `wash`
+
 
 Other modes with additional behaviour:
-<br>- 'morning' behaves as 'normal' mode with conditions and Lux constraints. Useful for some extra light in morning during workdays.
-<br>When 'morning' mode is triggered, mode will be set to 'normal' if not defined in room and after media players is turned off.
-<br>- 'night*' and 'off'
-<br>In addition to 'night' mode you can configure modes beginning with 'night', for instance 'night_Kids_Bedroom'.
-<br>All modes starting with 'night' in addition to 'off' will disable motion detection.
-<br>Set room in off mode with 'off_' + app name.
-<br>
-<br>'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
+- `morning` behaves as `normal` mode with conditions and Lux constraints. Useful for some extra light in morning during workdays. When `morning` mode is triggered, mode will be set to `normal` after media players is turned off.
+
+- In addition to `night` mode you can configure modes beginning with night, for instance `night_kids_bedroom`. All modes starting with night or off will by default disable motion detection.
+
+'custom' mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
+
+- `reset` sets all lights back to normal automation.
+
+Only change one room:
+To change only one room you can call either normal, off, or reset + _appName. Appname is what you call your app in configuration. See AppName example on nameyourRoom in [Installation](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#installation). Given this name the mode to call to reset only that rom will be `reset_nameyourRoom`.
 
 > [!TIP]
 > You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
@@ -298,12 +300,27 @@ You can configure two outdoor lux sensors with the second ending with '_2' and i
 ```
 
 ### Custom options
-Create a list of `options` with choises to make for each room.
-> [!TIP]
->  Enable motion detection during `night` mode with `night_motion`
+`options` is a list with choices. It can be configured for the room or for each light.
 
-> [!TIP]
-> `exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom.
+Enable motion detection during night mode with `night_motion`
+
+By default the light does not dim down when motion is detected. With `dim_while_motion` you allow the light to dim down even when motion, but only if the lightmode is `normal`.
+
+`exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom. Exclude from custom applies to the whole room, even if configured for one light.
+
+```yaml
+  #Configure in room
+  options:
+    - exclude_from_custom
+    - dim_while_motion
+
+  MQTTLights:
+    - lights:
+      - zigbee2mqtt/ENTRE_Spot
+      # Configure in light
+      options:
+        - night_motion
+```
 
 ### Conditions and constraints
 You can use Lux sensors to control or constrain lights. Optionally you can provide IF statements to be meet for light to turn on at normal/morning/motion mode or with automations defined. Inherits Appdaemon Api as ADapi.
@@ -327,9 +344,26 @@ If you manage to configure every light to your liking, normal automation should 
 -Mode is changed
 -Time automation is executed when conditions are met (e.g., if lux is above the constraint, automation will not execute)
 
+> [!NOTE]
+> If you define more than one light in the list the app only listens for changes in the first light in the list. In the example below the app will only detect changes to spot1. If you then only turn on spot2, the reset mode will not work.
+
+```yaml
+    - lights:
+      - light.spot1
+      - light.spot2
+```
+
+> [!TIP]
+> To reset back to normal automation you can call mode `reset` or app_N
 
 ### Persistent storage
-Define a path to store json files with 'json_path' for persistent storage. This will store current mode for room and outdoor lux, room lux, and if lights is on for lights that has adjust/manual states and MQTT lights. Toggle lights will store current toggles.
+Define a path to store json files with `json_path` for persistent storage to recall last MQTT data and current lightmode for room on reboot. It writes data on terminate/reboot to store current mode for room and outdoor lux, room lux, and if lights is on or off for lights where needed.
+
+Toggle lights automation will break if persistent storage is not configured. It is used to store current toggles.
+
+This will increase writing to disk so it is not recomended for devices running on a SD card.
+
+If it is not configured the lightmode will be set to normal/away/media depending on presence and if media player is on.
 
 ## Namespace
 If you have defined a namespace for MQTT other than default you need to define your namespace with `MQTT_namespace`. Same for HASS you need to define your namespace with `HASS_namespace`.
@@ -367,6 +401,7 @@ your_room_name:
   options:
     - exclude_from_custom
     - night_motion
+    - dim_while_motion
 
   # Motion sensors.
   # Input delay in seconds before light turns back from motion to 'mode' light

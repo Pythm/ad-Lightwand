@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -21,7 +21,7 @@ class Room(hass.Hass):
         self.roomlight:list = []
         
         self.LIGHT_MODE:str = 'normal'
-        self.all_modes:list = ['normal', 'away', 'off', 'night', 'custom', 'fire', 'wash']
+        self.all_modes:list = ['normal', 'away', 'off', 'night', 'custom', 'fire', 'wash', 'reset']
         self.getOutOfBedMode:str = 'normal'
         self.ROOM_LUX:float = 0.0
         self.OUT_LUX:float = 0.0
@@ -30,12 +30,16 @@ class Room(hass.Hass):
 
 
         self.exclude_from_custom:bool = self.args.get('exclude_from_custom', False) # Old configuration of exclude from custom...
-        self.night_motion:bool = False
+        night_motion:bool = False
+        dim_while_motion:bool = False
 
         # Options defined in configurations
         if 'options' in self.args:
-            self.exclude_from_custom:bool = 'exclude_from_custom' in self.args['options']
-            self.night_motion:bool = 'night_motion' in self.args['options']
+            self.exclude_from_custom = 'exclude_from_custom' in self.args['options']
+            night_motion = 'night_motion' in self.args['options']
+            dim_while_motion = 'dim_while_motion' in self.args['options']
+        room_night_motion:bool = night_motion
+        room_dim_while_motion:bool = dim_while_motion
 
         self.mediaplayers:dict = self.args.get('mediaplayers', {})
 
@@ -43,7 +47,7 @@ class Room(hass.Hass):
         HASS_namespace:str = self.args.get('HASS_namespace', 'default')
         MQTT_namespace:str = self.args.get('MQTT_namespace', 'default')
 
-            # Presence detection
+            # Presence detection (tracking)
         self.presence:dict = self.args.get('presence', {})
         for tracker in self.presence:
             self.listen_state(self.presence_change, tracker['tracker'],
@@ -54,7 +58,7 @@ class Room(hass.Hass):
         for tracker in self.presence:
             if self.get_state(tracker['tracker']) == 'home':
                 self.LIGHT_MODE = 'normal'
-                continue
+                break
             else:
                 self.LIGHT_MODE = 'away'
 
@@ -103,6 +107,17 @@ class Room(hass.Hass):
             self.listen_state(self.out_lux_state, lux_sensor,
                 namespace = HASS_namespace
             )
+            new_lux = self.get_state(lux_sensor,
+                namespace = HASS_namespace)
+            try:
+                self.OUT_LUX = float(new_lux)
+            except ValueError as ve:
+                self.OUT_LUX:float = 0.0
+                self.log(f"Not able to set Rain amount. Exception: {ve}", level = 'DEBUG')
+            except Exception as e:
+                self.OUT_LUX:float = 0.0
+                self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
+
         if 'OutLuxMQTT' in self.args:
             if not self.mqtt:
                 self.mqtt = self.get_plugin_api("MQTT")
@@ -133,6 +148,17 @@ class Room(hass.Hass):
             self.listen_state(self.room_lux_state, lux_sensor,
                 namespace = HASS_namespace
             )
+            new_lux = self.get_state(lux_sensor,
+                namespace = HASS_namespace)
+            try:
+                self.ROOM_LUX = float(new_lux)
+            except ValueError as ve:
+                self.ROOM_LUX:float = 0.0
+                self.log(f"Not able to set Rain amount. Exception: {ve}", level = 'DEBUG')
+            except Exception as e:
+                self.ROOM_LUX:float = 0.0
+                self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
+
         if 'RoomLuxMQTT' in self.args:
             if not self.mqtt:
                 self.mqtt = self.get_plugin_api("MQTT")
@@ -180,13 +206,17 @@ class Room(hass.Hass):
             self.LIGHT_MODE = lightwand_data['mode']
             self.OUT_LUX = float(lightwand_data['out_lux'])
             self.ROOM_LUX = float(lightwand_data['room_lux'])
-            for light in self.roomlight:
-                light.roomLux = self.ROOM_LUX
-                light.outLux = self.OUT_LUX
 
             # Configuration of MQTT Lights
         lights = self.args.get('MQTTLights', [])
         for l in lights:
+            if 'options' in l:
+                if 'exclude_from_custom' in l['options']:
+                    self.exclude_from_custom = True
+                if 'night_motion' in l['options']:
+                    night_motion = True
+                if 'dim_while_motion' in l['options']:
+                    dim_while_motion = True
             light = MQTTLights(self,
                 lights = l['lights'],
                 light_modes = l.get('light_modes', []),
@@ -198,13 +228,26 @@ class Room(hass.Hass):
                 json_path = self.JSON_PATH,
                 usePersistentStorage = self.usePersistentStorage,
                 MQTT_namespace = MQTT_namespace,
-                HASS_namespace = HASS_namespace
+                HASS_namespace = HASS_namespace,
+                night_motion = night_motion,
+                dim_while_motion = dim_while_motion
             )
             self.roomlight.append(light)
+            # Reset option to room option
+            night_motion = room_night_motion
+            dim_while_motion = room_dim_while_motion
+
 
             # Configuration of HASS Lights
         lights = self.args.get('Lights', [])
         for l in lights:
+            if 'options' in l:
+                if 'exclude_from_custom' in l['options']:
+                    self.exclude_from_custom = True
+                if 'night_motion' in l['options']:
+                    night_motion = True
+                if 'dim_while_motion' in l['options']:
+                    dim_while_motion = True
             light = Light(self,
                 lights = l['lights'],
                 light_modes = l.get('light_modes', []),
@@ -215,9 +258,14 @@ class Room(hass.Hass):
                 conditions = l.get('conditions', ['True']),
                 json_path = self.JSON_PATH,
                 usePersistentStorage = self.usePersistentStorage,
-                HASS_namespace = HASS_namespace
+                HASS_namespace = HASS_namespace,
+                night_motion = night_motion,
+                dim_while_motion = dim_while_motion
             )
             self.roomlight.append(light)
+            # Reset option to room option
+            night_motion = room_night_motion
+            dim_while_motion = room_dim_while_motion
 
             # Configuration of HASS Toggle Lights
         toggle = self.args.get('ToggleLights', [])
@@ -253,6 +301,11 @@ class Room(hass.Hass):
             self.listen_state(self.state_changed, sensor,
                 namespace = HASS_namespace
             )
+
+            # Update lux
+        for light in self.roomlight:
+            light.roomLux = self.ROOM_LUX
+            light.outLux = self.OUT_LUX
 
             # Media players for setting mediaplayer mode
         mediaIsOn:bool = False
@@ -304,6 +357,35 @@ class Room(hass.Hass):
         """
 
 
+    def terminate(self):
+        if self.usePersistentStorage:
+
+            with open(self.JSON_PATH, 'r') as json_read:
+                lightwand_data = json.load(json_read)
+            
+            for light in self.roomlight:
+                if (
+                    light.adjustLight_enabled
+                    or type(light).__name__ == 'MQTTLights'
+                ):
+                    if light.lights[0] in lightwand_data:
+                        lightwand_data[light.lights[0]].update(
+                            {"isON" : light.isON}
+                        )
+                elif type(light).__name__ == 'Toggle':
+                    if light.lights[0] in lightwand_data:
+                        lightwand_data[light.lights[0]].update(
+                            {"toggle" : light.current_toggle}
+                        )
+            lightwand_data.update(
+                {"mode" : self.LIGHT_MODE,
+                "out_lux" : self.OUT_LUX,
+                "room_lux" : self.ROOM_LUX}
+            )
+            with open(self.JSON_PATH, 'w') as json_write:
+                json.dump(lightwand_data, json_write, indent = 4)
+
+
     def mode_event(self, event_name, data, kwargs) -> None:
         """ New mode events. Updates lights if conditions are met
         """
@@ -333,6 +415,8 @@ class Room(hass.Hass):
             data['mode'] in self.all_modes
             or data['mode'] == 'morning'
             or data['mode'] == 'off_' + str(self.name)
+            or data['mode'] == 'normal_' + str(self.name)
+            or data['mode'] == 'reset_' + str(self.name)
         ):
             if inBed:
                 self.getOutOfBedMode = data['mode']
@@ -343,18 +427,8 @@ class Room(hass.Hass):
                 if not 'morning' in self.all_modes:
                     self.LIGHT_MODE = 'normal'
 
-                # Persistent storage
-            if self.usePersistentStorage:
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-                lightwand_data.update(
-                    { "mode" : self.LIGHT_MODE}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-
             self.reactToChange()
-   
+
 
         # Motion and presence
 
@@ -429,12 +503,12 @@ class Room(hass.Hass):
         """
         if self.check_mediaplayers_off():
             string:str = self.LIGHT_MODE
-            if (
-                (string[:5] != 'night'
-                or self.night_motion)
-                and string[:3] != 'off'
-            ):
-                for light in self.roomlight:
+            for light in self.roomlight:
+                if (
+                    (string[:5] != 'night'
+                    or light.night_motion)
+                    and string[:3] != 'off'
+                ):
                     if light.motionlight:
                         light.setMotion(lightmode = self.LIGHT_MODE)
 
@@ -453,9 +527,8 @@ class Room(hass.Hass):
     def oldMotion(self, sensor) -> None:
         """ Motion no longer detected in sensor. Checks other sensors in room and starts countdown to turn off light
         """
-        for sens in self.all_motion_sensors:
-            if self.all_motion_sensors[sens]:
-                return
+        if self.checkMotion():
+            return
 
         if self.handle != None:
             if self.timer_running(self.handle):
@@ -468,6 +541,12 @@ class Room(hass.Hass):
         else:
             self.handle = self.run_in(self.MotionEnd, 60)
 
+
+    def checkMotion(self) -> bool:
+        for sens in self.all_motion_sensors:
+            if self.all_motion_sensors[sens]:
+                return True
+        
 
     def out_of_bed(self, entity, attribute, old, new, kwargs) -> None:
         for bed_sensor in self.bed_sensors:
@@ -540,36 +619,33 @@ class Room(hass.Hass):
         """ Update light settings when state of a HA entity is updated
         """
         self.reactToChange()
-    
+
 
     def reactToChange(self):
 
         if self.check_mediaplayers_off():
             string:str = self.LIGHT_MODE
-            if (
-                (string[:5] != 'night'
-                or self.night_motion)
-                and string[:3] != 'off'
-            ):
-                if self.handle != None:
-                    if self.timer_running(self.handle):
-                        for light in self.roomlight:
-                            if light.motionlight:
-                                light.setMotion(lightmode = self.LIGHT_MODE)
-                            else:
-                                light.setLightMode(lightmode = self.LIGHT_MODE)
-                        return
-
-                for sens in self.all_motion_sensors:
-                    if self.all_motion_sensors[sens]:
-                        for light in self.roomlight:
-                            if light.motionlight:
-                                light.setMotion(lightmode = self.LIGHT_MODE)
-                            else:
-                                light.setLightMode(lightmode = self.LIGHT_MODE)
-                        return
-
             for light in self.roomlight:
+                if (
+                    (string[:5] != 'night'
+                    or light.night_motion)
+                    and string[:3] != 'off'
+                ):
+                    if self.handle != None:
+                        if self.timer_running(self.handle):
+                            if light.motionlight:
+                                light.setMotion(lightmode = self.LIGHT_MODE)
+                            else:
+                                light.setLightMode(lightmode = self.LIGHT_MODE)
+                            continue
+
+                    if self.checkMotion():
+                        if light.motionlight:
+                            light.setMotion(lightmode = self.LIGHT_MODE)
+                        else:
+                            light.setLightMode(lightmode = self.LIGHT_MODE)
+                        continue
+
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
 
@@ -611,16 +687,6 @@ class Room(hass.Hass):
                 light.outLux = self.OUT_LUX
             self.reactToChange()
 
-                # Persistent storage
-            if self.usePersistentStorage:
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-                lightwand_data.update(
-                    { "out_lux" : self.OUT_LUX}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-
         self.lux_last_update1 = self.datetime(aware=True)
 
 
@@ -654,16 +720,6 @@ class Room(hass.Hass):
                 light.outLux = self.OUT_LUX
             self.reactToChange()
 
-                # Persistent storage
-            if self.usePersistentStorage:
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-                lightwand_data.update(
-                    { "out_lux" : self.OUT_LUX}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-
         self.lux_last_update2 = self.datetime(aware=True)
 
 
@@ -690,16 +746,6 @@ class Room(hass.Hass):
         for light in self.roomlight:
             light.roomLux = self.ROOM_LUX
         self.reactToChange()
-
-            # Persistent storage
-        if self.usePersistentStorage:
-            with open(self.JSON_PATH, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-            lightwand_data.update(
-                { "room_lux" : self.ROOM_LUX}
-            )
-            with open(self.JSON_PATH, 'w') as json_write:
-                json.dump(lightwand_data, json_write, indent = 4)
 
 
     def update_rain_amount(self, entity, attribute, old, new, kwargs) -> None:
@@ -737,7 +783,11 @@ class Room(hass.Hass):
         """ Returns true if media player sensors is off
             or self.LIGHT_DATA != 'normal'/'night'
         """
-        if self.LIGHT_MODE == 'normal' or self.LIGHT_MODE == 'night':
+        if (
+            str(self.LIGHT_MODE)[:6] == 'normal'
+            or str(self.LIGHT_MODE)[:5] == 'night'
+            or str(self.LIGHT_MODE)[:5] == 'reset'
+        ):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
                     for light in self.roomlight:
@@ -760,7 +810,9 @@ class Light:
         conditions,
         json_path,
         usePersistentStorage,
-        HASS_namespace
+        HASS_namespace,
+        night_motion,
+        dim_while_motion
     ):
 
         self.ADapi = api
@@ -774,6 +826,8 @@ class Light:
         self.conditions:list = conditions
         self.JSON_PATH:str = json_path
         self.usePersistentStorage:bool = usePersistentStorage
+        self.night_motion:bool = night_motion
+        self.dim_while_motion:bool = dim_while_motion
 
         self.outLux:float = 0.0
         self.roomLux:float = 0.0
@@ -783,9 +837,10 @@ class Light:
         self.dimHandler = None
         self.motion:bool = False
         self.isON:bool = None
+        self.adjustLight_enabled:bool = False
         self.brightness:int = 0
-        self.manualHandler = None
         self.current_light_data:dict = {}
+
 
         string:str = self.lights[0]
         if string[:6] == 'light.':
@@ -794,13 +849,23 @@ class Light:
                 namespace = HASS_namespace
             )
             try:
-                self.brightness = int(self.ADapi.get_state(self.lights[0], attribute = 'brightness'))
+                self.brightness = int(self.ADapi.get_state(self.lights[0],
+                    attribute = 'brightness',
+                    namespace = HASS_namespace)
+                )
             except TypeError:
                 self.brightness = 0
-                #string:str = self.lights[0] ?
-            self.isON = self.ADapi.get_state(self.lights[0]) == 'on' 
+
+            self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
+                namespace = HASS_namespace
+            )
+            self.isOn = self.ADapi.get_state(self.lights[0]) == 'on'
         if string[:7] == 'switch.':
-            self.isON = self.ADapi.get_state(self.lights[0]) == 'on' 
+            self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
+                namespace = HASS_namespace
+            )
+            self.isOn = self.ADapi.get_state(self.lights[0]) == 'on'
+        
 
         # Helpers to check if conditions to turn on/off light has changed
         self.wereMotion:bool = False
@@ -819,15 +884,13 @@ class Light:
             for automation in self.automations:
                 if (
                     'adjust' in automation['state']
-                    and not self.manualHandler
+                    and self.adjustLight_enabled
                 ):
                     if (
                         string[:6] == 'light.'
                         or string[:7] == 'switch.'
                     ):
-                        self.manualHandler = self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
-                            namespace = HASS_namespace
-                        )
+                        self.adjustLight_enabled = True
 
         self.motions_original:list = []
         if self.motionlight:
@@ -844,16 +907,14 @@ class Light:
                 for automation in mode['automations']:
                     if (
                         'adjust' in automation['state']
-                        and not self.manualHandler
+                        and self.adjustLight_enabled
                     ):
                         string:str = self.lights[0]
                         if (
                             string[:6] == 'light.'
                             or string[:7] == 'switch.'
                         ):
-                            self.manualHandler = self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
-                                namespace = HASS_namespace
-                            )
+                            self.adjustLight_enabled = True
 
 
         if self.motionlight and not self.automations:
@@ -868,13 +929,13 @@ class Light:
                 self.ADapi.run_once(self.run_daily_lights, time)
 
             # Persistent storage
-        if self.usePersistentStorage and self.manualHandler:
+        if self.usePersistentStorage and self.adjustLight_enabled:
             with open(self.JSON_PATH, 'r') as json_read:
                 lightwand_data = json.load(json_read)
 
             if not self.lights[0] in lightwand_data:
                 lightwand_data.update(
-                    { self.lights[0] : {"isON" : self.isLightOn()}}
+                    { self.lights[0] : {"isON" : self.isOn}}
                 )
                 with open(self.JSON_PATH, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
@@ -1072,8 +1133,14 @@ class Light:
         elif type(self.motionlight) == list:
             target_num = self.find_time(automation = self.motionlight)
             if self.motionlight[target_num]['state'] == 'turn_off':
-                if self.isON:
+                if self.isON or self.isON == None:
                     self.turn_off_lights()
+            elif (
+                self.dim_while_motion
+                and self.motion
+                and self.lightmode == 'normal'
+            ):
+                self.setMotion()
 
 
     def find_time(self, automation:list) -> int:
@@ -1087,11 +1154,13 @@ class Light:
                 if (
                     datetime.datetime.today().hour == testtid.hour
                     and datetime.datetime.today().minute == testtid.minute
+                    and datetime.datetime.today().second == testtid.second
                 ):
                     pass
                 elif target_num != 0:
                     target_num -= 1
                 return target_num
+            prev_time = automations['time']
         return target_num
 
 
@@ -1125,6 +1194,7 @@ class Light:
             or lightmode == 'None')
             and self.current_OnCondition == self.checkOnConditions()
             and self.current_LuxCondition == self.checkLuxConstraints()
+            and str(lightmode)[:5] != 'reset'
         ):
             if self.motionlight:
                 if not self.wereMotion:
@@ -1139,7 +1209,7 @@ class Light:
         self.current_LuxCondition = self.checkLuxConstraints()
 
         if lightmode != self.lightmode:
-            if self.dimHandler:
+            if self.dimHandler != None:
                 if self.ADapi.timer_running(self.dimHandler):
                     try:
                         self.ADapi.cancel_timer(self.dimHandler)
@@ -1175,7 +1245,7 @@ class Light:
                         and self.current_OnCondition
                     ):
                         self.setLightAutomation(automations = mode['automations'])
-                    elif self.isON:
+                    elif self.isON or self.isON == None:
                         self.turn_off_lights()
                     return
 
@@ -1183,7 +1253,7 @@ class Light:
                     # Turns on light with given data. Lux constrained but Conditions do not need to be met
                     if self.current_LuxCondition:
                         self.turn_on_lights(light_data = mode['light_data'])
-                    elif self.isON:
+                    elif self.isON or self.isON == None:
                         self.turn_off_lights()
                     return
 
@@ -1196,7 +1266,7 @@ class Light:
                     ):
                         if 'lux_controlled' in mode['state']:
                             if not self.current_LuxCondition:
-                                if self.isON:
+                                if self.isON or self.isON == None:
                                     self.turn_off_lights()
                                 return
 
@@ -1210,13 +1280,13 @@ class Light:
                             """
                             self.setLightAutomation(automations = mode)
 
-                        elif not self.isON:
+                        elif not self.isON or self.isON == None:
                             self.turn_on_lights()
                         return
                         
                     elif 'turn_off' in mode['state']:
                         # Turns off light
-                        if self.isON:
+                        if self.isON or self.isON == None:
                             self.turn_off_lights()
                         return
                         
@@ -1232,7 +1302,7 @@ class Light:
             or lightmode == 'night'
         ):
             self.lightmode = lightmode
-            if self.isON:
+            if self.isON or self.isON == None:
                 self.turn_off_lights()
             return
 
@@ -1253,9 +1323,9 @@ class Light:
         ):
             if self.automations:
                 self.setLightAutomation(automations = self.automations)
-            elif not self.isON:
+            elif not self.isON or self.isON == None:
                 self.turn_on_lights()
-        elif self.isON:
+        elif self.isON or self.isON == None:
             self.turn_off_lights()
 
 
@@ -1264,6 +1334,10 @@ class Light:
         """
         if lightmode == 'None':
             lightmode = self.lightmode
+        elif str(lightmode)[:5] == 'reset':
+            lightmode = 'normal'
+        elif str(lightmode)[:6] == 'normal':
+            lightmode = 'normal'
         else:
             self.lightmode = lightmode
 
@@ -1383,7 +1457,11 @@ class Light:
 
                                 target_light[target_num]['light_data']['brightness'] = self.brightness
 
-                        return
+                        if (
+                            not self.dim_while_motion 
+                            or self.lightmode != 'normal'
+                        ):
+                            return
                     
                     if 'dimrate' in target_light[target_num]:
                         if self.ADapi.now_is_between(target_light[target_num]['time'], target_light[target_num]['stop']):
@@ -1434,7 +1512,11 @@ class Light:
 
                                 target_light[target_num]['light_data']['value'] = self.brightness
 
-                        return
+                        if (
+                            not self.dim_while_motion 
+                            or self.lightmode != 'normal'
+                        ):
+                            return
 
                     if 'dimrate' in target_light[target_num]:
                         if self.ADapi.now_is_between(target_light[target_num]['time'], target_light[target_num]['stop']):
@@ -1460,12 +1542,12 @@ class Light:
                             )
                     self.turn_on_lights(light_data =  target_light_data)
 
-            elif not self.isON:
+            elif not self.isON or self.isON == None:
                 self.turn_on_lights()
 
         elif (
             automations[target_num]['state'] != 'adjust'
-            and self.isON
+            and (self.isON or self.isON == None)
         ):
             self.turn_off_lights()
 
@@ -1505,7 +1587,7 @@ class Light:
                 # Outside dim target for dimming down
                 return targetBrightness
 
-            if not self.dimHandler:
+            if self.dimHandler == None:
                 runtime = datetime.datetime.now() + datetime.timedelta(minutes = int(automation[target_num]['dimrate']))
                 self.dimHandler = self.ADapi.run_every(self.dimBrightnessByOne, runtime, automation[target_num]['dimrate'] *60,
                     targetBrightness = targetBrightness,
@@ -1522,7 +1604,7 @@ class Light:
                 # Outside dim target for dimming up
                 return targetBrightness
             
-            if not self.dimHandler:
+            if self.dimHandler == None:
                 runtime = datetime.datetime.now() + datetime.timedelta(minutes = int(automation[target_num]['dimrate']))
                 self.dimHandler = self.ADapi.run_every(self.increaseBrightnessByOne, runtime, automation[target_num]['dimrate'] *60,
                     targetBrightness = targetBrightness,
@@ -1556,7 +1638,7 @@ class Light:
 
 
     def StopDimByOne(self, kwargs) -> None:
-        if self.dimHandler:
+        if self.dimHandler != None:
             if self.ADapi.timer_running(self.dimHandler):
                 try:
                     self.ADapi.cancel_timer(self.dimHandler)
@@ -1579,36 +1661,9 @@ class Light:
     def update_isOn_lights(self, entity, attribute, old, new, kwargs) -> None:
         if new == 'on':
             self.isON = True
-                # Persistent on/off
-            if (
-                self.usePersistentStorage
-                and self.manualHandler
-            ):
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-
-                lightwand_data.update(
-                    { self.lights[0] : {"isON" : self.isON}}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
 
         elif new == 'off':
             self.isON = False
-
-                # Persistent on/off
-            if (
-                self.usePersistentStorage
-                and self.manualHandler
-            ):
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-
-                lightwand_data.update(
-                    { self.lights[0] : {"isON" : self.isON}}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
 
 
     def toggle_light(self, kwargs) -> None:
@@ -1620,8 +1675,8 @@ class Light:
         if (
             self.current_light_data != light_data
             or not self.isON
+            or self.isON == None
         ):
-            self.isON = True
             self.current_light_data = light_data
 
             for light in self.lights:
@@ -1629,7 +1684,6 @@ class Light:
 
 
     def turn_on_lights_at_max(self) -> None:
-        self.isON = True
         for light in self.lights:
             string:str = self.lights[0]
             if string[:6] == 'light.':
@@ -1640,13 +1694,9 @@ class Light:
 
     def turn_off_lights(self) -> None:
         self.current_light_data = {}
-        self.isON = False
         for light in self.lights:
             self.ADapi.turn_off(light)
-
-
-    def isLightOn(self) -> bool:
-        return self.ADapi.get_state(self.lights[0]) == 'on' 
+        self.brightness = 0
 
 
 class MQTTLights(Light):
@@ -1664,7 +1714,9 @@ class MQTTLights(Light):
         json_path,
         usePersistentStorage,
         MQTT_namespace,
-        HASS_namespace
+        HASS_namespace,
+        night_motion,
+        dim_while_motion
     ):
 
         self.ADapi = api
@@ -1689,7 +1741,9 @@ class MQTTLights(Light):
             conditions = conditions,
             json_path = json_path,
             usePersistentStorage = usePersistentStorage,
-            HASS_namespace = HASS_namespace
+            HASS_namespace = HASS_namespace,
+            night_motion = night_motion,
+            dim_while_motion = dim_while_motion
         )
 
             # Persistent storage
@@ -1723,7 +1777,7 @@ class MQTTLights(Light):
 
         if 'brightness' in lux_data:
             self.isON = lux_data['state'] == 'ON'
-            if not self.isON:
+            if not self.isON or self.isON == None:
                 self.brightness = 0
                 self.current_light_data = {}
             else:
@@ -1774,30 +1828,20 @@ class MQTTLights(Light):
                 f"and provide what MQTT brigde and light type you are trying to control, in addition to the data sent from broker: {lux_data}"
             )
 
-            # Persistent on/off
-        if self.usePersistentStorage:
-            with open(self.JSON_PATH, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-
-            lightwand_data.update(
-                { self.lights[0] : {"isON" : self.isON}}
-            )
-            with open(self.JSON_PATH, 'w') as json_write:
-                json.dump(lightwand_data, json_write, indent = 4)
-
 
     def turn_on_lights(self, light_data:dict = {}) -> None:
 
         if (
             self.current_light_data != light_data
             or not self.isON
+            or self.isON == None
         ):
             self.current_light_data = light_data
 
             for light in self.lights:
                 if 'zigbee2mqtt' in light:
                     if (
-                        not self.isON
+                        (not self.isON or self.isON == None)
                         and not light_data
                     ):
                         light_data.update(
@@ -1805,19 +1849,19 @@ class MQTTLights(Light):
                         )
 
                 if 'switch_multilevel' in light:
-                    if not self.isON:
+                    if not self.isON or self.isON == None:
                         light_data.update(
                             {"ON" : True}
                         )
 
                 elif 'switch_binary' in light:
-                    if not self.isON:
+                    if not self.isON or self.isON == None:
                         light_data.update(
                             {"ON" : True}
                         )
                     if (
                         'value' in light_data
-                        and self.isON
+                        and (self.isON or self.isON == None)
                     ):
                         continue
                 payload = json.dumps(light_data)
@@ -1827,13 +1871,13 @@ class MQTTLights(Light):
                     payload = payload,
                     namespace = self.MQTT_namespace
                 )
-                self.isON = True
+            self.isON = True
 
 
     def turn_on_lights_at_max(self) -> None:
         light_data:dict = {}
 
-        if not self.isON:
+        if not self.isON or self.isON == None:
             light_data.update({"ON" : True})
 
         for light in self.lights:
@@ -1844,19 +1888,15 @@ class MQTTLights(Light):
 
             payload = json.dumps(light_data)
             self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = payload, namespace = self.MQTT_namespace)
-            self.isON = True
+        self.isON = True
 
 
     def turn_off_lights(self) -> None:
         self.current_light_data = {}
-        if self.isON:
+        if self.isON or self.isON == None:
             for light in self.lights:
                 self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = "OFF", namespace = self.MQTT_namespace)
             self.isON = False
-
-
-    def isLightOn(self) -> bool:
-        return self.isON
 
 
 class Toggle(Light):
@@ -1922,7 +1962,9 @@ class Toggle(Light):
             conditions = conditions,
             json_path = json_path,
             usePersistentStorage = usePersistentStorage,
-            HASS_namespace = HASS_namespace
+            HASS_namespace = HASS_namespace,
+            night_motion = False,
+            dim_while_motion = False
         )
 
 
@@ -1956,16 +1998,6 @@ class Toggle(Light):
                         self.turn_off_lights()
                         self.current_toggle = 0
 
-                    # Persistent toggle
-                if self.usePersistentStorage:
-                    with open(self.JSON_PATH, 'r') as json_read:
-                        lightwand_data = json.load(json_read)
-
-                    lightwand_data[self.lights[0]].update(
-                        {"toggle" : self.current_toggle}
-                    )
-                    with open(self.JSON_PATH, 'w') as json_write:
-                        json.dump(lightwand_data, json_write, indent = 4)
                 return
 
         if (
@@ -1977,16 +2009,7 @@ class Toggle(Light):
             self.lightmode = lightmode
             self.turn_off_lights()
             self.current_toggle = 0
-                # Persistent toggle
-            if self.usePersistentStorage:
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
 
-                lightwand_data[self.lights[0]].update(
-                    {"toggle" : self.current_toggle}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
             return
 
         elif (
@@ -2000,16 +2023,6 @@ class Toggle(Light):
 
             self.calculateToggles(toggle_bulb = 1)
 
-                # Persistent toggle
-            if self.usePersistentStorage:
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-
-                lightwand_data[self.lights[0]].update(
-                    {"toggle" : 1}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
             return
 
         self.lightmode = 'normal'
@@ -2025,17 +2038,6 @@ class Toggle(Light):
         else:
             self.turn_off_lights()
             self.current_toggle = 0
-
-            # Persistent toggle
-        if self.usePersistentStorage:
-            with open(self.JSON_PATH, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-
-            lightwand_data[self.lights[0]].update(
-                {"toggle" : self.toggle_lightbulb}
-            )
-            with open(self.JSON_PATH, 'w') as json_write:
-                json.dump(lightwand_data, json_write, indent = 4)
 
 
     def setMotion(self, lightmode:str = 'None') -> None:
@@ -2085,17 +2087,6 @@ class Toggle(Light):
 
                 self.calculateToggles(toggle_bulb = toggle_bulb)
 
-                    # Persistent toggle
-                if self.usePersistentStorage:
-                    with open(self.JSON_PATH, 'r') as json_read:
-                        lightwand_data = json.load(json_read)
-
-                    lightwand_data[self.lights[0]].update(
-                        {"toggle" : self.current_toggle}
-                    )
-                    with open(self.JSON_PATH, 'w') as json_write:
-                        json.dump(lightwand_data, json_write, indent = 4)
-
 
     def calculateToggles(self, toggle_bulb:int = 1) -> None:
         if self.current_toggle == toggle_bulb:
@@ -2115,7 +2106,7 @@ class Toggle(Light):
 
 
     def checkToggleAfterRun(self, kwargs) -> None:
-        if not self.isLightOn():
+        if self.ADapi.get_state(self.lights[0]) == 'off':
             toggle_bulb = self.current_toggle
             self.current_toggle = 0
             self.calculateToggles(toggle_bulb = toggle_bulb)
