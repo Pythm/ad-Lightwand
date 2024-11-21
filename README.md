@@ -114,7 +114,7 @@ To change only one room you can call either normal, off, or reset + _appName. Ap
 
 
 ##### Add delay to activate modes
-An option for room configuration is to add delay in seconds on mode change. The modes that will wait with the option `mode_turn_off_delay` is away, off and night. The modes that will change after delay with option `mode_turn_on_delay` is modes: 'normal' and 'morning'.
+An option for room configuration is to add delay in seconds on mode change. The modes that will wait with the option `mode_turn_off_delay` is away, off and night. The modes that will change after delay with option `mode_turn_on_delay` is modes: normal and morning.
 
 > [!TIP]
 > Setting different delays to rooms will help not to flood the zigbee/zwave network if you have a lot of lights.
@@ -320,8 +320,10 @@ You can configure two outdoor lux sensors with the second ending with '_2' and i
 - By default the light does not dim down when motion is detected. With `dim_while_motion` you allow the light to dim down even when motion, but only if the lightmode is `normal`.
 - `exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom. Exclude from custom applies to the whole room, even if configured for one light.
 
-When you configure holliday lights you can add `enable_light_control` to those lights. This is a HA input_boolean or other with on/off state. By design this only reads state on reboot/startup and if state is off, the lights will not be added to room.
+When you configure holliday lights you can add `enable_light_control` to those lights. This is a HA input_boolean or other with on/off state. By design this only reads state on reboot/startup and if state is off, the lights will not be added to room. You can then keep the configuration for next year, but disable all those switches ticking on and off during the whole year, or free them up to other things, with one HA switch.
 
+> [!TIP]
+> I use one switch to disable xmas lights and also to hide any buttons with modes created for xmas in Home Assistant Frontend
 
 ```yaml
   #Configure in room
