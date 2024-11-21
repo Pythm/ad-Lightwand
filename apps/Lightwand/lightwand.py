@@ -43,7 +43,7 @@ class Room(hass.Hass):
 
 
         self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
-        self.mode_turn_on_delay:int = self.args.get('mode_turn_on_dealy',0)
+        self.mode_turn_on_delay:int = self.args.get('mode_turn_on_delay',0)
         self.mode_delay_handler = None
 
         self.mediaplayers:dict = self.args.get('mediaplayers', {})
