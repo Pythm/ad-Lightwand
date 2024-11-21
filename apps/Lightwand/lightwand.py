@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -40,6 +40,11 @@ class Room(hass.Hass):
             dim_while_motion = 'dim_while_motion' in self.args['options']
         room_night_motion:bool = night_motion
         room_dim_while_motion:bool = dim_while_motion
+
+
+        self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
+        self.mode_turn_on_delay:int = self.args.get('mode_turn_on_dealy',0)
+        self.mode_delay_handler = None
 
         self.mediaplayers:dict = self.args.get('mediaplayers', {})
 
@@ -210,6 +215,9 @@ class Room(hass.Hass):
             # Configuration of MQTT Lights
         lights = self.args.get('MQTTLights', [])
         for l in lights:
+            if 'enable_light_control' in l:
+                if self.get_state(l['enable_light_control']) == 'off':
+                    continue
             if 'options' in l:
                 if 'exclude_from_custom' in l['options']:
                     self.exclude_from_custom = True
@@ -241,6 +249,9 @@ class Room(hass.Hass):
             # Configuration of HASS Lights
         lights = self.args.get('Lights', [])
         for l in lights:
+            if 'enable_light_control' in l:
+                if self.get_state(l['enable_light_control']) == 'off':
+                    continue
             if 'options' in l:
                 if 'exclude_from_custom' in l['options']:
                     self.exclude_from_custom = True
@@ -270,6 +281,9 @@ class Room(hass.Hass):
             # Configuration of HASS Toggle Lights
         toggle = self.args.get('ToggleLights', [])
         for l in toggle:
+            if 'enable_light_control' in l:
+                if self.get_state(l['enable_light_control']) == 'off':
+                    continue
             light = Toggle(self,
                 lights = l['lights'],
                 light_modes = l.get('light_modes', []),
@@ -427,8 +441,44 @@ class Room(hass.Hass):
                 if not 'morning' in self.all_modes:
                     self.LIGHT_MODE = 'normal'
 
+            if (
+                self.LIGHT_MODE == 'away'
+                or self.LIGHT_MODE == 'off'
+                or self.LIGHT_MODE == 'night'
+            ):
+                if self.mode_turn_off_delay > 0:
+                    self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_off_delay)
+                    return
+            elif (
+                self.LIGHT_MODE == 'normal'
+                or self.LIGHT_MODE == 'morning'
+            ):
+                if self.mode_turn_on_delay > 0:
+                    self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_on_delay)
+                    return
+
+
             self.reactToChange()
 
+            if (
+                data['mode'] == 'normal_' + str(self.name)
+                or data['mode'] == 'reset_' + str(self.name)
+                or data['mode'] == 'reset'
+            ):
+                self.LIGHT_MODE = 'normal'
+
+
+    def set_Mode_with_delay(self, kwargs):
+
+        if self.mode_delay_handler != None:
+            if self.timer_running(self.mode_delay_handler):
+                try:
+                    self.ADapi.cancel_timer(self.mode_delay_handler)
+                except Exception:
+                    self.ADapi.log(f"Could not stop dim timer for {entity}.", level = 'DEBUG')
+            self.mode_delay_handler = None
+
+        self.reactToChange()
 
         # Motion and presence
 
@@ -685,6 +735,11 @@ class Room(hass.Hass):
 
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
+
+            if self.mode_delay_handler != None:
+                if self.timer_running(self.mode_delay_handler):
+                    return
+
             self.reactToChange()
 
         self.lux_last_update1 = self.datetime(aware=True)
@@ -718,6 +773,11 @@ class Room(hass.Hass):
 
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
+
+            if self.mode_delay_handler != None:
+                if self.timer_running(self.mode_delay_handler):
+                    return
+
             self.reactToChange()
 
         self.lux_last_update2 = self.datetime(aware=True)
@@ -745,6 +805,11 @@ class Room(hass.Hass):
     def newRoomLux(self) -> None:
         for light in self.roomlight:
             light.roomLux = self.ROOM_LUX
+
+        if self.mode_delay_handler != None:
+                if self.timer_running(self.mode_delay_handler):
+                    return
+
         self.reactToChange()
 
 
@@ -939,7 +1004,8 @@ class Light:
                 )
                 with open(self.JSON_PATH, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
-            self.isON = lightwand_data[self.lights[0]]['isON'] == 'on'
+            elif self.isON == None:
+                self.isON = lightwand_data[self.lights[0]]['isON'] == 'on'
 
 
         """ End initial setup for lights
@@ -1379,6 +1445,9 @@ class Light:
                     if self.brightness < self.motionlight['light_data']['value']:
                         self.turn_on_lights(light_data = self.motionlight['light_data'])
 
+                else: # Set light_data if no brightness change, only colour etc.
+                    self.turn_on_lights(light_data = self.motionlight['light_data'])
+
                 # Defines more simple on/off with possibility to have offset off normal automation
             elif 'state' in self.motionlight:
                 if (
@@ -1542,6 +1611,9 @@ class Light:
                             )
                     self.turn_on_lights(light_data =  target_light_data)
 
+                else: # Set light_data if no brightness change, only colour etc.
+                    self.turn_on_lights(light_data =  target_light_data)
+
             elif not self.isON or self.isON == None:
                 self.turn_on_lights()
 
@@ -1602,6 +1674,7 @@ class Light:
                 or newbrightness < originalBrightness
             ):
                 # Outside dim target for dimming up
+                self.ADapi.log(f"Increase brightness {newbrightness}. Return original based on: {newbrightness < targetBrightness} or {newbrightness > originalBrightness}") ###
                 return targetBrightness
             
             if self.dimHandler == None:

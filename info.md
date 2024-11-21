@@ -79,8 +79,8 @@ day:
 > <br>- If mode is not defined in light but is present in room, light will be set to normal mode.
 > <br>- If mode is not defined in room, the lights will keep existing mode.
 
-##### Predefined mode names 
 
+##### Predefined mode names 
 All mode names except <b>'custom'</b> can be defined in 'light_modes' with your own configuration.
 
 > [!NOTE]
@@ -112,6 +112,22 @@ To change only one room you can call either normal, off, or reset + _appName. Ap
 > [!TIP]
 > You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
 
+
+##### Add delay to activate modes
+An option for room configuration is to add delay in seconds on mode change. The modes that will wait with the option `mode_turn_off_delay` is away, off and night. The modes that will change after delay with option `mode_turn_on_delay` is modes: 'normal' and 'morning'.
+
+> [!TIP]
+> Setting different delays to rooms will help not to flood the zigbee/zwave network if you have a lot of lights.
+
+You can also use this delay if you want to keep the light on/off for longer in some rooms when you exit or come home.
+
+> [!NOTE]
+> Motion, Precence (trackers) and when listening to state changes with 'listen_sensors', will override any delay if app reacts to state change.
+
+```yaml
+  mode_turn_off_delay: 2
+  mode_turn_on_delay: 2
+```
 
 ## Automating lights
 Setting up automation is configured by time with a state and/or light data.
@@ -198,7 +214,6 @@ Automations example:
 > [!NOTE]
 > When motion is active the light will not dim down. Motion detected will also not turn down brightness to set motion, in case other modes sets brightness higher e.g. <b>wash</b> active and set to 255 and motion only set to 125, light will stay at 255 brightness.
 > <br>If media players is on or night* / off mode is active motion lighting is deactivated.
-
 
 
 State with offset example:
@@ -301,12 +316,12 @@ You can configure two outdoor lux sensors with the second ending with '_2' and i
 
 ### Custom options
 `options` is a list with choices. It can be configured for the room or for each light.
+- Enable motion detection during night mode with `night_motion`
+- By default the light does not dim down when motion is detected. With `dim_while_motion` you allow the light to dim down even when motion, but only if the lightmode is `normal`.
+- `exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom. Exclude from custom applies to the whole room, even if configured for one light.
 
-Enable motion detection during night mode with `night_motion`
+When you configure holliday lights you can add `enable_light_control` to those lights. This is a HA input_boolean or other with on/off state. By design this only reads state on reboot/startup and if state is off, the lights will not be added to room.
 
-By default the light does not dim down when motion is detected. With `dim_while_motion` you allow the light to dim down even when motion, but only if the lightmode is `normal`.
-
-`exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom. Exclude from custom applies to the whole room, even if configured for one light.
 
 ```yaml
   #Configure in room
@@ -320,6 +335,8 @@ By default the light does not dim down when motion is detected. With `dim_while_
       # Configure in light
       options:
         - night_motion
+
+      enable_light_control: input_boolean.xmas_light_control
 ```
 
 ### Conditions and constraints
