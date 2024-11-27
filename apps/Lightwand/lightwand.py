@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -473,9 +473,9 @@ class Room(hass.Hass):
         if self.mode_delay_handler != None:
             if self.timer_running(self.mode_delay_handler):
                 try:
-                    self.ADapi.cancel_timer(self.mode_delay_handler)
+                    self.cancel_timer(self.mode_delay_handler)
                 except Exception:
-                    self.ADapi.log(f"Could not stop dim timer for {entity}.", level = 'DEBUG')
+                    self.log(f"Could not stop dim timer for {entity}.", level = 'DEBUG')
             self.mode_delay_handler = None
 
         self.reactToChange()
@@ -1674,7 +1674,6 @@ class Light:
                 or newbrightness < originalBrightness
             ):
                 # Outside dim target for dimming up
-                self.ADapi.log(f"Increase brightness {newbrightness}. Return original based on: {newbrightness < targetBrightness} or {newbrightness > originalBrightness}") ###
                 return targetBrightness
             
             if self.dimHandler == None:
