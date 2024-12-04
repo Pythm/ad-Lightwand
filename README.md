@@ -19,34 +19,34 @@ nameyourRoom:
 ## App usage and configuration
 > [!TIP]
 > All sections and configurations except the minimum above are optional, so you use only what is applicable.
-> Each app contains one `Room` with all of the sensors you want to use for that room and define all the lights to automate.
+
+Each app contains one `Room` defined with Appname, that in this example equals *nameyourRoom*. You input all of the sensors you want to use for that room, and define all the lights you want to automate.
 
 
 ## Lights
-All lights for the room is configured as either `MQTTLights` to control lights directly via MQTT or `Lights` as Home Assistant lights/switches. Optionally as Home Assistant switches you can configure `ToggleLights` if you have lights/bulbs that dim with toggle.
+All lights for the room is configured as either `MQTTLights` to control lights directly via MQTT, or `Lights` as Home Assistant lights/switches. Optionally as Home Assistant switches you can configure `ToggleLights` if you have lights/bulbs that dim with toggle.
 Each of the different light types can have multiple <b>-lights</b> as lists with the lights / switches. Each set containing the same settings including automations, motions, modes, lux on/off/constraints and conditions.
 
 #### MQTTLights
+To control lights via MQTT make sure to set up the[ MQTT plugin](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#mqtt) in Appdaemon. The app will automatically set up subscription and listen for needed MQTT topics.
 Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Just define light_data with the brightness, color, effect you want to control. Check your zigbee2mqtt for what your light supports. Brightness is set in range 1-255.
-<br>
-<br>Can be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
-<br>
+
+MQTT can also be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set with 'value' in range 1 to 99.
+
 <br>Mqtt light names are full topics for targets excluding /set, case sensitive.
 <br>Zigbee2mqtt should be something like: zigbee2mqtt/YourLightName
 <br>Zwave could be something like: zwave/YourLightName/switch_multilevel/endpoint_1/targetValue
-<br>App will set up subscription to MQTT topics.
 
 > [!TIP]
-> I recommend [MQTT Explorer](https://mqtt-explorer.com/) or similar to find Zwave topic.
+> I recommend [MQTT Explorer](https://mqtt-explorer.com/) or similar to find MQTT topic.
 
 
 #### Home Assistant Lights
-Is configured with Lights and can control switches and lights. Use entity-id including type as name. Check your entity in Home Assistant for what your light supports as data like brightness, transition, rgb, etc.
+Is configured with Lights and can control switches and lights. Use entity-id including type as name. Check your entity in Home Assistant for what your light supports as data like brightness, transition, rgb, color temp, etc.
 
 #### ToggleLights
 ToggleLights is Home Assistant switch entities. Toggles are configured with a `toggle` number on how many times to turn on light to get wanted dim instead of light_data for dimmable lights. Input `num_dim_steps` as number of dim steps in bulb.
-<br>
-<br>
+
 
 ## Mode change events
 > [!IMPORTANT]
@@ -84,7 +84,7 @@ day:
 All mode names except <b>'custom'</b> can be defined in 'light_modes' with your own configuration.
 
 > [!NOTE]
-> Setting mode to 'custom' stops all automation like mediaplayer, motion or lux control.
+> Setting mode to 'custom' stops all automation like mediaplayer, motion and lux control.
 
 The predefined mode names with default turn on/off:
 
@@ -110,8 +110,11 @@ Only change one room:
 To change only one room you can call either normal, off, or reset + _appName. Appname is what you call your app in configuration. See AppName example on nameyourRoom in [Installation](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#installation). Given this name the mode to call to reset only that rom will be `reset_nameyourRoom`.
 
 > [!TIP]
-> You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights lux constrained during night.
+> You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights on during night mode.
 
+
+#### Add delays
+Calling a lot of lights simultaneously, espesially if you have lights that do not support transition nativly so the controller needs to send multiple commands to each dimmer, will cause a lot of traffic. If you experience problems that not all lights responds every time to mode changes you can add delays to see if it helps to distribute the network traffic over time. You have then two options.
 
 ##### Add delay to activate modes
 An option for room configuration is to add delay in seconds on mode change. The modes that will wait with the option `mode_turn_off_delay` is away, off and night. The modes that will change after delay with option `mode_turn_on_delay` is modes: normal and morning.
@@ -127,6 +130,16 @@ You can also use this delay if you want to keep the light on/off for longer in s
 ```yaml
   mode_turn_off_delay: 2
   mode_turn_on_delay: 2
+```
+
+##### Add delay to every change
+You can also add a random delay `random_turn_on_delay` defined with an number, and the lights in the room, will be turned on/off randomly between zero and the given number in seconds. This applies to every change, including motion.
+
+> [!IMPORTANT]
+> Try to avoid setting this in rooms that sets the light turn on by motion. This delay is also added to turn on/off lights when motion is detected.
+
+```yaml
+  random_turn_on_delay: 2
 ```
 
 ## Automating lights
@@ -343,7 +356,7 @@ When you configure holliday lights you can add `enable_light_control` to those l
 
 ### Conditions and constraints
 You can use Lux sensors to control or constrain lights. Optionally you can provide IF statements to be meet for light to turn on at normal/morning/motion mode or with automations defined. Inherits Appdaemon Api as ADapi.
-<br>I use this on some of the lights in my livingroom and kitchen for when my wife is not home but without using the presence sensor because I do not want to set my rooms as away.
+<br>I use this on some of the lights in my livingroom and kitchen for when my wife is not home but without using the presence tracker because I do not want to set my rooms as away.
 You can define any statement you want so I have not figured out a better way than to create a 'listen_sensors' list for the sensors you use in statement so light can be updated when the condition changes.
 
 ```yaml
@@ -373,7 +386,7 @@ If you manage to configure every light to your liking, normal automation should 
 ```
 
 > [!TIP]
-> To reset back to normal automation you can call mode `reset` or app_N
+> To reset back to normal automation you can call mode `reset` or  `reset` + _appName
 
 ### Persistent storage
 Define a path to store json files with `json_path` for persistent storage to recall last MQTT data and current lightmode for room on reboot. It writes data on terminate/reboot to store current mode for room and outdoor lux, room lux, and if lights is on or off for lights where needed.
@@ -382,7 +395,7 @@ Toggle lights automation will break if persistent storage is not configured. It 
 
 This will increase writing to disk so it is not recomended for devices running on a SD card.
 
-If it is not configured the lightmode will be set to normal/away/media depending on presence and if media player is on.
+If it is not configured the lightmode will be set to normal/away/media depending on presence tracking and if media player is on.
 
 ## Namespace
 If you have defined a namespace for MQTT other than default you need to define your namespace with `MQTT_namespace`. Same for HASS you need to define your namespace with `HASS_namespace`.
@@ -436,7 +449,7 @@ your_room_name:
       delay: 600
       motion_constraints: "self.now_is_between('06:30:00', '21:00:00')"
 
-  # Presence detection. Configuration is same as motion sensors
+  # Presence tracker detection. Configuration is same as motion sensors
   # Sets mode as away for room if all trackers are not equal to 'home'.
   # Sets mode to presence if defined in light_modes or normal if not defined when returning home
   presence:
@@ -454,6 +467,10 @@ your_room_name:
       mode: pc
     - mediaplayer: media_player.tv
       mode: tv
+
+  # Add delay to turn on/off lights.
+  mode_turn_off_delay: 2
+  mode_turn_on_delay: 2
 
   # Configure lights and switches as Lights. Lights that dim with toggle is configured with 'ToggleLights' insted of 'Lights'
   MQTTLights:
@@ -606,6 +623,9 @@ key | optional | type | default | introduced in | description
 `MQTTLights` | True | list | | v1.1.0 | MQTT lights
 `ToggleLights` | True | list | | v1.0.0 | Use ToggleLights instead of Lights for bulbs/lights that dim with toggle
 `listen_sensors` | True | list | | v1.1.0 | List of sensors to listen to state change for updating light
+`mode_turn_off_delay` | True | int | | v1.3.1 | Add delay to turn on and off
+`mode_turn_on_delay` | True | int | | v1.3.1 | Add delay to turn on and off
+`random_turn_on_delay` | True | int | | v1.3.2 | Add delay to turn on and off
 
 ### Key definitions to add to motion and presence sensors
 key | optional | type | default | introduced in | description
