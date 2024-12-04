@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.1.2"
+__version__ = "1.3.2"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -45,6 +45,7 @@ class Room(hass.Hass):
         self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
         self.mode_turn_on_delay:int = self.args.get('mode_turn_on_delay',0)
         self.mode_delay_handler = None
+        random_turn_on_delay:int = self.args.get('random_turn_on_delay',0)
 
         self.mediaplayers:dict = self.args.get('mediaplayers', {})
 
@@ -308,6 +309,7 @@ class Room(hass.Hass):
             for mode in light.light_modes:
                 if not mode['mode'] in self.all_modes:
                     self.all_modes.append(mode['mode'])
+            light.random_turn_on_delay = random_turn_on_delay
 
             # Listen sensors for when to update lights based on 'conditions'
         self.listen_sensors = self.args.get('listen_sensors', [])
@@ -479,6 +481,13 @@ class Room(hass.Hass):
             self.mode_delay_handler = None
 
         self.reactToChange()
+
+        if (
+            self.LIGHT_MODE == 'normal_' + str(self.name)
+            or self.LIGHT_MODE == 'reset_' + str(self.name)
+            or self.LIGHT_MODE == 'reset'
+        ):
+            self.LIGHT_MODE = 'normal'
 
         # Motion and presence
 
@@ -893,6 +902,7 @@ class Light:
         self.usePersistentStorage:bool = usePersistentStorage
         self.night_motion:bool = night_motion
         self.dim_while_motion:bool = dim_while_motion
+        self.random_turn_on_delay:int = 0
 
         self.outLux:float = 0.0
         self.roomLux:float = 0.0
@@ -1751,24 +1761,46 @@ class Light:
         ):
             self.current_light_data = light_data
 
-            for light in self.lights:
-                self.ADapi.turn_on(light, **light_data)
+            if self.random_turn_on_delay == 0:
+                for light in self.lights:
+                    self.ADapi.turn_on(light, **light_data)
+            else:
+                for light in self.lights:
+                    self.ADapi.run_in(self.turn_on_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light, light_data = light_data)
 
+
+    def turn_on_lights_with_delay(self, kwargs) -> None:
+        """ Turns on light with random delay
+        """
+        self.ADapi.turn_on(kwargs['light'], **kwargs['light_data'])
 
     def turn_on_lights_at_max(self) -> None:
         for light in self.lights:
             string:str = self.lights[0]
             if string[:6] == 'light.':
-                self.ADapi.turn_on(light, brightness = 254)
+                if self.random_turn_on_delay == 0:
+                    self.ADapi.turn_on(light, brightness = 254)
+                else:
+                    self.ADapi.run_in(self.turn_on_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light, light_data = light_data)
             if string[:7] == 'switch.':
                 self.ADapi.turn_on(light)
 
 
     def turn_off_lights(self) -> None:
         self.current_light_data = {}
-        for light in self.lights:
-            self.ADapi.turn_off(light)
+        if self.random_turn_on_delay == 0:
+            for light in self.lights:
+                self.ADapi.turn_off(light)
+        else:
+            for light in self.lights:
+                self.ADapi.run_in(self.turn_off_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light)
         self.brightness = 0
+
+
+    def turn_off_lights_with_delay(self, kwargs) -> None:
+        """ Turns off light with random delay
+        """
+        self.ADapi.turn_off(kwargs['light'])
 
 
 class MQTTLights(Light):
@@ -1936,14 +1968,30 @@ class MQTTLights(Light):
                         and (self.isON or self.isON == None)
                     ):
                         continue
-                payload = json.dumps(light_data)
 
-                self.mqtt.mqtt_publish(
-                    topic = str(light) + "/set",
-                    payload = payload,
-                    namespace = self.MQTT_namespace
-                )
+                if self.random_turn_on_delay == 0:
+                    payload = json.dumps(light_data)
+                    self.mqtt.mqtt_publish(
+                        topic = str(light) + "/set",
+                        payload = payload,
+                        namespace = self.MQTT_namespace
+                    )
+                else:
+                    self.ADapi.run_in(self.turn_on_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light, light_data = light_data)
+
             self.isON = True
+
+
+    def turn_on_lights_with_delay(self, kwargs) -> None:
+        """ Turns on light with random delay
+        """
+        payload = json.dumps(kwargs['light_data'])
+        light = kwargs['light']
+        self.mqtt.mqtt_publish(
+            topic = str(light) + "/set",
+            payload = payload,
+            namespace = self.MQTT_namespace
+        )
 
 
     def turn_on_lights_at_max(self) -> None:
@@ -1958,17 +2006,38 @@ class MQTTLights(Light):
             elif 'switch_multilevel' in light:
                 light_data.update({"value" : 99})
 
-            payload = json.dumps(light_data)
-            self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = payload, namespace = self.MQTT_namespace)
+            if self.random_turn_on_delay == 0:
+                payload = json.dumps(light_data)
+                self.mqtt.mqtt_publish(
+                    topic = str(light) + "/set",
+                    payload = payload,
+                    namespace = self.MQTT_namespace
+                )
+            else:
+                self.ADapi.run_in(self.turn_on_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light, light_data = light_data)
+
         self.isON = True
 
 
     def turn_off_lights(self) -> None:
         self.current_light_data = {}
         if self.isON or self.isON == None:
-            for light in self.lights:
-                self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = "OFF", namespace = self.MQTT_namespace)
+
+            if self.random_turn_on_delay == 0:
+                for light in self.lights:
+                    self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = "OFF", namespace = self.MQTT_namespace)
+            else:
+                for light in self.lights:
+                    self.ADapi.run_in(self.turn_off_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light)
+
             self.isON = False
+
+
+    def turn_off_lights_with_delay(self, kwargs) -> None:
+        """ Turns off light with random delay
+        """
+        light = kwargs['light']
+        self.mqtt.mqtt_publish(topic = str(light) + "/set", payload = "OFF", namespace = self.MQTT_namespace)
 
 
 class Toggle(Light):
