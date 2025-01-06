@@ -20,7 +20,7 @@ nameyourRoom:
 > [!TIP]
 > All sections and configurations except the minimum above are optional, so you use only what is applicable.
 
-Each app contains one `Room` defined with Appname, that in this example equals *nameyourRoom*. You input all of the sensors you want to use for that room, and define all the lights you want to automate.
+Each app contains one `Room` defined with Appname, that in the above example equals *nameyourRoom*. You input all of the sensors you want to use for that room, and define all the lights you want to automate.
 
 
 ## Lights
@@ -112,9 +112,21 @@ To change only one room you can call either normal, off, or reset + _appName. Ap
 > [!TIP]
 > You are free to define whatever you like even for the names with default value. Useful for rgb lighting to set a colourtemp for wash or keep some lights on during night mode.
 
+##### Normal vs Reset Modes
+While the distinction between normal and reset modes is subtle, it's essential to note that calling normal mode when the current mode is already set to normal will have no effect. To simplify automation and user interactions, I use the following approach:
+
+In automations that adjust lighting modes automatically, I call normal mode.
+For all other cases, such as user interface interactions or switch activations, I call reset mode.
+This separation helps maintain a clean and intuitive control flow for both automated and manual lighting adjustments.
+
+
+### Maintaining a Healthy Network and Infrastructure
+When controlling multiple lights simultaneously, especially those that don't natively support transition commands, you may experience network congestion. This is because the controller needs to send multiple commands to each dimmer, generating significant traffic.
+
+To mitigate this issue, consider grouping zigbee devices together in your zigbee2mqtt controller and referencing them by a group name under `MQTTlights`. This approach can help reduce network strain compared to listing all individual devices.
 
 #### Add delays
-Calling a lot of lights simultaneously, espesially if you have lights that do not support transition nativly so the controller needs to send multiple commands to each dimmer, will cause a lot of traffic. If you experience problems that not all lights responds every time to mode changes you can add delays to see if it helps to distribute the network traffic over time. You have then two options.
+If you experience problems that not all lights responds every time to mode changes you can add delays to see if it helps to distribute the network traffic over time. You have then two options.
 
 ##### Add delay to activate modes
 An option for room configuration is to add delay in seconds on mode change. The modes that will wait with the option `mode_turn_off_delay` is away, off and night. The modes that will change after delay with option `mode_turn_on_delay` is modes: normal and morning.
@@ -185,6 +197,35 @@ Use `dimrate` to set brightness transition -/+ 1 brightness per x minutes. Dimmi
 
 If you only provide time in automation, the state will be set to `none` and the light will turn on if conditions are met. However, if you do not provide any light data it will not adjust anything.
 If you do not provide time you must specify state.
+
+#### Use Adaptive Lighting instead of setting light data
+Use [Adaptive Lighting ](https://github.com/basnijholt/adaptive-lighting/tree/main) custom component to control your brightness and color control for automation, motion or mode with setting state to 'adaptive'.
+
+There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' when you set it up. Lightwand will set manual control in the provided switch "Adaptive Lighting" that you'll need to define in your room with: 
+```yaml
+  adaptive_switch: switch.adaptive_lighting_yourName
+```
+
+The normal 'automations' is a list. Minimum configuration is with:
+```yaml
+      automations:
+      - state: adaptive
+```
+To use when motion configure with:
+```yaml
+      motionlights:
+        state: adaptive
+```
+Both 'automations' and 'motionlights' support list with times and states so you can configure Adaptive Lighting only to be active during specific times if needed to.
+
+To use in mode configure with:
+```yaml
+      light_modes:
+        - mode: your_mode
+          state: adaptive
+```
+
+Automatic setting of Adaptive Lighting's "Sleep Mode" is not implemented. If you plan to use this make sure that your automation or mode is set to the adaptive state.
 
 
 ### Motion behaviour
