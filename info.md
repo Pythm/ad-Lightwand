@@ -201,31 +201,48 @@ If you do not provide time you must specify state.
 #### Use Adaptive Lighting instead of setting light data
 Use [Adaptive Lighting ](https://github.com/basnijholt/adaptive-lighting/tree/main) custom component to control your brightness and color control for automation, motion or mode with setting state to 'adaptive'.
 
-There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' when you set it up. Lightwand will set manual control in the provided switch "Adaptive Lighting" that you'll need to define in your room with: 
+There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' or 'take_over_control' when you set it up, if you only use Lightwand and Adaptive Lighting as automations for light. Lightwand will set manual control with the provided "Adaptive Lighting" switch that you'll need to define in your room. If a state or mode does not use Adaptive lighting Lightwand will update manual control to true, and then give back control when state is again `adaptive`.
+
+Automatic setting of Adaptive Lighting's "Sleep Mode" is also implemented if you prefer to have a dimmed light instead of turning it completely off during night. All you need to do is define the `adaptive_sleep_mode` switch in room. The switch will then be activated when night mode is called and keep light at a minimum as configured in Adaptive light, instead of turning it off. This applies to both `night` and `night_` + appName modes.
+
 ```yaml
   adaptive_switch: switch.adaptive_lighting_yourName
+  adaptive_sleep_mode: switch.adaptive_lighting_sleep_mode_yourName
 ```
 
-The normal 'automations' is a list. Minimum configuration is with:
+Minimum configuration to use Adaptive Lighting brightness and color temp setting is with:
+
 ```yaml
       automations:
       - state: adaptive
 ```
-To use when motion configure with:
+To include max and min brightness it looks like this:
+```yaml
+      automations:
+      - state: adaptive
+        max_brightness: 60
+        min_brightness: 10
+```
+
+To configure with motionlights:
 ```yaml
       motionlights:
         state: adaptive
+        max_brightness: 80
+        min_brightness: 30
 ```
-Both 'automations' and 'motionlights' support list with times and states so you can configure Adaptive Lighting only to be active during specific times if needed to.
+
 
 To use in mode configure with:
 ```yaml
       light_modes:
         - mode: your_mode
           state: adaptive
+          max_brightness: 100
+          min_brightness: 1
 ```
 
-Automatic setting of Adaptive Lighting's "Sleep Mode" is not implemented. If you plan to use this make sure that your automation or mode is set to the adaptive state.
+Automations, motionlights and automations in modes all supports list with times and states so you can configure Adaptive Lighting to only be active during specific times.
 
 
 ### Motion behaviour
@@ -667,6 +684,8 @@ key | optional | type | default | introduced in | description
 `mode_turn_off_delay` | True | int | | v1.3.1 | Add delay to turn on and off
 `mode_turn_on_delay` | True | int | | v1.3.1 | Add delay to turn on and off
 `random_turn_on_delay` | True | int | | v1.3.2 | Add delay to turn on and off
+`adaptive_switch` | True | string | | v1.3.3 | HA switch to turn on/off Adaptive Lighting
+`adaptive_sleep_mode` | True | string | | v1.3.4 | HA switch to turn on/off Adaptive Lightings sleep mode
 
 ### Key definitions to add to motion and presence sensors
 key | optional | type | default | introduced in | description

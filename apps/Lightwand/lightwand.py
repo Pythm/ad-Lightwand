@@ -1,9 +1,11 @@
 """ Lightwand by Pythm
 
+## What's Changed
+
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.3"
+__version__ = "1.3.4"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -50,6 +52,7 @@ class Room(hass.Hass):
         self.mediaplayers:dict = self.args.get('mediaplayers', {})
 
         adaptive_switch:str = self.args.get('adaptive_switch', None)
+        adaptive_sleep_mode:str = self.args.get('adaptive_sleep_mode', None)
 
         # Namespaces for HASS and MQTT
         HASS_namespace:str = self.args.get('HASS_namespace', 'default')
@@ -242,6 +245,7 @@ class Room(hass.Hass):
                 HASS_namespace = HASS_namespace,
                 night_motion = night_motion,
                 adaptive_switch = adaptive_switch,
+                adaptive_sleep_mode = adaptive_sleep_mode,
                 dim_while_motion = dim_while_motion
             )
             self.roomlight.append(light)
@@ -276,6 +280,7 @@ class Room(hass.Hass):
                 HASS_namespace = HASS_namespace,
                 night_motion = night_motion,
                 adaptive_switch = adaptive_switch,
+                adaptive_sleep_mode = adaptive_sleep_mode,
                 dim_while_motion = dim_while_motion
             )
             self.roomlight.append(light)
@@ -777,6 +782,10 @@ class Room(hass.Hass):
             if self.outLux2 != float(lux_data['illuminance_lux']):
                 self.outLux2 = float(lux_data['illuminance_lux']) # Zigbee sensor
                 self.newOutLux2()
+        elif 'illuminance' in lux_data:
+            if self.outLux1 != float(lux_data['illuminance']):
+                self.outLux1 = float(lux_data['illuminance']) # Zigbee sensor
+                self.newOutLux2()
         elif 'value' in lux_data:
             if self.outLux2 != float(lux_data['value']):
                 self.outLux2 = float(lux_data['value']) # Zwave sensor
@@ -814,6 +823,10 @@ class Room(hass.Hass):
         if 'illuminance_lux' in lux_data:
             if self.ROOM_LUX != float(lux_data['illuminance_lux']):
                 self.ROOM_LUX = float(lux_data['illuminance_lux']) # Zigbee sensor
+                self.newRoomLux()
+        elif 'illuminance' in lux_data:
+            if self.outLux1 != float(lux_data['illuminance']):
+                self.outLux1 = float(lux_data['illuminance']) # Zigbee sensor
                 self.newRoomLux()
         elif 'value' in lux_data:
             if self.ROOM_LUX != float(lux_data['value']):
@@ -897,6 +910,7 @@ class Light:
         HASS_namespace,
         night_motion,
         adaptive_switch,
+        adaptive_sleep_mode,
         dim_while_motion
     ):
 
@@ -917,6 +931,7 @@ class Light:
         self.random_turn_on_delay:int = 0
 
         self.adaptive_switch = adaptive_switch
+        self.adaptive_sleep_mode = adaptive_sleep_mode
         self.has_adaptive_state:bool = False
 
         self.outLux:float = 0.0
@@ -1325,6 +1340,13 @@ class Light:
                     except Exception:
                         self.ADapi.log(f"Could not stop dim timer for {entity}.", level = 'DEBUG')
                 self.dimHandler = None
+            
+            if (
+                str(lightmode)[:5] != 'night'
+                and str(self.lightmode)[:5] == 'night'
+                and self.adaptive_sleep_mode != None
+            ):
+                self.ADapi.turn_off(self.adaptive_sleep_mode)
 
         if lightmode == 'None':
             lightmode = self.lightmode
@@ -1415,16 +1437,47 @@ class Light:
                         if not self.isON or self.isON == None:
                             self.turn_on_lights()
                         self.setAdaptiveLightingOn()
+                        if 'max_brightness' in mode['state']:
+                            if 'min_brightness' in mode['state']:
+                                self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                    entity_id = self.adaptive_switch,
+                                    max_brightness = mode['state']['max_brightness'],
+                                    min_brightness = mode['state']['min_brightness'],
+                                    namespace = self.HASS_namespace
+                                )
+                            else:
+                                self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                    entity_id = self.adaptive_switch,
+                                    max_brightness = mode['state']['max_brightness'],
+                                    namespace = self.HASS_namespace
+                                )
+                        else:
+                            self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                entity_id = self.adaptive_switch,
+                                use_defaults = 'configuration',
+                                namespace = self.HASS_namespace
+                            )
+                       
                 
             # Default turn off if away/off/night is not defined as a mode in light
         if (
             lightmode == 'away'
             or lightmode == 'off'
             or lightmode == 'off_' + str(self.ADapi.name)
-            or lightmode == 'night'
         ):
             self.lightmode = lightmode
             if self.isON or self.isON == None:
+                self.turn_off_lights()
+            return
+
+        elif (
+            lightmode == 'night'
+            or lightmode == 'night_' + str(self.ADapi.name)
+        ):
+            self.lightmode = lightmode
+            if self.adaptive_sleep_mode != None:
+                self.ADapi.turn_on(self.adaptive_sleep_mode)
+            elif self.isON or self.isON == None:
                 self.turn_off_lights()
             return
 
@@ -1502,8 +1555,6 @@ class Light:
                         self.setAdaptiveLightingOff()
                     self.turn_on_lights_at_max()
                     return
-                            #self.motion = False
-                            #self.setLightMode(lightmode = lightmode)
 
 
         if self.motionlight:
@@ -1587,6 +1638,26 @@ class Light:
                     if not self.isON or self.isON == None:
                         self.turn_on_lights()
                     self.setAdaptiveLightingOn()
+                    if 'max_brightness' in self.motionlight:
+                        if 'min_brightness' in self.motionlight:
+                            self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                entity_id = self.adaptive_switch,
+                                max_brightness = self.motionlight['max_brightness'],
+                                min_brightness = self.motionlight['min_brightness'],
+                                namespace = self.HASS_namespace
+                            )
+                        else:
+                            self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                entity_id = self.adaptive_switch,
+                                max_brightness = self.motionlight['max_brightness'],
+                                namespace = self.HASS_namespace
+                            )
+                    else:
+                        self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                            entity_id = self.adaptive_switch,
+                            use_defaults = 'configuration',
+                            namespace = self.HASS_namespace
+                        )             
 
 
     def setLightAutomation(self, automations:list, offset:int = 0 ) -> None:
@@ -1745,6 +1816,26 @@ class Light:
                 if not self.isON or self.isON == None:
                     self.turn_on_lights()
                 self.setAdaptiveLightingOn()
+                if 'max_brightness' in automations[target_num]['state']:
+                    if 'min_brightness' in automations[target_num]['state']:
+                        self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                            entity_id = self.adaptive_switch,
+                            max_brightness = automations[target_num]['state']['max_brightness'],
+                            min_brightness = automations[target_num]['state']['min_brightness'],
+                            namespace = self.HASS_namespace
+                        )
+                    else:
+                        self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                            entity_id = self.adaptive_switch,
+                            max_brightness = automations[target_num]['state']['max_brightness'],
+                            namespace = self.HASS_namespace
+                        )
+                else:
+                    self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                        entity_id = self.adaptive_switch,
+                        use_defaults = 'configuration',
+                        namespace = self.HASS_namespace
+                    )
 
             elif not self.isON or self.isON == None:
                 if self.has_adaptive_state:
@@ -1992,6 +2083,8 @@ class Light:
     def turn_off_lights(self) -> None:
         """ Turns off lights
         """
+        if self.has_adaptive_state:
+            self.setAdaptiveLightingOff()
         self.current_light_data = {}
         if self.random_turn_on_delay == 0:
             for light in self.lights:
@@ -2026,6 +2119,7 @@ class MQTTLights(Light):
         HASS_namespace,
         night_motion,
         adaptive_switch,
+        adaptive_sleep_mode,
         dim_while_motion
     ):
 
@@ -2054,6 +2148,7 @@ class MQTTLights(Light):
             HASS_namespace = HASS_namespace,
             night_motion = night_motion,
             adaptive_switch = adaptive_switch,
+            adaptive_sleep_mode = adaptive_sleep_mode,
             dim_while_motion = dim_while_motion
         )
 
@@ -2227,6 +2322,8 @@ class MQTTLights(Light):
 
 
     def turn_off_lights(self) -> None:
+        if self.has_adaptive_state:
+            self.setAdaptiveLightingOff()
         self.current_light_data = {}
         if self.isON or self.isON == None:
 
@@ -2313,6 +2410,7 @@ class Toggle(Light):
             HASS_namespace = HASS_namespace,
             night_motion = False,
             adaptive_switch = None,
+            adaptive_sleep_mode = None,
             dim_while_motion = False
         )
 
