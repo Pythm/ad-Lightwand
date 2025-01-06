@@ -1,11 +1,9 @@
 """ Lightwand by Pythm
 
-## What's Changed
-
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.4"
+__version__ = "1.3.4.1"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -1657,7 +1655,7 @@ class Light:
                             entity_id = self.adaptive_switch,
                             use_defaults = 'configuration',
                             namespace = self.HASS_namespace
-                        )             
+                        )
 
 
     def setLightAutomation(self, automations:list, offset:int = 0 ) -> None:
@@ -1816,18 +1814,18 @@ class Light:
                 if not self.isON or self.isON == None:
                     self.turn_on_lights()
                 self.setAdaptiveLightingOn()
-                if 'max_brightness' in automations[target_num]['state']:
-                    if 'min_brightness' in automations[target_num]['state']:
+                if 'max_brightness' in automations[target_num]:
+                    if 'min_brightness' in automations[target_num]:
                         self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                             entity_id = self.adaptive_switch,
-                            max_brightness = automations[target_num]['state']['max_brightness'],
-                            min_brightness = automations[target_num]['state']['min_brightness'],
+                            max_brightness = automations[target_num]['max_brightness'],
+                            min_brightness = automations[target_num]['min_brightness'],
                             namespace = self.HASS_namespace
                         )
                     else:
                         self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                             entity_id = self.adaptive_switch,
-                            max_brightness = automations[target_num]['state']['max_brightness'],
+                            max_brightness = automations[target_num]['max_brightness'],
                             namespace = self.HASS_namespace
                         )
                 else:
