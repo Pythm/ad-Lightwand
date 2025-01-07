@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.4.1"
+__version__ = "1.3.5"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -242,8 +242,8 @@ class Room(hass.Hass):
                 MQTT_namespace = MQTT_namespace,
                 HASS_namespace = HASS_namespace,
                 night_motion = night_motion,
-                adaptive_switch = adaptive_switch,
-                adaptive_sleep_mode = adaptive_sleep_mode,
+                adaptive_switch = l.get('adaptive_switch', adaptive_switch),
+                adaptive_sleep_mode = l.get('adaptive_sleep_mode', adaptive_sleep_mode),
                 dim_while_motion = dim_while_motion
             )
             self.roomlight.append(light)
@@ -277,8 +277,8 @@ class Room(hass.Hass):
                 usePersistentStorage = self.usePersistentStorage,
                 HASS_namespace = HASS_namespace,
                 night_motion = night_motion,
-                adaptive_switch = adaptive_switch,
-                adaptive_sleep_mode = adaptive_sleep_mode,
+                adaptive_switch = l.get('adaptive_switch', adaptive_switch),
+                adaptive_sleep_mode = l.get('adaptive_sleep_mode', adaptive_sleep_mode),
                 dim_while_motion = dim_while_motion
             )
             self.roomlight.append(light)
@@ -1435,18 +1435,18 @@ class Light:
                         if not self.isON or self.isON == None:
                             self.turn_on_lights()
                         self.setAdaptiveLightingOn()
-                        if 'max_brightness' in mode['state']:
-                            if 'min_brightness' in mode['state']:
+                        if 'max_brightness' in mode:
+                            if 'min_brightness' in mode:
                                 self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                     entity_id = self.adaptive_switch,
-                                    max_brightness = mode['state']['max_brightness'],
-                                    min_brightness = mode['state']['min_brightness'],
+                                    max_brightness = mode['max_brightness'],
+                                    min_brightness = mode['min_brightness'],
                                     namespace = self.HASS_namespace
                                 )
                             else:
                                 self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                     entity_id = self.adaptive_switch,
-                                    max_brightness = mode['state']['max_brightness'],
+                                    max_brightness = mode['max_brightness'],
                                     namespace = self.HASS_namespace
                                 )
                         else:
@@ -1455,6 +1455,8 @@ class Light:
                                 use_defaults = 'configuration',
                                 namespace = self.HASS_namespace
                             )
+
+                        return
                        
                 
             # Default turn off if away/off/night is not defined as a mode in light

@@ -155,8 +155,7 @@ You can also add a random delay `random_turn_on_delay` defined with an number, a
 ```
 
 ## Automating lights
-Setting up automation is configured by time with a state and/or light data.
-
+Setting up automation is configured by time with a state and/or light data or use [Adaptive Lighting ](https://github.com/basnijholt/adaptive-lighting/tree/main) custom component to control the brightness and color control.
 
 ### Defining times
 Automations contains a set of times for each set of light and is activated with mode 'normal'. If you only want lux control on/off, you do not need to set up any time automations.
@@ -198,16 +197,22 @@ Use `dimrate` to set brightness transition -/+ 1 brightness per x minutes. Dimmi
 If you only provide time in automation, the state will be set to `none` and the light will turn on if conditions are met. However, if you do not provide any light data it will not adjust anything.
 If you do not provide time you must specify state.
 
-#### Use Adaptive Lighting instead of setting light data
+### Use Adaptive Lighting instead of setting light data
 Use [Adaptive Lighting ](https://github.com/basnijholt/adaptive-lighting/tree/main) custom component to control your brightness and color control for automation, motion or mode with setting state to 'adaptive'.
 
-There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' or 'take_over_control' when you set it up, if you only use Lightwand and Adaptive Lighting as automations for light. Lightwand will set manual control with the provided "Adaptive Lighting" switch that you'll need to define in your room. If a state or mode does not use Adaptive lighting Lightwand will update manual control to true, and then give back control when state is again `adaptive`.
+There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' or 'take_over_control' when you set it up, if you only use Lightwand and Adaptive Lighting as automations for light. Lightwand will set manual control with the provided "Adaptive Lighting" switch that you'll need to define. If a state or mode does not use Adaptive lighting Lightwand will update manual control to true, and then give back control when state is again `adaptive`.
 
-Automatic setting of Adaptive Lighting's "Sleep Mode" is also implemented if you prefer to have a dimmed light instead of turning it completely off during night. All you need to do is define the `adaptive_sleep_mode` switch in room. The switch will then be activated when night mode is called and keep light at a minimum as configured in Adaptive light, instead of turning it off. This applies to both `night` and `night_` + appName modes.
+Automatic setting of Adaptive Lighting's "Sleep Mode" is also implemented if you prefer to have a dimmed light instead of turning it completely off during night. All you need to do is define the `adaptive_sleep_mode` switch, and have one of the states in automation, motionlight or modes beeing `adaptive`. The switch will then be activated when night mode is called and keep light at a minimum as configured in Adaptive light, instead of turning it off. This applies to both `night` and `night_` + appName modes.
 
 ```yaml
+  # The swiches can be configured in the room
   adaptive_switch: switch.adaptive_lighting_yourName
   adaptive_sleep_mode: switch.adaptive_lighting_sleep_mode_yourName
+  # Or in lights
+    - lights:
+      - light.yourLight
+      adaptive_switch: switch.adaptive_lighting_yourName
+      adaptive_sleep_mode: switch.adaptive_lighting_sleep_mode_yourName
 ```
 
 Minimum configuration to use Adaptive Lighting brightness and color temp setting is with:
@@ -338,7 +343,7 @@ An example :
 MQTT sensor names are full topics for targets excluding /set, case sensitive. App will subscribe to MQTT topics. Home Assistant sensors uses entity-id as sensor name.
 
 ### Motion Sensors and Presence trackers
-You can define time after sensor no longer detects motion before it turns light back with `delay` in seconds, and define constraints to each sensor as an if statement that must be true for motion to activate. Inherits Appdaemon API to self.
+You can define time after sensor no longer detects motion before it turns light back with `delay` in seconds. This defauts to 60 seconds. You can also define constraints to each sensor as an if statement that must be true for motion to activate. Inherits Appdaemon API to self.
 
 Trackers will trigger 'presence' mode when new == home and sets 'away' mode if all trackers defined in room is not home. When presence is detected it will go to 'normal' mode if old state is 'away' and 'presence' is not defined in light_mode. Trackers will not change mode unless it is normal or away.
 
@@ -347,7 +352,7 @@ Trackers will trigger 'presence' mode when new == home and sets 'away' mode if a
     - motion_sensor: binary_sensor.yourMotionSensor
   MQTT_motion_sensors:
     - motion_sensor: zigbee2mqtt/KITCHEN_sensor
-      delay: 300
+      delay: 60
       motion_constraints: "self.now_is_between('06:50:00', '23:00:00') and self.get_tracker_state('person.wife') == 'home' or self.get_state('switch.kitch_espresso') == 'on' "
   presence:
     - tracker: person.wife
@@ -500,11 +505,11 @@ your_room_name:
     # "self.now_is_between('06:50:00', '23:00:00') and self.get_tracker_state('person.yourwife') == 'home' or self.get_state('switch.espresso') == 'on' "
   motion_sensors:
     - motion_sensor: binary_sensor.motion_sensor_home_security_motion_detection
-      delay: 600
+      delay: 60
       motion_constraints: "self.now_is_between('06:30:00', '21:00:00')"
   MQTT_motion_sensors:
     - motion_sensor: zigbee2mqtt/
-      delay: 600
+      delay: 60
       motion_constraints: "self.now_is_between('06:30:00', '21:00:00')"
 
   # Presence tracker detection. Configuration is same as motion sensors
@@ -512,10 +517,10 @@ your_room_name:
   # Sets mode to presence if defined in light_modes or normal if not defined when returning home
   presence:
     - tracker: person.yourwife
-      delay: 600
+      delay: 60
       tracker_constraints: "self.now_is_between('06:30:00', '22:00:00') "
     - tracker: person.yourself
-      delay: 600
+      delay: 60
       tracker_constraints: "self.now_is_between('06:30:00', '22:00:00') "
 
   # Media players. Sorted by priority if more than one mediaplayer is defined in room. Can be any sensor or switch with on/off state
