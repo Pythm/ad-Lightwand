@@ -200,7 +200,7 @@ If you do not provide time you must specify state.
 ### Use Adaptive Lighting instead of setting light data
 Use [Adaptive Lighting ](https://github.com/basnijholt/adaptive-lighting/tree/main) custom component to control your brightness and color control for automation, motion or mode with setting state to 'adaptive'.
 
-There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' or 'take_over_control' when you set it up, if you only use Lightwand and Adaptive Lighting as automations for light. Lightwand will set manual control with the provided "Adaptive Lighting" switch that you'll need to define. If a state or mode does not use Adaptive lighting Lightwand will update manual control to true, and then give back control when state is again `adaptive`.
+There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' or 'take_over_control' when you set it up, if you only use Lightwand and Adaptive Lighting as automations for light. Lightwand is programmed to not change light if changed outside app until there is a change in sensors for room. If you change light manually then check Adaptive Lightings documetation for information if you need 'detect_non_ha_changes' or 'take_over_control'. Lightwand will set manual control with the provided "Adaptive Lighting" switch that you'll need to define. If a state or mode does not use Adaptive lighting Lightwand will update manual control to true, and then give back control when state is again `adaptive`.
 
 Automatic setting of Adaptive Lighting's "Sleep Mode" is also implemented if you prefer to have a dimmed light instead of turning it completely off during night. All you need to do is define the `adaptive_sleep_mode` switch, and have one of the states in automation, motionlight or modes beeing `adaptive`. The switch will then be activated when night mode is called and keep light at a minimum as configured in Adaptive light, instead of turning it off. This applies to both `night` and `night_` + appName modes.
 
@@ -248,6 +248,13 @@ To use in mode configure with:
 ```
 
 Automations, motionlights and automations in modes all supports list with times and states so you can configure Adaptive Lighting to only be active during specific times.
+
+
+**Important Consideration for Adaptive Lighting**
+
+When setting up `min` and `max` brightness values in the configuration, keep in mind that Lightwand does not know what brightness Adaptive Lighting will set. This can impact motionlights when changing between modes.
+
+For more information on this issue, see [issue #16](https://github.com/Pythm/ad-Lightwand/issues/16).
 
 
 ### Motion behaviour

@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.5"
+__version__ = "1.3.6"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -506,8 +506,7 @@ class Room(hass.Hass):
 
         if new == 'on':
             if 'motion_constraints' in sensor:
-                condition_statement = eval(sensor['motion_constraints'])
-                if not condition_statement:
+                if not eval(sensor['motion_constraints']):
                     return
             self.all_motion_sensors.update(
                 {sensor['motion_sensor'] : True}
@@ -534,8 +533,7 @@ class Room(hass.Hass):
         if 'occupancy' in motion_data:
             if motion_data['occupancy']:
                 if 'motion_constraints' in sensor:
-                    condition_statement = eval(sensor['motion_constraints'])
-                    if not condition_statement:
+                    if not eval(sensor['motion_constraints']):
                         return
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : True}
@@ -549,8 +547,7 @@ class Room(hass.Hass):
         elif 'value' in motion_data:
             if motion_data['value'] == 8:
                 if 'motion_constraints' in sensor:
-                    condition_statement = eval(sensor['motion_constraints'])
-                    if not condition_statement:
+                    if not eval(sensor['motion_constraints']):
                         return
                 self.all_motion_sensors.update(
                     {sensor['motion_sensor'] : True}
@@ -630,8 +627,7 @@ class Room(hass.Hass):
 
         if new == 'home':
             if 'tracker_constraints' in tracker:
-                condition_statement = eval(tracker['tracker_constraints'])
-                if not condition_statement:
+                if not eval(tracker['tracker_constraints']):
                     if self.LIGHT_MODE == 'away':
                         self.LIGHT_MODE = 'normal'
                         self.reactToChange()
@@ -1520,24 +1516,32 @@ class Light:
         else:
             self.lightmode = lightmode
 
-            # Do not adjust if current mode's state is manual.
-        for mode in self.light_modes:
-            if lightmode == mode['mode']:
-                if 'state' in mode:
-                    if 'manual' in mode['state']:
-                        if self.has_adaptive_state:
-                            self.setAdaptiveLightingOff()
-                        return
-        
+
         mode_brightness:int = 0
-        if self.wereMotion:
-            if self.lightmode != 'normal':
-                for mode in self.light_modes:
-                    """ Finds out if new lightmode is configured for light and executes
-                    """
-                    if lightmode == mode['mode']:
+        adaptive_min_mode:int = -1
+        adaptive_max_mode:int = -1
+        
+        if self.lightmode != 'normal':
+            for mode in self.light_modes:
+                """ Finds out if new lightmode is configured for light and executes
+                """
+                if lightmode == mode['mode']:
+                        # Do not adjust if current mode's state is manual.
+                    if 'state' in mode:
+                        if 'manual' in mode['state']:
+                            if self.has_adaptive_state:
+                                self.setAdaptiveLightingOff()
+                            return
+                        elif 'adaptive' in mode['state']:
+                            if 'max_brightness' in mode:
+                                adaptive_max_mode = mode['max_brightness']
+                            if 'min_brightness' in mode:
+                                adaptive_min_mode = mode['min_brightness']
+
+                    if self.wereMotion:
                         if 'automations' in mode:
                             mode_brightness = self.getLightAutomationBrightness(automations = mode['automations'])
+                            adaptive_max_mode = mode_brightness
                             if self.brightness < mode_brightness:
                                 self.setLightAutomation(automations = mode['automations'])
                                 return
@@ -1545,16 +1549,20 @@ class Light:
                         elif 'light_data' in mode:
                             if 'brightness' in mode['light_data']:
                                 mode_brightness = mode['light_data']['brightness']
+                                adaptive_max_mode = mode_brightness
+                            elif 'value' in mode['light_data']:
+                                mode_brightness = mode['light_data']['value']
+                                adaptive_max_mode = mode_brightness
 
-                if (
-                    mode_brightness == 0
-                    and (lightmode == 'fire'
-                    or lightmode == 'wash')
-                ):
-                    if self.has_adaptive_state:
-                        self.setAdaptiveLightingOff()
-                    self.turn_on_lights_at_max()
-                    return
+            if (
+                mode_brightness == 0
+                and (lightmode == 'fire'
+                or lightmode == 'wash')
+            ):
+                if self.has_adaptive_state:
+                    self.setAdaptiveLightingOff()
+                self.turn_on_lights_at_max()
+                return
 
 
         if self.motionlight:
@@ -1640,16 +1648,36 @@ class Light:
                     self.setAdaptiveLightingOn()
                     if 'max_brightness' in self.motionlight:
                         if 'min_brightness' in self.motionlight:
+                            if (
+                                self.motionlight['max_brightness'] > adaptive_max_mode
+                                and self.motionlight['min_brightness'] >= adaptive_min_mode
+                            ):
+                                self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                    entity_id = self.adaptive_switch,
+                                    max_brightness = self.motionlight['max_brightness'],
+                                    min_brightness = self.motionlight['min_brightness'],
+                                    namespace = self.HASS_namespace
+                                )
+                            elif (
+                                adaptive_max_mode > self.motionlight['max_brightness']
+                                and adaptive_min_mode >= self.motionlight['min_brightness']
+                            ):
+                                self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                    entity_id = self.adaptive_switch,
+                                    max_brightness = adaptive_max_mode,
+                                    min_brightness = adaptive_min_mode,
+                                    namespace = self.HASS_namespace
+                                )
+                        elif self.motionlight['max_brightness'] > adaptive_max_mode:
                             self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                 entity_id = self.adaptive_switch,
                                 max_brightness = self.motionlight['max_brightness'],
-                                min_brightness = self.motionlight['min_brightness'],
                                 namespace = self.HASS_namespace
                             )
-                        else:
+                        elif adaptive_max_mode  > self.motionlight['max_brightness']:
                             self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                 entity_id = self.adaptive_switch,
-                                max_brightness = self.motionlight['max_brightness'],
+                                max_brightness = adaptive_max_mode,
                                 namespace = self.HASS_namespace
                             )
                     else:
