@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.3.6"
+__version__ = "1.3.7"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -1431,18 +1431,18 @@ class Light:
                         if not self.isON or self.isON == None:
                             self.turn_on_lights()
                         self.setAdaptiveLightingOn()
-                        if 'max_brightness' in mode:
-                            if 'min_brightness' in mode:
+                        if 'max_brightness_pct' in mode:
+                            if 'min_brightness_pct' in mode:
                                 self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                     entity_id = self.adaptive_switch,
-                                    max_brightness = mode['max_brightness'],
-                                    min_brightness = mode['min_brightness'],
+                                    max_brightness = mode['max_brightness_pct'],
+                                    min_brightness = mode['min_brightness_pct'],
                                     namespace = self.HASS_namespace
                                 )
                             else:
                                 self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                     entity_id = self.adaptive_switch,
-                                    max_brightness = mode['max_brightness'],
+                                    max_brightness = mode['max_brightness_pct'],
                                     namespace = self.HASS_namespace
                                 )
                         else:
@@ -1533,10 +1533,10 @@ class Light:
                                 self.setAdaptiveLightingOff()
                             return
                         elif 'adaptive' in mode['state']:
-                            if 'max_brightness' in mode:
-                                adaptive_max_mode = mode['max_brightness']
-                            if 'min_brightness' in mode:
-                                adaptive_min_mode = mode['min_brightness']
+                            if 'max_brightness_pct' in mode:
+                                adaptive_max_mode = mode['max_brightness_pct']
+                            if 'min_brightness_pct' in mode:
+                                adaptive_min_mode = mode['min_brightness_pct']
 
                     if self.wereMotion:
                         if 'automations' in mode:
@@ -1553,6 +1553,14 @@ class Light:
                             elif 'value' in mode['light_data']:
                                 mode_brightness = mode['light_data']['value']
                                 adaptive_max_mode = mode_brightness
+                            if (
+                                type(self.motionlight) == list
+                                and self.brightness < mode_brightness
+                            ):
+                                if self.has_adaptive_state:
+                                    self.setAdaptiveLightingOff()
+                                self.turn_on_lights(light_data = mode['light_data'])
+                                return
 
             if (
                 mode_brightness == 0
@@ -1586,6 +1594,7 @@ class Light:
 
             if type(self.motionlight) == list:
                 self.setLightAutomation(automations = self.motionlight)
+
 
             elif 'light_data' in self.motionlight:
                 if 'brightness' in self.motionlight['light_data']:
@@ -1646,35 +1655,50 @@ class Light:
                     if not self.isON or self.isON == None:
                         self.turn_on_lights()
                     self.setAdaptiveLightingOn()
-                    if 'max_brightness' in self.motionlight:
-                        if 'min_brightness' in self.motionlight:
+                    if 'max_brightness_pct' in self.motionlight:
+                        if 'min_brightness_pct' in self.motionlight:
                             if (
-                                self.motionlight['max_brightness'] > adaptive_max_mode
-                                and self.motionlight['min_brightness'] >= adaptive_min_mode
+                                self.motionlight['max_brightness_pct'] > adaptive_max_mode
+                                and self.motionlight['min_brightness_pct'] >= adaptive_min_mode
                             ):
                                 self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                     entity_id = self.adaptive_switch,
-                                    max_brightness = self.motionlight['max_brightness'],
-                                    min_brightness = self.motionlight['min_brightness'],
+                                    max_brightness = self.motionlight['max_brightness_pct'],
+                                    min_brightness = self.motionlight['min_brightness_pct'],
                                     namespace = self.HASS_namespace
                                 )
                             elif (
-                                adaptive_max_mode > self.motionlight['max_brightness']
-                                and adaptive_min_mode >= self.motionlight['min_brightness']
+                                adaptive_max_mode > self.motionlight['max_brightness_pct']
+                                and adaptive_min_mode >= self.motionlight['min_brightness_pct']
                             ):
                                 self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                     entity_id = self.adaptive_switch,
-                                    max_brightness = adaptive_max_mode,
+                                    max_brightness_pct = adaptive_max_mode,
                                     min_brightness = adaptive_min_mode,
                                     namespace = self.HASS_namespace
                                 )
-                        elif self.motionlight['max_brightness'] > adaptive_max_mode:
+                            elif adaptive_max_mode > 0:
+                                if adaptive_min_mode >= 0:
+                                    self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                        entity_id = self.adaptive_switch,
+                                        max_brightness = adaptive_max_mode,
+                                        min_brightness = adaptive_min_mode,
+                                        namespace = self.HASS_namespace
+                                    )
+                                else: 
+                                    self.ADapi.call_service('adaptive_lighting/change_switch_settings',
+                                        entity_id = self.adaptive_switch,
+                                        max_brightness = adaptive_max_mode,
+                                        namespace = self.HASS_namespace
+                                    )
+
+                        elif self.motionlight['max_brightness_pct'] > adaptive_max_mode:
                             self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                 entity_id = self.adaptive_switch,
-                                max_brightness = self.motionlight['max_brightness'],
+                                max_brightness = self.motionlight['max_brightness_pct'],
                                 namespace = self.HASS_namespace
                             )
-                        elif adaptive_max_mode  > self.motionlight['max_brightness']:
+                        elif adaptive_max_mode  > self.motionlight['max_brightness_pct']:
                             self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                                 entity_id = self.adaptive_switch,
                                 max_brightness = adaptive_max_mode,
@@ -1844,18 +1868,18 @@ class Light:
                 if not self.isON or self.isON == None:
                     self.turn_on_lights()
                 self.setAdaptiveLightingOn()
-                if 'max_brightness' in automations[target_num]:
+                if 'max_brightness_pct' in automations[target_num]:
                     if 'min_brightness' in automations[target_num]:
                         self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                             entity_id = self.adaptive_switch,
-                            max_brightness = automations[target_num]['max_brightness'],
+                            max_brightness = automations[target_num]['max_brightness_pct'],
                             min_brightness = automations[target_num]['min_brightness'],
                             namespace = self.HASS_namespace
                         )
                     else:
                         self.ADapi.call_service('adaptive_lighting/change_switch_settings',
                             entity_id = self.adaptive_switch,
-                            max_brightness = automations[target_num]['max_brightness'],
+                            max_brightness = automations[target_num]['max_brightness_pct'],
                             namespace = self.HASS_namespace
                         )
                 else:

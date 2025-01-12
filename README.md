@@ -225,16 +225,16 @@ To include max and min brightness it looks like this:
 ```yaml
       automations:
       - state: adaptive
-        max_brightness: 60
-        min_brightness: 10
+        max_brightness_pct: 60
+        min_brightness_pct: 10
 ```
 
 To configure with motionlights:
 ```yaml
       motionlights:
         state: adaptive
-        max_brightness: 80
-        min_brightness: 30
+        max_brightness_pct: 80
+        min_brightness_pct: 30
 ```
 
 
@@ -243,8 +243,8 @@ To use in mode configure with:
       light_modes:
         - mode: your_mode
           state: adaptive
-          max_brightness: 100
-          min_brightness: 1
+          max_brightness_pct: 100
+          min_brightness_pct: 1
 ```
 
 Automations, motionlights and automations in modes all supports list with times and states so you can configure Adaptive Lighting to only be active during specific times.
