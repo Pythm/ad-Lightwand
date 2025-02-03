@@ -146,7 +146,7 @@ To change only one room you can call either normal, off, or reset + _appName. Ap
 ##### Normal vs Reset Modes
 While the distinction between normal and reset modes is subtle, it's essential to note that calling normal mode when the current mode is already set to normal will have no effect. To simplify automation and user interactions, I use the following approach:
 
-In automations that adjust lighting modes automatically, I call normal mode.
+In automations that changes lighting modes automatically, I call normal mode.
 For all other cases, such as user interface interactions or switch activations, I call reset mode.
 This separation helps maintain a clean and intuitive control flow for both automated and manual lighting adjustments.
 
@@ -160,7 +160,11 @@ This chapter will try to explain all the different options you have when configu
 Defines how light will be automated. If not defined in mode under `light_modes`, it will turn on by default. When configuring `automations` and `motionlights`, control is lux constrained and conditions need to pass.
 
 - `turn_off`: Turns off light at the given time/mode.
-- `adjust`: Does not turn on or off the light but adjusts to the `light_data` configured with the state at the given time. Adjust can only be configured in normal automations.
+- `adjust`: Does not turn on or off the light but adjusts to the `light_data` configured with the state at the given time.
+- `pass` : Lights that runs a program, like the 'sunrise' effect in Philips Hue restarts the program every time it receives an command. With this state Lightwand will set light_data with the turn on command, but Lightwand will not send a new command if the light is on.
+
+> [!NOTE]
+> If a automation or mode has `adjust` as state, using motion detection will turn on the light.
 
 States only applicable for modes defined with `light_modes`:
 - `manual`: Lightwand will not do anything to the lights when in the mode with manual state.
@@ -746,3 +750,6 @@ key | optional | type | default | introduced in | description
 `room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint
 `conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi
 `toggle_speed` | True | float | 1 | v1.1.4 | Set time in seconds between each toggle. Supports sub second with 0.x
+
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Pythm/ad-Lightwand/total)
