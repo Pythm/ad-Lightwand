@@ -751,5 +751,3 @@ key | optional | type | default | introduced in | description
 `conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi
 `toggle_speed` | True | float | 1 | v1.1.4 | Set time in seconds between each toggle. Supports sub second with 0.x
 
-
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Pythm/ad-Lightwand/total)
