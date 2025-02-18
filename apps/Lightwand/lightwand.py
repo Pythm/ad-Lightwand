@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.4.2"
+__version__ = "1.4.3"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -341,7 +341,6 @@ class Room(hass.Hass):
             light.outLux = self.OUT_LUX
 
             # Media players for setting mediaplayer mode
-        mediaIsOn:bool = False
         for mediaplayer in self.mediaplayers:
             delay = mediaplayer.get('delay', 0)
             self.listen_state(self.media_on, mediaplayer['mediaplayer'],
@@ -357,24 +356,9 @@ class Room(hass.Hass):
                 namespace = HASS_namespace,
                 mode = mediaplayer['mode']
             )
-            if self.get_state(mediaplayer['mediaplayer']) == 'on':
-                mediaIsOn = True
 
-            # Sets lights at startup
-        
-        if (
-            self.LIGHT_MODE == 'normal'
-            or self.LIGHT_MODE == 'night'
-            and mediaIsOn
-        ):
-            for mediaplayer in self.mediaplayers:
-                if self.get_state(mediaplayer['mediaplayer']) == 'on':
-                    for light in self.roomlight:
-                        light.setLightMode(lightmode = mediaplayer['mode'])
-                    break
-        
-        if not mediaIsOn:
-            self.reactToChange()
+        # Sets lights at startup
+        self.reactToChange()
     
         """ This listens to events fired as MODE_CHANGE with data beeing mode = 'yourmode'
             self.fire_event('MODE_CHANGE', mode = 'normal')
@@ -384,7 +368,6 @@ class Room(hass.Hass):
         self.listen_event(self.mode_event, "MODE_CHANGE",
             namespace = HASS_namespace
         )
-
 
         """ End initial setup for Room
         """
@@ -956,7 +939,14 @@ class Room(hass.Hass):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
                     for light in self.roomlight:
-                        light.setLightMode(lightmode = mediaplayer['mode'])
+                        if (
+                            light.checkOnConditions()
+                            and light.checkLuxConstraints()
+                        ):
+                            light.setLightMode(lightmode = mediaplayer['mode'])
+                        else:
+                            light.turn_off_lights()
+                            
                     return False
         return True
 
