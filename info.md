@@ -53,7 +53,6 @@ Check your entity in [Home Assistant developer-tools -> state](https://my.home-a
 #### ToggleLights
 ToggleLights is Home Assistant switch entities. Toggles are configured with a `toggle` number on how many times to turn on light to get wanted dim instead of light_data for dimmable lights. Input `num_dim_steps` as number of dim steps in bulb.
 
-
 ## Mode change events
 > [!IMPORTANT]
 > This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with `normal` mode as default setting.
@@ -77,6 +76,9 @@ day:
 
 > [!TIP]
 > Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
+
+####
+As an option to fire an event you can set light in rooms with Home assistant selectors configured with: `selector_input`.
 
 ### Mode names
 > [!IMPORTANT]
@@ -137,19 +139,66 @@ Other mode names with additional behaviour:
 - `reset` sets all lights back to normal automation.
 
 Only change one room:
-To change only one room you can call either normal, off, or reset + _appName. Appname is what you call your app in configuration. See AppName example on nameyourRoom in [Installation](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#installation). Given this name the mode to call to reset only that rom will be `reset_nameyourRoom`.
+To change only one room call the mode name + _appName. Appname is what you call your app in configuration. See AppName example on nameyourRoom in [Installation](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#installation). Given this name the mode to call to reset only that rom will be `modename_nameyourRoom`.
+
 
 > [!TIP]
 > You are free to define whatever you like even for the names with default values. Useful for rgb lighting to set a color_temp for wash, or keep some lights on during night mode.
 
 
 ##### Normal vs Reset Modes
-While the distinction between normal and reset modes is subtle, it's essential to note that calling normal mode when the current mode is already set to normal will have no effect. To simplify automation and user interactions, I use the following approach:
+While the distinction between normal and reset modes is subtle, it's essential to note that calling normal mode when the current mode is already set to normal will have no effect on the lights you have manually changed. Calling reset mode will force a reset to normal settings. To simplify automation and user interactions, I use the following approach:
 
 In automations that changes lighting modes automatically, I call normal mode.
 For all other cases, such as user interface interactions or switch activations, I call reset mode.
-This separation helps maintain a clean and intuitive control flow for both automated and manual lighting adjustments.
+In this way if mode is already normal, and I perform changes to the lights, automations will not change the lights.
 
+### Translating or Changing Modes
+
+Starting from version 1.5.0, a `translation.json` file has been included to allow customization of mode names according to user preference. You can modify this file to reflect your preferred terminology.
+
+#### Steps to Customize Mode Names:
+1. **Modify the Translation File**: Edit the `translation.json` file to update mode names and event settings as desired.
+2. **Save in a Persistent Location**: Store the modified `translation.json` file in a location that persists across sessions.
+3. **Define the Path**: Specify the path to your custom translation file using the configuration option: `language_file`.
+
+#### Customizing Event Listeners:
+- Within the `translation.json`, you can also specify different events for the app to listen to, rather than relying on the default `MODE_CHANGE` event.
+
+#### Setting Language Preferences:
+- Set your preferred language by configuring the `lightwand_language`. Available options include `"en"` for English and `"de"` for German. Ensure that these values match those defined in your example file.
+
+By following these steps, you can tailor the application to better suit your linguistic preferences and operational needs.
+```json
+{
+    "en": {
+        "MODE_CHANGE": "MODE_CHANGE",
+        "normal": "normal",
+        "morning": "morning",
+        "away": "away",
+        "off": "off",
+        "night": "night",
+        "custom": "custom",
+        "manual": "manual",
+        "fire": "fire",
+        "wash": "wash",
+        "reset": "reset"
+    },
+    "de": {
+        "MODE_CHANGE": "MODE_CHANGE",
+        "normal": "automatik",
+        "morning": "morgen",
+        "away": "abwesend",
+        "off": "aus",
+        "night": "nacht",
+        "custom": "custom",
+        "manual": "manuell",
+        "fire": "brand",
+        "wash": "hell",
+        "reset": "zurücksetzen"
+    }
+}
+```
 
 ## Setting up how lights will behave
 This chapter will try to explain all the different options you have when configuring states and light_data, and set up automation.
@@ -372,12 +421,15 @@ When you configure holliday lights you can add `enable_light_control` to those l
 > [!TIP]
 > I use one switch to disable xmas lights and also to hide any buttons with modes created for xmas in Home Assistant Frontend.
 
+The option `prevent_off_to_normal` is to keep lights off if mode in room is off and automation is setting normal. This is useful if you have kids home sick or teenagers that like to sleep in when they have the day off, if you are using a automation to change from morning to normal the light will stay off. Reset to normal operation with `reset` mode.
+
 
 ```yaml
   #Configure in room
   options:
     - exclude_from_custom
     - dim_while_motion
+    - prevent_off_to_normal
 
   MQTTLights:
     - lights:
@@ -415,6 +467,7 @@ Trackers will trigger 'presence' mode when new == home and sets 'away' mode if a
 
 
 With `bed_sensor` light mode will stay at nigth mode until bed is exited, to then turn on normal operations when bed is exited.
+There is also an option to set `out_of_bed_delay` if you have unstable bedsensors and need to give them some extra seconds to see if the sensor detects again.
 
 ### Media Players
 Sorted by priority if more than one media player is defined in a room. Can be any sensor or switch with an on/off state. Define the name of the mode for each sensor and define light attributes in `light_modes`. The "media mode" will set the light and keep it as the media mode when motion is detected, as well as during morning, normal, and night* modes. Calling any other modes will set the light to the new mode. If any of the morning, normal, or night* modes are called when the media is on, the media mode will be active again.
@@ -537,6 +590,9 @@ your_room_name:
   class: Room
   # Configure path to store Json for mode and lux data. This will give you some persistency when restarted. Adds 'your_room_name' + '.json' to the json_path
   json_path: /path/to/your/storage/
+  language_file: /conf/apps/Lightwand/translations.json
+  lightwand_language: no
+
 
   # Namespaces for MQTT and HASS if other than default.
   MQTT_namespace: mqtt
@@ -750,3 +806,4 @@ key | optional | type | default | introduced in | description
 `room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint
 `conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi
 `toggle_speed` | True | float | 1 | v1.1.4 | Set time in seconds between each toggle. Supports sub second with 0.x
+

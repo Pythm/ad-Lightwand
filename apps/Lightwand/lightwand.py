@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.4.3"
+__version__ = "1.5.0"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -12,6 +12,28 @@ import csv
 import math
 import copy
 
+NORMAL_TRANSLATE:str = 'normal'
+MORNING_TRANSLATE:str = 'morning'
+AWAY_TRANSLATE:str = 'away'
+OFF_TRANSLATE:str = 'off'
+NIGHT_TRANSLATE:str = 'night'
+CUSTOM_TRANSLATE:str = 'custom'
+FIRE_TRANSLATE:str = 'fire'
+WASH_TRANSLATE:str = 'wash'
+RESET_TRANSLATE:str = 'reset'
+
+@staticmethod
+def split_around_underscore(input_string):
+    index = input_string.find('_')
+    
+    if index != -1:
+        part_before = input_string[:index]
+        part_after = input_string[index + 1:]
+        return part_before, part_after
+    else:
+        return None, None
+
+
 class Room(hass.Hass):
 
     def initialize(self):
@@ -19,25 +41,55 @@ class Room(hass.Hass):
         self.mqtt = None
 
         self.roomlight:list = []
-        
-        self.LIGHT_MODE:str = 'normal'
-        self.all_modes:list = ['normal', 'away', 'off', 'night', 'custom', 'fire', 'wash', 'reset']
-        self.getOutOfBedMode:str = 'normal'
+        event_listen_str:str = "MODE_CHANGE"
+
+        language = self.args.get('lightwand_language', 'en')
+        language_file = self.args.get('language_file', '/conf/apps/Lightwand/translations.json')
+        try:
+            with open(language_file) as lang:
+                translations = json.load(lang)
+        except FileNotFoundError:
+            self.log("Translation file not found", level = 'DEBUG')
+        else:
+            event_listen_str = translations[language]['MODE_CHANGE']
+            global NORMAL_TRANSLATE
+            NORMAL_TRANSLATE = translations[language]['normal']
+            global MORNING_TRANSLATE
+            MORNING_TRANSLATE = translations[language]['morning']
+            global AWAY_TRANSLATE
+            AWAY_TRANSLATE = translations[language]['away']
+            global OFF_TRANSLATE
+            OFF_TRANSLATE = translations[language]['off']
+            global NIGHT_TRANSLATE
+            NIGHT_TRANSLATE = translations[language]['night']
+            global CUSTOM_TRANSLATE
+            CUSTOM_TRANSLATE = translations[language]['custom']
+            global FIRE_TRANSLATE
+            FIRE_TRANSLATE = translations[language]['fire']
+            global WASH_TRANSLATE
+            WASH_TRANSLATE = translations[language]['wash']
+            global RESET_TRANSLATE
+            RESET_TRANSLATE = translations[language]['reset']
+
+        self.LIGHT_MODE:str = NORMAL_TRANSLATE
+        self.all_modes:list = [NORMAL_TRANSLATE, AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE, CUSTOM_TRANSLATE, FIRE_TRANSLATE, WASH_TRANSLATE, RESET_TRANSLATE]
+        self.getOutOfBedMode:str = NORMAL_TRANSLATE
         self.ROOM_LUX:float = 0.0
         self.OUT_LUX:float = 0.0
         self.RAIN:float = 0.0
         self.JSON_PATH:str = ''
 
-
         self.exclude_from_custom:bool = self.args.get('exclude_from_custom', False) # Old configuration of exclude from custom...
         night_motion:bool = False
         dim_while_motion:bool = False
+        self.prevent_off_to_normal:bool = False
 
         # Options defined in configurations
         if 'options' in self.args:
             self.exclude_from_custom = 'exclude_from_custom' in self.args['options']
             night_motion = 'night_motion' in self.args['options']
             dim_while_motion = 'dim_while_motion' in self.args['options']
+            self.prevent_off_to_normal = 'prevent_off_to_normal' in self.args['options']
         room_night_motion:bool = night_motion
         room_dim_while_motion:bool = dim_while_motion
 
@@ -67,10 +119,10 @@ class Room(hass.Hass):
 
         for tracker in self.presence:
             if self.get_state(tracker['tracker']) == 'home':
-                self.LIGHT_MODE = 'normal'
+                self.LIGHT_MODE = NORMAL_TRANSLATE
                 break
             else:
-                self.LIGHT_MODE = 'away'
+                self.LIGHT_MODE = AWAY_TRANSLATE
 
             # Motion detection
         self.handle = None
@@ -85,7 +137,6 @@ class Room(hass.Hass):
             self.all_motion_sensors.update(
                 {motion_sensor['motion_sensor'] : self.get_state(motion_sensor['motion_sensor']) == 'on'}
             )
-
 
         if 'MQTT_motion_sensors' in self.args:
             MQTT_motion_sensors:list = self.args['MQTT_motion_sensors']
@@ -102,14 +153,14 @@ class Room(hass.Hass):
                     {motion_sensor['motion_sensor'] : False}
                 )
 
-
         self.bed_sensors:list = self.args.get('bed_sensors', [])
-
+        self.out_of_bed_delay:int = self.args.get('out_of_bed_delay', 0)
 
             # Weather sensors
         self.outLux1:float = 0.0
         self.outLux2:float = 0.0
-        self.lux_last_update1 = self.datetime(aware=True) - datetime.timedelta(minutes = 20) # Helpers for last updated when two outdoor lux sensors in use
+            # Helpers for last updated when two outdoor lux sensors in use
+        self.lux_last_update1 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
         self.lux_last_update2 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
 
         if 'OutLux_sensor' in self.args:
@@ -207,7 +258,7 @@ class Room(hass.Hass):
                 with open(self.JSON_PATH, 'r') as json_read:
                     lightwand_data = json.load(json_read)
             except FileNotFoundError:
-                lightwand_data = {"mode" : "normal",
+                lightwand_data = {"mode" : NORMAL_TRANSLATE,
                                 "out_lux" : 0,
                                 "room_lux" : 0}
                 with open(self.JSON_PATH, 'w') as json_write:
@@ -326,6 +377,16 @@ class Room(hass.Hass):
             for mode in light.light_modes:
                 if not mode['mode'] in self.all_modes:
                     self.all_modes.append(mode['mode'])
+                    modename, roomname = split_around_underscore(mode['mode'])
+                    if (
+                        modename != None
+                        and roomname != str(self.name)
+                    ):
+                        self.log(
+                            f"Your mode name: {mode['mode']} might get you into trouble. Please do not use names with underscore. "
+                            "You can read more about this change in version 1.5.0 in the documentation. ",
+                            level = 'WARNING'
+                        )
             light.random_turn_on_delay = random_turn_on_delay
 
             # Listen sensors for when to update lights based on 'conditions'
@@ -357,17 +418,30 @@ class Room(hass.Hass):
                 mode = mediaplayer['mode']
             )
 
+        # Verifies your mode names
+        modename, roomname = split_around_underscore(str(self.name))
+        if modename != None:
+            self.log(
+                f"Your app name: {self.name} might get you into trouble. Please do not use names with underscore. "
+                "You can read more about this change in version 1.5.0 in the documentation.",
+                level = 'WARNING'
+            )
         # Sets lights at startup
         self.reactToChange()
     
         """ This listens to events fired as MODE_CHANGE with data beeing mode = 'yourmode'
             self.fire_event('MODE_CHANGE', mode = 'normal')
             If you already have implemented someting similar in your Home Assistant setup you can easily change
-            MODE_CHANGE and > data['mode'] in mode_event to receive whatever data you are sending            
+            MODE_CHANGE in translation.json to receive whatever data you are sending            
         """
-        self.listen_event(self.mode_event, "MODE_CHANGE",
+        self.listen_event(self.mode_event, event_listen_str,
             namespace = HASS_namespace
         )
+
+        if 'selector_input' in self.args:
+            self.listen_state(self.mode_update_from_selector, self.args['selector_input'],
+                namespace = HASS_namespace
+            )
 
         """ End initial setup for Room
         """
@@ -407,54 +481,60 @@ class Room(hass.Hass):
     def mode_event(self, event_name, data, kwargs) -> None:
         """ New mode events. Updates lights if conditions are met.
         """
+        modename, roomname = split_around_underscore(data['mode'])
+        if modename == None:
+            modename = data['mode']
+        elif (
+            roomname != None
+            and roomname != str(self.name)
+        ):
+            return
+
+        if (
+            self.LIGHT_MODE == OFF_TRANSLATE
+            and modename == NORMAL_TRANSLATE
+            and self.prevent_off_to_normal
+        ):
+            return
+
         if self.exclude_from_custom:
             if (
-                data['mode'] == 'custom'
-                or data['mode'] == 'wash'
+                modename == CUSTOM_TRANSLATE
+                or modename == WASH_TRANSLATE
             ):
                 return
-
 
         # Check if old light mode is night and bed is occupied.
         inBed = False
-        if str(self.LIGHT_MODE)[:5] == 'night':
-            if (
-                str(data['mode'])[:5] != 'night'
-                and str(data['mode'])[:3] != 'off'
-            ):
+        if str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE:
+            if modename not in [NIGHT_TRANSLATE, OFF_TRANSLATE]:
                 for bed_sensor in self.bed_sensors:
                     if self.get_state(bed_sensor) == 'on':
-                        self.listen_state(self.out_of_bed, bed_sensor, new = 'off', oneshot = True)
+                        self.listen_state(self.out_of_bed, bed_sensor,
+                            new = 'off',
+                            duration = self.out_of_bed_delay,
+                            oneshot = True
+                        )
                         inBed = True
 
         if (
-            data['mode'] in self.all_modes
-            or data['mode'] == 'morning'
-            or data['mode'] == 'off_' + str(self.name)
-            or data['mode'] == 'normal_' + str(self.name)
-            or data['mode'] == 'reset_' + str(self.name)
+            modename in self.all_modes
+            or modename == MORNING_TRANSLATE
         ):
+            if modename == MORNING_TRANSLATE:
+                if not MORNING_TRANSLATE in self.all_modes:
+                    modename = NORMAL_TRANSLATE
             if inBed:
-                self.getOutOfBedMode = data['mode']
+                self.getOutOfBedMode = modename
                 return
 
-            self.LIGHT_MODE = data['mode']
-            if data['mode'] == 'morning':
-                if not 'morning' in self.all_modes:
-                    self.LIGHT_MODE = 'normal'
+            self.LIGHT_MODE = modename
 
-            if (
-                self.LIGHT_MODE == 'away'
-                or self.LIGHT_MODE == 'off'
-                or self.LIGHT_MODE == 'night'
-            ):
+            if self.LIGHT_MODE in [AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE]:
                 if self.mode_turn_off_delay > 0:
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_off_delay)
                     return
-            elif (
-                self.LIGHT_MODE == 'normal'
-                or self.LIGHT_MODE == 'morning'
-            ):
+            elif self.LIGHT_MODE in [NORMAL_TRANSLATE, MORNING_TRANSLATE]:
                 if self.mode_turn_on_delay > 0:
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_on_delay)
                     return
@@ -462,12 +542,27 @@ class Room(hass.Hass):
 
             self.reactToChange()
 
-            if (
-                data['mode'] == 'normal_' + str(self.name)
-                or data['mode'] == 'reset_' + str(self.name)
-                or data['mode'] == 'reset'
-            ):
-                self.LIGHT_MODE = 'normal'
+            if modename == RESET_TRANSLATE:
+                self.LIGHT_MODE = NORMAL_TRANSLATE
+
+
+    def mode_update_from_selector(self, entity, attribute, old, new, kwargs) -> None:
+        """ Updates mode based on HA selector update
+        """
+        modename, roomname = split_around_underscore(new)
+        if modename == None:
+            modename = new
+        elif (
+            roomname != None
+            and roomname != str(self.name)
+        ):
+            return
+        if modename in self.all_modes:
+            self.LIGHT_MODE = modename
+            self.reactToChange()
+
+        if modename == RESET_TRANSLATE:
+            self.LIGHT_MODE = NORMAL_TRANSLATE
 
 
     def set_Mode_with_delay(self, kwargs):
@@ -483,12 +578,8 @@ class Room(hass.Hass):
 
         self.reactToChange()
 
-        if (
-            self.LIGHT_MODE == 'normal_' + str(self.name)
-            or self.LIGHT_MODE == 'reset_' + str(self.name)
-            or self.LIGHT_MODE == 'reset'
-        ):
-            self.LIGHT_MODE = 'normal'
+        if self.LIGHT_MODE in [NORMAL_TRANSLATE, RESET_TRANSLATE, RESET_TRANSLATE]:
+            self.LIGHT_MODE = NORMAL_TRANSLATE
 
         # Motion and presence
 
@@ -561,12 +652,11 @@ class Room(hass.Hass):
         """ Motion detected. Checks constraints given in motion and setMotion.
         """
         if self.check_mediaplayers_off():
-            string:str = self.LIGHT_MODE
             for light in self.roomlight:
                 if (
-                    (string[:5] != 'night'
+                    (str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
                     or light.night_motion)
-                    and string[:3] != 'off'
+                    and self.LIGHT_MODE != OFF_TRANSLATE
                 ):
                     if light.motionlight:
                         light.setMotion(lightmode = self.LIGHT_MODE)
@@ -646,16 +736,13 @@ class Room(hass.Hass):
         if new == 'home':
             if 'tracker_constraints' in tracker:
                 if not eval(tracker['tracker_constraints']):
-                    if self.LIGHT_MODE == 'away':
-                        self.LIGHT_MODE = 'normal'
+                    if self.LIGHT_MODE == AWAY_TRANSLATE:
+                        self.LIGHT_MODE = NORMAL_TRANSLATE
                         self.reactToChange()
                     return
 
-            if (
-                self.LIGHT_MODE == 'normal'
-                or self.LIGHT_MODE == 'away'
-            ):
-                self.LIGHT_MODE = 'normal'
+            if self.LIGHT_MODE in [NORMAL_TRANSLATE, AWAY_TRANSLATE]:
+                self.LIGHT_MODE = NORMAL_TRANSLATE
                 if (
                     'presence' in self.all_modes
                     and self.check_mediaplayers_off()
@@ -681,7 +768,7 @@ class Room(hass.Hass):
                 if self.get_state(tracker['tracker']) == 'home':
                     self.reactToChange()
                     return
-            self.LIGHT_MODE = 'away'
+            self.LIGHT_MODE = AWAY_TRANSLATE
 
         for light in self.roomlight:
             light.setLightMode(lightmode = self.LIGHT_MODE)
@@ -707,13 +794,12 @@ class Room(hass.Hass):
         """ This function is called when a sensor has new values and based upon mode and if motion is detected,
             it will either call 'setMotion' or 'setLightMode' to adjust lights based on the updated sensors.
         """
-
         if self.check_mediaplayers_off():
             for light in self.roomlight:
                 if (
-                    (str(self.LIGHT_MODE)[:5] != 'night'
+                    (str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
                     or light.night_motion)
-                    and str(self.LIGHT_MODE)[:3] != 'off'
+                    and self.LIGHT_MODE != OFF_TRANSLATE
                 ):
                     if self.handle != None:
                         if self.timer_running(self.handle):
@@ -915,9 +1001,9 @@ class Room(hass.Hass):
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
         """ Function is called when a media is turned on.
         """
-        if self.LIGHT_MODE == 'morning':
-            self.LIGHT_MODE = 'normal'
-        if self.LIGHT_MODE != 'night':
+        if self.LIGHT_MODE == MORNING_TRANSLATE:
+            self.LIGHT_MODE = NORMAL_TRANSLATE
+        if self.LIGHT_MODE != NIGHT_TRANSLATE:
             self.check_mediaplayers_off()
 
 
@@ -932,9 +1018,8 @@ class Room(hass.Hass):
             If not it updates lightmode to the first detected media player.
         """
         if (
-            str(self.LIGHT_MODE)[:6] == 'normal'
-            or str(self.LIGHT_MODE)[:5] == 'night'
-            or str(self.LIGHT_MODE)[:5] == 'reset'
+            self.LIGHT_MODE in [NORMAL_TRANSLATE, NIGHT_TRANSLATE, RESET_TRANSLATE]
+            or str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE
         ):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
@@ -995,7 +1080,7 @@ class Light:
         self.outLux:float = 0.0
         self.roomLux:float = 0.0
         self.rain_amount:float = 0.0
-        self.lightmode:str = 'normal'
+        self.lightmode:str = NORMAL_TRANSLATE
         self.times_to_adjust_light:list = []
         self.dimHandler = None
         self.motion:bool = False
@@ -1074,7 +1159,6 @@ class Light:
                 self.motionlight.update(
                     {'state': 'none'}
                 )
-                
 
         for mode in self.light_modes:
             if 'automations' in mode:
@@ -1103,12 +1187,10 @@ class Light:
                     {'state': 'none'}
                 )
 
-
         if self.motionlight and not self.automations:
             # Sets a valid state turn off in automation when motionlight turns on light for when motion ends
             self.automations = [{'time': '00:00:00', 'state': 'turn_off'}]
             self.automations_original = copy.deepcopy(self.automations)
-
 
         self.ADapi.run_daily(self.rundaily_Automation_Adjustments, '00:01:00')
 
@@ -1163,7 +1245,6 @@ class Light:
         """ Find and adjust times in automations based on clock and sunrise/sunset times.
             Set up some default behaviour.
         """
-
         automationsToDelete:list = []
         timeToAdd: timedelta = datetime.timedelta(minutes = 0)
         calculateFromSunrise:bool = False
@@ -1245,7 +1326,6 @@ class Light:
             # Delete automations with unvalid times
         for num in reversed(automationsToDelete):
             del automations[num]
-
 
             # Adds valid state and sets up times to adjust lights
         for automation in automations:
@@ -1332,9 +1412,9 @@ class Light:
                 and self.motion
             ):
                 if (
-                    (str(self.lightmode)[:5] != 'night'
+                    (str(self.lightmode)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
                     or self.night_motion)
-                    and str(self.lightmode)[:3] != 'off'
+                    and self.lightmode != OFF_TRANSLATE
                 ):
                     self.setMotion()
 
@@ -1387,13 +1467,13 @@ class Light:
     def setLightMode(self, lightmode:str = 'None') -> None:
         """ The main function/logic to handle turning on / off lights based on mode selected.
         """
-        # Checking if anything has changed.
+            # Checking if anything has changed.
         if (
             (lightmode == self.lightmode
             or lightmode == 'None')
             and self.current_OnCondition == self.checkOnConditions()
             and self.current_LuxCondition == self.checkLuxConstraints()
-            and str(lightmode)[:5] != 'reset'
+            and lightmode != RESET_TRANSLATE
         ):
             if self.motionlight:
                 if not self.wereMotion:
@@ -1417,8 +1497,8 @@ class Light:
                 self.dimHandler = None
             
             if (
-                str(lightmode)[:5] != 'night'
-                and str(self.lightmode)[:5] == 'night'
+                str(lightmode)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
+                and str(self.lightmode)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE
                 and self.adaptive_sleep_mode != None
             ):
                 self.ADapi.turn_off(self.adaptive_sleep_mode)
@@ -1426,21 +1506,20 @@ class Light:
         if lightmode == 'None':
             lightmode = self.lightmode
         
-        if lightmode == 'morning':
+        if lightmode == MORNING_TRANSLATE:
             # Only do morning mode if Lux and conditions are valid
             if (
                 not self.current_OnCondition
                 or not self.current_LuxCondition
             ):
-                lightmode = 'normal'
+                lightmode = NORMAL_TRANSLATE
 
-        if lightmode == 'custom':
+        if lightmode == CUSTOM_TRANSLATE:
             # Custom mode will break any automation and keep light as is
             if self.has_adaptive_state:
                 self.setAdaptiveLightingOff()
             self.lightmode = lightmode
             return
-
 
         for mode in self.light_modes:
             # Finds out if new lightmode is configured for light and executes
@@ -1535,20 +1614,18 @@ class Light:
                     # Adjust and not on.
                     return
 
-
             # Default turn off if away/off/night is not defined as a mode in light
         if (
-            lightmode == 'away'
-            or lightmode == 'off'
-            or lightmode == 'off_' + str(self.ADapi.name)
+            lightmode == AWAY_TRANSLATE
+            or lightmode == OFF_TRANSLATE
         ):
             self.lightmode = lightmode
             if self.isON or self.isON == None:
                 self.turn_off_lights()
             return
 
-        elif str(lightmode)[:5] == 'night':
-            self.lightmode = 'night'
+        elif str(lightmode)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE:
+            self.lightmode = NIGHT_TRANSLATE
             if self.adaptive_sleep_mode != None:
                 self.ADapi.turn_on(self.adaptive_sleep_mode)
             elif self.isON or self.isON == None:
@@ -1557,8 +1634,8 @@ class Light:
 
             # Default turn on maximum light if not fire/wash is defined as a mode in light
         elif (
-            lightmode == 'fire'
-            or lightmode == 'wash'
+            lightmode == FIRE_TRANSLATE
+            or lightmode == WASH_TRANSLATE
         ):
             self.lightmode = lightmode
             if self.has_adaptive_state:
@@ -1567,7 +1644,7 @@ class Light:
             return
 
             # Mode is normal or not valid for light. Checks Lux and Conditions constraints and does defined automations for light
-        self.lightmode = 'normal'
+        self.lightmode = NORMAL_TRANSLATE
         if (
             self.current_OnCondition
             and self.current_LuxCondition
@@ -1583,21 +1660,19 @@ class Light:
 
 
     def setMotion(self, lightmode:str = 'None') -> None:
-        """ Sets motion lights when motion is detected insted of using setModeLight.
+        """ Sets motion lights when motion is detected.
         """
         if (
-            lightmode == 'off'
-            or lightmode == 'custom'
+            lightmode == OFF_TRANSLATE
+            or lightmode == CUSTOM_TRANSLATE
         ):
             self.lightmode = lightmode
             return
 
         if lightmode == 'None':
             lightmode = self.lightmode
-        elif str(lightmode)[:5] == 'reset':
-            lightmode = 'normal'
-        elif str(lightmode)[:6] == 'normal':
-            lightmode = 'normal'
+        elif lightmode == RESET_TRANSLATE:
+            lightmode = NORMAL_TRANSLATE
 
         mode_brightness:int = 0
         offset:int = 0
@@ -1607,7 +1682,6 @@ class Light:
         motion_light_data:dict = {}
         self.motion = True
         self.wereMotion = True
-        
 
             # Get light data for motion setting
         if (
@@ -1638,7 +1712,7 @@ class Light:
         self.lightmode = lightmode
 
             # Get light data if lightmode is not normal automations
-        if lightmode != 'normal':
+        if lightmode != NORMAL_TRANSLATE:
             for mode in self.light_modes:
                 """ Finds out if new lightmode is configured for light and executes
                 """
@@ -1739,14 +1813,13 @@ class Light:
                             return
 
             if (
-                lightmode == 'fire'
-                or lightmode == 'wash'
+                lightmode == FIRE_TRANSLATE
+                or lightmode == WASH_TRANSLATE
             ):
                 if self.has_adaptive_state:
                     self.setAdaptiveLightingOff()
                 self.turn_on_lights_at_max()
                 return
-
 
         if (
             not self.checkOnConditions()
@@ -1896,7 +1969,6 @@ class Light:
                 elif 'value' in target_light[target_num]['light_data']:
                     light_dataBrightness = int(target_light[target_num]['light_data']['value'])
 
-
                     """ Correct brightness in lists if the difference between values is +/- 1 
                         to avoid repeatedly attempting to set an invalid brightness value in the dimmer
                     """
@@ -1917,7 +1989,6 @@ class Light:
                         elif 'value' in target_light[target_num]['light_data']:
                             target_light[target_num]['light_data']['value'] = self.brightness
 
-                        
                 target_light_data = copy.deepcopy(target_light[target_num]['light_data'])
 
                 if 'dimrate' in target_light[target_num]:
@@ -1951,7 +2022,6 @@ class Light:
                 if self.has_adaptive_state:
                     self.setAdaptiveLightingOff()
                 self.turn_on_lights(light_data = target_light_data)
-
 
             elif 'adaptive' in automations[target_num]['state']:
                 if not self.isON or self.isON == None:
@@ -2064,7 +2134,6 @@ class Light:
 
             brightnessvalue = 'value'
 
-
         if originalBrightness > targetBrightness:
             newbrightness = math.ceil(originalBrightness - math.floor(timedifference/automation[target_num]['dimrate']))
             if (
@@ -2090,7 +2159,7 @@ class Light:
             ):
                 # Outside dim target for dimming up
                 return targetBrightness
-            
+
             if self.dimHandler == None:
                 runtime = datetime.datetime.now() + datetime.timedelta(minutes = int(automation[target_num]['dimrate']))
                 self.dimHandler = self.ADapi.run_every(self.increaseBrightnessByOne, runtime, automation[target_num]['dimrate'] *60,
@@ -2561,7 +2630,7 @@ class Toggle(Light):
             if self.ADapi.get_state(lights[0]) == 'on':
                 self.current_toggle = self.toggle_lightbulb   
 
-    
+
         super().__init__(self.ADapi,
             lights = lights,
             light_modes = light_modes,
@@ -2586,15 +2655,15 @@ class Toggle(Light):
         if lightmode == 'None':
             lightmode = self.lightmode
 
-        if lightmode == 'morning':
+        if lightmode == MORNING_TRANSLATE:
             if (
                 not self.checkOnConditions()
                 or not self.checkLuxConstraints()
             ):
-                lightmode = 'normal'
+                lightmode = NORMAL_TRANSLATE
                 return
 
-        if lightmode == 'custom':
+        if lightmode == CUSTOM_TRANSLATE:
             self.lightmode = lightmode
             return
 
@@ -2615,10 +2684,9 @@ class Toggle(Light):
                 return
 
         if (
-            lightmode == 'away'
-            or lightmode == 'off'
-            or lightmode == 'off_' + str(self.ADapi.name)
-            or lightmode == 'night'
+            lightmode == AWAY_TRANSLATE
+            or lightmode == OFF_TRANSLATE
+            or lightmode == NIGHT_TRANSLATE
         ):
             self.lightmode = lightmode
             self.turn_off_lights()
@@ -2627,8 +2695,8 @@ class Toggle(Light):
             return
 
         elif (
-            lightmode == 'fire'
-            or lightmode == 'wash'
+            lightmode == FIRE_TRANSLATE
+            or lightmode == WASH_TRANSLATE
         ):
             self.lightmode = lightmode
 
@@ -2639,7 +2707,7 @@ class Toggle(Light):
 
             return
 
-        self.lightmode = 'normal'
+        self.lightmode = NORMAL_TRANSLATE
         if (
             self.checkOnConditions()
             and self.checkLuxConstraints()
@@ -2671,16 +2739,10 @@ class Toggle(Light):
                 Do not do motion mode if current mode is starting with night or is off
             """
             if (
-                lightmode == 'off'
-                or lightmode == 'custom'
+                lightmode == OFF_TRANSLATE
+                or lightmode == CUSTOM_TRANSLATE
             ):
                 return
-
-            string:str = lightmode
-            if string[:5] == 'night':
-                if not 'night' in self.motionlight:
-                    self.motion = False
-                    return
 
                 # Do not adjust if current mode's state is manual.
             for mode in self.light_modes:
