@@ -179,7 +179,6 @@ By following these steps, you can tailor the application to better suit your lin
         "off": "off",
         "night": "night",
         "custom": "custom",
-        "manual": "manual",
         "fire": "fire",
         "wash": "wash",
         "reset": "reset"
@@ -191,8 +190,7 @@ By following these steps, you can tailor the application to better suit your lin
         "away": "abwesend",
         "off": "aus",
         "night": "nacht",
-        "custom": "custom",
-        "manual": "manuell",
+        "custom": "manuell",
         "fire": "brand",
         "wash": "hell",
         "reset": "zurücksetzen"
