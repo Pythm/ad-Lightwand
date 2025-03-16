@@ -75,10 +75,12 @@ day:
 ```
 
 > [!TIP]
-> Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate some default away/morning/night modes.
+> Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate away/morning/night modes.
 
-####
-As an option to fire an event you can set light in rooms with Home assistant selectors configured with: `selector_input`.
+### Change mode in one room
+As an option to fire an event you can set light in rooms with defining a Home assistant selector configured with: `selector_input`. The app will update the selector mode from MODE_CHANGE if the mode exists as an option. In this way you can stay up to date on modes in different rooms that have the selector defined.
+
+The options is mode only without _roomname.
 
 ### Mode names
 > [!IMPORTANT]
@@ -408,19 +410,21 @@ Offset is configured like this:
 
 
 #### Defining options
-`options` is an array with choices that can be configured for the room or in each `-lights` entry.
+`options` is an array with choices that can be configured for the room. Some options can also be configured under each `-lights` entry.
+
+These options apply to both room and for each light:
 - Enable motion detection during night mode with `night_motion`
 - Enable light to dim down when motion is detected with `dim_while_motion`.
-- `exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom. Exclude from custom applies to the whole room, even if configured for one light.
 
+These options apply only to the whole room:
+- `exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom. Exclude from custom applies to the whole room, even if configured for one light.
+- `prevent_off_to_normal` is to keep lights `off` if new mode is `normal`. Reset to normal operation with `reset` mode.
+- `prevent_night_to_morning` is to keep lights in night mode for room when new mode is `morning` or `normal`. Reset to normal operation with `reset` mode.
 
 When you configure holliday lights you can add `enable_light_control` to those lights. This is a HA input_boolean or other with on/off state. By design this only reads state on reboot/startup and if state is off, the lights will not be added to room. You can then keep the configuration for next year, but disable all those switches ticking on and off during the whole year, or free them up to other things, with one HA switch.
 
 > [!TIP]
 > I use one switch to disable xmas lights and also to hide any buttons with modes created for xmas in Home Assistant Frontend.
-
-The option `prevent_off_to_normal` is to keep lights off if mode in room is off and automation is setting normal. This is useful if you have kids home sick or teenagers that like to sleep in when they have the day off, if you are using a automation to change from morning to normal the light will stay off. Reset to normal operation with `reset` mode.
-
 
 ```yaml
   #Configure in room
@@ -428,6 +432,7 @@ The option `prevent_off_to_normal` is to keep lights off if mode in room is off 
     - exclude_from_custom
     - dim_while_motion
     - prevent_off_to_normal
+    - prevent_night_to_morning
 
   MQTTLights:
     - lights:

@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 
 import appdaemon.plugins.hass.hassapi as hass
 import datetime
@@ -83,6 +83,7 @@ class Room(hass.Hass):
         night_motion:bool = False
         dim_while_motion:bool = False
         self.prevent_off_to_normal:bool = False
+        self.prevent_night_to_morning:bool = False
 
         # Options defined in configurations
         if 'options' in self.args:
@@ -90,6 +91,7 @@ class Room(hass.Hass):
             night_motion = 'night_motion' in self.args['options']
             dim_while_motion = 'dim_while_motion' in self.args['options']
             self.prevent_off_to_normal = 'prevent_off_to_normal' in self.args['options']
+            self.prevent_night_to_morning = 'prevent_night_to_morning' in self.args['options']
         room_night_motion:bool = night_motion
         room_dim_while_motion:bool = dim_while_motion
 
@@ -384,7 +386,7 @@ class Room(hass.Hass):
                     ):
                         self.log(
                             f"Your mode name: {mode['mode']} might get you into trouble. Please do not use names with underscore. "
-                            "You can read more about this change in version 1.5.0 in the documentation. ",
+                            "You can read more about this change in version 1.4.4 in the documentation. ",
                             level = 'WARNING'
                         )
             light.random_turn_on_delay = random_turn_on_delay
@@ -423,7 +425,7 @@ class Room(hass.Hass):
         if modename != None:
             self.log(
                 f"Your app name: {self.name} might get you into trouble. Please do not use names with underscore. "
-                "You can read more about this change in version 1.5.0 in the documentation.",
+                "You can read more about this change in version 1.4.4 in the documentation.",
                 level = 'WARNING'
             )
         # Sets lights at startup
@@ -438,8 +440,10 @@ class Room(hass.Hass):
             namespace = HASS_namespace
         )
 
+        self.selector_input = None
         if 'selector_input' in self.args:
-            self.listen_state(self.mode_update_from_selector, self.args['selector_input'],
+            self.selector_input = self.args['selector_input']
+            self.listen_state(self.mode_update_from_selector, self.selector_input,
                 namespace = HASS_namespace
             )
 
@@ -516,6 +520,11 @@ class Room(hass.Hass):
                             oneshot = True
                         )
                         inBed = True
+            if (
+                modename in [MORNING_TRANSLATE, NORMAL_TRANSLATE]
+                and self.prevent_night_to_morning
+            ):
+                return
 
         if (
             modename in self.all_modes
@@ -529,6 +538,16 @@ class Room(hass.Hass):
                 return
 
             self.LIGHT_MODE = modename
+
+            if self.selector_input != None:
+                try:
+                    self.call_service("input_select/select_option",
+                        entity_id = self.selector_input,
+                        option = modename,
+                        namespace = self.namespace
+                    )
+                except Exception as e:
+                    self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
 
             if self.LIGHT_MODE in [AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE]:
                 if self.mode_turn_off_delay > 0:
