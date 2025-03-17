@@ -24,7 +24,7 @@ nameyourRoom:
 
 ## Lights
 Configure all lights for a room using either `MQTTLights` to control lights directly via MQTT, or `Lights` as Home Assistant lights/switches. Optionally, if you have bulbs that dim with toggle actions, configure them under `ToggleLights`.
-Each of the different light types can have multiple `-lights:` as lists with the lights / switches to control, and under each you configure how the light should react to time/sensors/modes. 
+Each of the different light types can have multiple `-lights:` as lists with the lights / switches to control, and under each entry you configure how the light should react to time/sensors/modes. 
 
 > [!TIP]
 > You can configure multiple lights under each `-lights:` but look into creating groups in your controller instead, for a better network health.
@@ -32,9 +32,9 @@ Each of the different light types can have multiple `-lights:` as lists with the
 
 #### MQTTLights
 To control lights via MQTT set up Appdaemon with the [MQTT plugin](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#mqtt) to connect Appdaemon to your MQTT broker. Define the MQTT namespace with `MQTT_namespace` in the app. The app will automatically set up subscription and listen for MQTT topics.
-Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Check your controller or device for what data your light supports. Brightness is set in range 1-255.
+Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Check your controller or device for what data your light supports. Brightness is set in range 1-254.
 
-MQTT can also be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set as percentage with 'value' in range 0 to 99, where 0 is off.
+MQTT can also be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set as percentage with 'value' in range 1 to 99. 0 is off.
 
 <br>Mqtt light names are full topics for targets excluding /set, case sensitive.
 <br>Zigbee2mqtt should be something like: zigbee2mqtt/YourLightName
@@ -50,12 +50,14 @@ Entities defined under `Lights` can be Home Assistant switches and lights. Use e
 Check your entity in [Home Assistant developer-tools -> state](https://my.home-assistant.io/redirect/developer_states/) for what your light supports when setting light_data.
 <a href="https://my.home-assistant.io/redirect/developer_states/" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/developer_states.svg" alt="Open your Home Assistant instance and show your state developer tools." /></a>
 
+
 #### ToggleLights
 ToggleLights is Home Assistant switch entities. Toggles are configured with a `toggle` number on how many times to turn on light to get wanted dim instead of light_data for dimmable lights. Input `num_dim_steps` as number of dim steps in bulb.
 
+
 ## Mode change events
 > [!IMPORTANT]
-> This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with `normal` mode as default setting.
+> This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with `normal` mode as default automation.
 > The use of events in Appdaemon and Home Assistant is well documented in [Appdaemon docs - Events](https://appdaemon.readthedocs.io/en/latest/APPGUIDE.html#events)
 
 To set mode from another appdaemon app simply use:
@@ -77,14 +79,13 @@ day:
 > [!TIP]
 > Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate away/morning/night modes.
 
-### Change mode in one room
-As an option to fire an event you can set light in rooms with defining a Home assistant selector configured with: `selector_input`. The app will update the selector mode from MODE_CHANGE if the mode exists as an option. In this way you can stay up to date on modes in different rooms that have the selector defined.
+> [!TIP]
+> Already using events in your automation? Check out the [translation section](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#translating-or-changing-modes) to listen for another event than "MODE_CHANGE".
 
-The options is mode only without _roomname.
 
 ### Mode names
 > [!IMPORTANT]
-> When an event with "MODE_CHANGE" is triggered, it will check thru all defined modes for all lights in the app/Room.
+> When an event with "MODE_CHANGE" is triggered, it will check thru all defined modes for all lights in the app/Room and act accordingly: 
 > <br>- If mode is defined in room and for light it will update light with state/data defined in mode.
 > <br>- If mode is not defined in light but is present in room, light will be set to normal mode. Any lights set to media modes will be set to normal.
 > <br>- If mode is not defined in room, the lights will keep existing mode.
@@ -114,13 +115,17 @@ Modes are configured for each `-lights:` entry and can look something like this:
           - time: '23:00:00'
 ```
 
-##### Predefined mode names 
-With the exception of <b>`custom`</b> and <b>`reset`</b> you can create whatever mode name you wish to use when defining `light_modes` and apply your own configuration.
+With the exception of <b>`custom`</b> and <b>`reset`</b> you can create whatever mode name you wish to use when defining `light_modes` and apply your own configuration. 
 
 > [!NOTE]
-> Setting mode to `custom` stops all automation like mediaplayer, motion and lux control.
+> Setting mode to `custom` stops **all** automation like mediaplayer, motion and lux control and is the equivialent to full manual.
 
-Setting lightmode to one of the predefined mode names, you only have to configure that mode in light if you want the light behave different that with the default action.
+> [!NOTE]
+> Calling `reset` mode will undo any manual changes and set lights back to normal automations. More on this below. 
+
+
+##### Predefined mode names 
+I've set up some predefined modes with default behaviors to simplify setup. If you prefer the default behavior, there's no need to configure these modes. Simply setting lightmode to one of these names will apply the predefined action.
 
 Mode names that defaults to off:
 - `away`
@@ -130,19 +135,16 @@ Mode names with default full brightness:
 - `fire`
 - `wash`
 
+However, if you wish for a light mode to behave differently than its default setting, you'll need to configure that specific mode in your configuration file under the light section.
+
 
 Other mode names with additional behaviour:
 - `morning` behaves as `normal` mode with condition and Lux constraints. Useful for some extra light in morning during workdays. When `morning` mode is triggered, mode will be set to `normal` after media players is turned off.
 
-- In addition to `night` mode you can configure modes beginning with night, for instance `night_kids_bedroom`. All modes starting with night or off will by default disable motion detection.
+- In addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
 
-- `custom` mode will disable all automation and keep light as is for all lights. Useful for special days you want to do something different with the lights.
-
-- `reset` sets all lights back to normal automation.
-
-Only change one room:
-To change only one room call the mode name + _appName. Appname is what you call your app in configuration. See AppName example on nameyourRoom in [Installation](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#installation). Given this name the mode to call to reset only that rom will be `modename_nameyourRoom`.
-
+> [!TIP]
+> I have created a `night-path` across multiple rooms so there will be a little bit of light if kids need to use the bathroom during nighttime. The mode is triggered from a mode selector and reset back to night after 15 minutes.
 
 > [!TIP]
 > You are free to define whatever you like even for the names with default values. Useful for rgb lighting to set a color_temp for wash, or keep some lights on during night mode.
@@ -152,12 +154,27 @@ To change only one room call the mode name + _appName. Appname is what you call 
 While the distinction between normal and reset modes is subtle, it's essential to note that calling normal mode when the current mode is already set to normal will have no effect on the lights you have manually changed. Calling reset mode will force a reset to normal settings. To simplify automation and user interactions, I use the following approach:
 
 In automations that changes lighting modes automatically, I call normal mode.
-For all other cases, such as user interface interactions or switch activations, I call reset mode.
+For all other cases, such as user interface interactions or mode selectors, I call reset mode.
 In this way if mode is already normal, and I perform changes to the lights, automations will not change the lights.
 
-### Translating or Changing Modes
 
-Starting from version 1.5.0, a `translation.json` file has been included to allow customization of mode names according to user preference. You can modify this file to reflect your preferred terminology.
+### Change mode in one room
+To change only one room call the mode name + `_appName`. Appname is what you call your app in configuration.
+
+> [!TIP]
+> See AppName example on nameyourRoom in [Installation](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#installation). Given this name the mode to call to reset only that rom will be `modename_nameyourRoom`.
+
+As an option to fire an event, you can set light in rooms with defining a Home Assistant selector configured with: `selector_input`. The app will also update the selector from "MODE_CHANGE" if the mode exists as an option in the selector.
+
+```yaml
+  selector_input: input_select.livingroom_mode_light
+```
+
+The selector does not have much logic to avoid setting a new mode like the mode change event. You can use the same selector in multiple rooms/apps and use mode name + `_appName` but for most cases I suggest creating one selector for each room you would want one.
+
+
+### Translating or Changing Modes
+Starting with version 1.5.0, a `translation.json` file has been included to allow customization of mode names according to user preference. You can modify this file to reflect your preferred terminology.
 
 #### Steps to Customize Mode Names:
 1. **Modify the Translation File**: Edit the `translation.json` file to update mode names and event settings as desired.
@@ -165,10 +182,10 @@ Starting from version 1.5.0, a `translation.json` file has been included to allo
 3. **Define the Path**: Specify the path to your custom translation file using the configuration option: `language_file`.
 
 #### Customizing Event Listeners:
-- Within the `translation.json`, you can also specify different events for the app to listen to, rather than relying on the default `MODE_CHANGE` event.
+- Within the `translation.json`, you can also specify different events for the app to listen to, rather than relying on the default "MODE_CHANGE" event.
 
 #### Setting Language Preferences:
-- Set your preferred language by configuring the `lightwand_language`. Available options include `"en"` for English and `"de"` for German. Ensure that these values match those defined in your example file.
+- Set your preferred language by configuring the `lightwand_language`. Available options include `"en"` as default for English and `"de"` for German. Ensure that these values match those defined in your example file.
 
 By following these steps, you can tailor the application to better suit your linguistic preferences and operational needs.
 ```json
