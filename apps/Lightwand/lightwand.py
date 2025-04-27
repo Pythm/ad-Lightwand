@@ -3,9 +3,9 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.5.1"
+__version__ = "1.5.2"
 
-import appdaemon.plugins.hass.hassapi as hass
+from appdaemon.plugins.hass.hassapi import Hass
 import datetime
 import json
 import csv
@@ -34,7 +34,7 @@ def split_around_underscore(input_string):
         return None, None
 
 
-class Room(hass.Hass):
+class Room(Hass):
 
     def initialize(self):
 
@@ -284,7 +284,7 @@ class Room(hass.Hass):
                 if 'dim_while_motion' in l['options']:
                     dim_while_motion = True
             if 'motionlights' in l:
-                if l['motionlights'] == None:
+                if l['motionlights'] is None:
                     l['motionlights'] = {'state': 'none'}
             light = MQTTLights(self,
                 lights = l['lights'],
@@ -323,7 +323,7 @@ class Room(hass.Hass):
                 if 'dim_while_motion' in l['options']:
                     dim_while_motion = True
             if 'motionlights' in l:
-                if l['motionlights'] == None:
+                if l['motionlights'] is None:
                     l['motionlights'] = {'state': 'none'}
             light = Light(self,
                 lights = l['lights'],
@@ -353,7 +353,7 @@ class Room(hass.Hass):
                 if self.get_state(l['enable_light_control']) == 'off':
                     continue
             if 'motionlights' in l:
-                if l['motionlights'] == None:
+                if l['motionlights'] is None:
                     l['motionlights'] = {'state': 'none'}
             light = Toggle(self,
                 lights = l['lights'],
@@ -381,7 +381,7 @@ class Room(hass.Hass):
                     self.all_modes.append(mode['mode'])
                     modename, roomname = split_around_underscore(mode['mode'])
                     if (
-                        modename != None
+                        modename is not None
                         and roomname != str(self.name)
                     ):
                         self.log(
@@ -422,7 +422,7 @@ class Room(hass.Hass):
 
         # Verifies your mode names
         modename, roomname = split_around_underscore(str(self.name))
-        if modename != None:
+        if modename is not None:
             self.log(
                 f"Your app name: {self.name} might get you into trouble. Please do not use names with underscore. "
                 "You can read more about this change in version 1.4.4 in the documentation.",
@@ -486,10 +486,10 @@ class Room(hass.Hass):
         """ New mode events. Updates lights if conditions are met.
         """
         modename, roomname = split_around_underscore(data['mode'])
-        if modename == None:
+        if modename is None:
             modename = data['mode']
         elif (
-            roomname != None
+            roomname is not None
             and roomname != str(self.name)
         ):
             return
@@ -511,6 +511,11 @@ class Room(hass.Hass):
         # Check if old light mode is night and bed is occupied.
         inBed = False
         if str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE:
+            if (
+                modename in [MORNING_TRANSLATE, NORMAL_TRANSLATE]
+                and self.prevent_night_to_morning
+            ):
+                return
             if modename not in [NIGHT_TRANSLATE, OFF_TRANSLATE]:
                 for bed_sensor in self.bed_sensors:
                     if self.get_state(bed_sensor) == 'on':
@@ -520,11 +525,6 @@ class Room(hass.Hass):
                             oneshot = True
                         )
                         inBed = True
-            if (
-                modename in [MORNING_TRANSLATE, NORMAL_TRANSLATE]
-                and self.prevent_night_to_morning
-            ):
-                return
 
         if (
             modename in self.all_modes
@@ -539,11 +539,14 @@ class Room(hass.Hass):
 
             self.LIGHT_MODE = modename
 
-            if self.selector_input != None:
+            if self.selector_input is not None:
+                select_name = modename
+                if modename == RESET_TRANSLATE:
+                    select_name = NORMAL_TRANSLATE
                 try:
                     self.call_service("input_select/select_option",
                         entity_id = self.selector_input,
-                        option = modename,
+                        option = select_name,
                         namespace = self.namespace
                     )
                 except Exception as e:
@@ -569,10 +572,10 @@ class Room(hass.Hass):
         """ Updates mode based on HA selector update
         """
         modename, roomname = split_around_underscore(new)
-        if modename == None:
+        if modename is None:
             modename = new
         elif (
-            roomname != None
+            roomname is not None
             and roomname != str(self.name)
         ):
             return
@@ -587,7 +590,7 @@ class Room(hass.Hass):
     def set_Mode_with_delay(self, kwargs):
         """ Sets mode with defined delay.
         """
-        if self.mode_delay_handler != None:
+        if self.mode_delay_handler is not None:
             if self.timer_running(self.mode_delay_handler):
                 try:
                     self.cancel_timer(self.mode_delay_handler)
@@ -680,7 +683,7 @@ class Room(hass.Hass):
                     if light.motionlight:
                         light.setMotion(lightmode = self.LIGHT_MODE)
 
-        if self.handle != None:
+        if self.handle is not None:
             if self.timer_running(self.handle):
                 try:
                     self.cancel_timer(self.handle)
@@ -691,7 +694,7 @@ class Room(hass.Hass):
                     )
                 self.handle = None
 
-        if self.trackerhandle != None:
+        if self.trackerhandle is not None:
             if self.timer_running(self.trackerhandle):
                 try:
                     self.cancel_timer(self.trackerhandle)
@@ -707,7 +710,7 @@ class Room(hass.Hass):
         if self.checkMotion():
             return
 
-        if self.trackerhandle != None:
+        if self.trackerhandle is not None:
             if self.timer_running(self.trackerhandle):
                 try:
                     self.cancel_timer(self.trackerhandle)
@@ -715,7 +718,7 @@ class Room(hass.Hass):
                     self.log(f"Was not able to stop timer for {tracker['tracker']}: {e}", level = 'DEBUG')
                 finally:
                     self.trackerhandle = None
-        if self.handle != None:
+        if self.handle is not None:
             if self.timer_running(self.handle):
                 try:
                     self.cancel_timer(self.handle)
@@ -766,7 +769,7 @@ class Room(hass.Hass):
                     'presence' in self.all_modes
                     and self.check_mediaplayers_off()
                 ):
-                    if self.trackerhandle != None:
+                    if self.trackerhandle is not None:
                         if self.timer_running(self.trackerhandle):
                             try:
                                 self.cancel_timer(self.trackerhandle)
@@ -820,7 +823,7 @@ class Room(hass.Hass):
                     or light.night_motion)
                     and self.LIGHT_MODE != OFF_TRANSLATE
                 ):
-                    if self.handle != None:
+                    if self.handle is not None:
                         if self.timer_running(self.handle):
                             if light.motionlight:
                                 light.setMotion(lightmode = self.LIGHT_MODE)
@@ -885,7 +888,7 @@ class Room(hass.Hass):
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
 
-            if self.mode_delay_handler != None:
+            if self.mode_delay_handler is not None:
                 if self.timer_running(self.mode_delay_handler):
                     return
 
@@ -940,7 +943,7 @@ class Room(hass.Hass):
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
 
-            if self.mode_delay_handler != None:
+            if self.mode_delay_handler is not None:
                 if self.timer_running(self.mode_delay_handler):
                     return
 
@@ -989,9 +992,9 @@ class Room(hass.Hass):
         for light in self.roomlight:
             light.roomLux = self.ROOM_LUX
 
-        if self.mode_delay_handler != None:
-                if self.timer_running(self.mode_delay_handler):
-                    return
+        if self.mode_delay_handler is not None:
+            if self.timer_running(self.mode_delay_handler):
+                return
 
         self.reactToChange()
 
@@ -1231,7 +1234,7 @@ class Light:
                 )
                 with open(self.JSON_PATH, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
-            elif self.isON == None:
+            elif self.isON is None:
                 self.isON = lightwand_data[self.lights[0]]['isON'] == 'on'
 
 
@@ -1424,7 +1427,7 @@ class Light:
         elif type(self.motionlight) == list:
             target_num = self.find_time(automation = self.motionlight)
             if self.motionlight[target_num]['state'] == 'turn_off':
-                if self.isON or self.isON == None:
+                if self.isON or self.isON is None:
                     self.turn_off_lights()
             elif (
                 self.dim_while_motion
@@ -1471,13 +1474,13 @@ class Light:
     def checkLuxConstraints(self) -> bool:
         """ Checks Lux constraints before turning on automated light.
         """
-        if self.lux_constraint != None:
+        if self.lux_constraint is not None:
             if self.rain_amount > 1:
                 if self.outLux >= self.lux_constraint * 1.5:
                     return False
             elif self.outLux >= self.lux_constraint:
                 return False
-        if self.room_lux_constraint != None:
+        if self.room_lux_constraint is not None:
             if self.roomLux >= self.room_lux_constraint:
                 return False
         return True
@@ -1507,7 +1510,7 @@ class Light:
         self.current_LuxCondition = self.checkLuxConstraints()
 
         if lightmode != self.lightmode:
-            if self.dimHandler != None:
+            if self.dimHandler is not None:
                 if self.ADapi.timer_running(self.dimHandler):
                     try:
                         self.ADapi.cancel_timer(self.dimHandler)
@@ -1518,7 +1521,7 @@ class Light:
             if (
                 str(lightmode)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
                 and str(self.lightmode)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE
-                and self.adaptive_sleep_mode != None
+                and self.adaptive_sleep_mode is not None
             ):
                 self.ADapi.turn_off(self.adaptive_sleep_mode)
 
@@ -1551,7 +1554,7 @@ class Light:
                         and self.current_OnCondition
                     ):
                         self.setLightAutomation(automations = mode['automations'])
-                    elif self.isON or self.isON == None:
+                    elif self.isON or self.isON is None:
                         self.turn_off_lights()
                     return
 
@@ -1564,7 +1567,7 @@ class Light:
                 ):
                     if 'lux_controlled' in mode['state']:
                         if not self.current_LuxCondition:
-                            if self.isON or self.isON == None:
+                            if self.isON or self.isON is None:
                                 self.turn_off_lights()
                             return
 
@@ -1587,13 +1590,13 @@ class Light:
                         # Sets light with brightness defined in automations
                         self.setLightAutomation(automations = mode)
 
-                    elif not self.isON or self.isON == None:
+                    elif not self.isON or self.isON is None:
                         self.turn_on_lights()
                     return
                     
                 elif 'turn_off' in mode['state']:
                     # Turns off light
-                    if self.isON or self.isON == None:
+                    if self.isON or self.isON is None:
                         self.turn_off_lights()
                     return
                     
@@ -1604,7 +1607,7 @@ class Light:
                     return
 
                 elif 'adaptive' in mode['state']:
-                    if not self.isON or self.isON == None:
+                    if not self.isON or self.isON is None:
                         self.turn_on_lights()
                     self.setAdaptiveLightingOn()
                     if 'max_brightness_pct' in mode:
@@ -1639,15 +1642,15 @@ class Light:
             or lightmode == OFF_TRANSLATE
         ):
             self.lightmode = lightmode
-            if self.isON or self.isON == None:
+            if self.isON or self.isON is None:
                 self.turn_off_lights()
             return
 
         elif str(lightmode)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE:
-            self.lightmode = NIGHT_TRANSLATE
-            if self.adaptive_sleep_mode != None:
+            self.lightmode = lightmode
+            if self.adaptive_sleep_mode is not None:
                 self.ADapi.turn_on(self.adaptive_sleep_mode)
-            elif self.isON or self.isON == None:
+            elif self.isON or self.isON is None:
                 self.turn_off_lights()
             return
 
@@ -1670,11 +1673,11 @@ class Light:
         ):
             if self.automations:
                 self.setLightAutomation(automations = self.automations)
-            elif not self.isON or self.isON == None:
+            elif not self.isON or self.isON is None:
                 if self.has_adaptive_state:
                     self.setAdaptiveLightingOff()
                 self.turn_on_lights()
-        elif self.isON or self.isON == None:
+        elif self.isON or self.isON is None:
             self.turn_off_lights()
 
 
@@ -1883,7 +1886,7 @@ class Light:
                 return
 
             elif 'adaptive' in motion_light_data['state']:
-                if not self.isON or self.isON == None:
+                if not self.isON or self.isON is None:
                     self.turn_on_lights()
 
                 self.setAdaptiveLightingOn()
@@ -2043,7 +2046,7 @@ class Light:
                 self.turn_on_lights(light_data = target_light_data)
 
             elif 'adaptive' in automations[target_num]['state']:
-                if not self.isON or self.isON == None:
+                if not self.isON or self.isON is None:
                     self.turn_on_lights()
                 self.setAdaptiveLightingOn()
                 if 'max_brightness_pct' in automations[target_num]:
@@ -2067,14 +2070,14 @@ class Light:
                         namespace = self.HASS_namespace
                     )
 
-            elif not self.isON or self.isON == None:
+            elif not self.isON or self.isON is None:
                 if self.has_adaptive_state:
                     self.setAdaptiveLightingOff()
                 self.turn_on_lights()
 
         elif (
             automations[target_num]['state'] != 'adjust'
-            and (self.isON or self.isON == None)
+            and (self.isON or self.isON is None)
         ):
             self.turn_off_lights()
 
@@ -2162,7 +2165,7 @@ class Light:
                 # Outside dim target for dimming down
                 return targetBrightness
 
-            if self.dimHandler == None:
+            if self.dimHandler is None:
                 runtime = datetime.datetime.now() + datetime.timedelta(minutes = int(automation[target_num]['dimrate']))
                 self.dimHandler = self.ADapi.run_every(self.dimBrightnessByOne, runtime, automation[target_num]['dimrate'] *60,
                     targetBrightness = targetBrightness,
@@ -2179,9 +2182,11 @@ class Light:
                 # Outside dim target for dimming up
                 return targetBrightness
 
-            if self.dimHandler == None:
+            if self.dimHandler is None:
                 runtime = datetime.datetime.now() + datetime.timedelta(minutes = int(automation[target_num]['dimrate']))
-                self.dimHandler = self.ADapi.run_every(self.increaseBrightnessByOne, runtime, automation[target_num]['dimrate'] *60,
+                self.dimHandler = self.ADapi.run_every(self.increaseBrightnessByOne,
+                    start = runtime,
+                    interval = automation[target_num]['dimrate'] *60,
                     targetBrightness = targetBrightness,
                     brightnessvalue = brightnessvalue
                 )
@@ -2190,7 +2195,7 @@ class Light:
         return newbrightness
 
 
-    def dimBrightnessByOne(self, kwargs) -> None:
+    def dimBrightnessByOne(self, **kwargs) -> None:
         """ Dim by one dimming to have the light dim down by one brightness every given minute.
         """
         targetBrightness = kwargs['targetBrightness']
@@ -2203,7 +2208,7 @@ class Light:
             self.ADapi.run_in(self.StopDimByOne, 1)
 
 
-    def increaseBrightnessByOne(self, kwargs) -> None:
+    def increaseBrightnessByOne(self, **kwargs) -> None:
         """ Increase brightness by one every given minute.
         """
         targetBrightness = kwargs['targetBrightness']
@@ -2219,7 +2224,7 @@ class Light:
     def StopDimByOne(self, kwargs) -> None:
         """ Stops dimming by one.
         """
-        if self.dimHandler != None:
+        if self.dimHandler is not None:
             if self.ADapi.timer_running(self.dimHandler):
                 try:
                     self.ADapi.cancel_timer(self.dimHandler)
@@ -2242,7 +2247,7 @@ class Light:
     def setAdaptiveLightingOn(self) -> None:
         """ Set Adaptive lighting to take control over brightness to on.
         """
-        if self.adaptive_switch != None:
+        if self.adaptive_switch is not None:
             self.ADapi.call_service('adaptive_lighting/set_manual_control',
                 entity_id = self.adaptive_switch,
                 manual_control = False,
@@ -2258,7 +2263,7 @@ class Light:
     def setAdaptiveLightingOff(self) -> None:
         """ Set Adaptive lighting to take control over brightness to on.
         """
-        if self.adaptive_switch != None:
+        if self.adaptive_switch is not None:
             self.ADapi.call_service('adaptive_lighting/set_manual_control',
                 entity_id = self.adaptive_switch,
                 manual_control = True,
@@ -2294,7 +2299,7 @@ class Light:
         if (
             self.current_light_data != light_data
             or not self.isON
-            or self.isON == None
+            or self.isON is None
         ):
             self.current_light_data = light_data
 
@@ -2306,7 +2311,7 @@ class Light:
                     self.ADapi.run_in(self.turn_on_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light, light_data = light_data)
 
 
-    def turn_on_lights_with_delay(self, kwargs) -> None:
+    def turn_on_lights_with_delay(self, **kwargs) -> None:
         """ Turns on lights with random delay.
         """
         self.ADapi.turn_on(kwargs['light'], **kwargs['light_data'])
@@ -2341,7 +2346,7 @@ class Light:
         self.brightness = 0
 
 
-    def turn_off_lights_with_delay(self, kwargs) -> None:
+    def turn_off_lights_with_delay(self, **kwargs)  -> None:
         """ Turns off light with random delay
         """
         self.ADapi.turn_off(kwargs['light'])
@@ -2431,7 +2436,7 @@ class MQTTLights(Light):
 
         if 'brightness' in lux_data:
             self.isON = lux_data['state'] == 'ON'
-            if not self.isON or self.isON == None:
+            if not self.isON or self.isON is None:
                 self.brightness = 0
                 self.current_light_data = {}
             else:
@@ -2489,14 +2494,14 @@ class MQTTLights(Light):
         if (
             self.current_light_data != light_data
             or not self.isON
-            or self.isON == None
+            or self.isON is None
         ):
             self.current_light_data = light_data
 
             for light in self.lights:
                 if 'zigbee2mqtt' in light:
                     if (
-                        (not self.isON or self.isON == None)
+                        (not self.isON or self.isON is None)
                         and not light_data
                     ):
                         light_data.update(
@@ -2504,19 +2509,19 @@ class MQTTLights(Light):
                         )
 
                 if 'switch_multilevel' in light:
-                    if not self.isON or self.isON == None:
+                    if not self.isON or self.isON is None:
                         light_data.update(
                             {"ON" : True}
                         )
 
                 elif 'switch_binary' in light:
-                    if not self.isON or self.isON == None:
+                    if not self.isON or self.isON is None:
                         light_data.update(
                             {"ON" : True}
                         )
                     if (
                         'value' in light_data
-                        and (self.isON or self.isON == None)
+                        and (self.isON or self.isON is None)
                     ):
                         continue
 
@@ -2533,7 +2538,7 @@ class MQTTLights(Light):
             self.isON = True
 
 
-    def turn_on_lights_with_delay(self, kwargs) -> None:
+    def turn_on_lights_with_delay(self, **kwargs) -> None:
         """ Turns on light with random delay.
         """
         payload = json.dumps(kwargs['light_data'])
@@ -2550,7 +2555,7 @@ class MQTTLights(Light):
         """
         light_data:dict = {}
 
-        if not self.isON or self.isON == None:
+        if not self.isON or self.isON is None:
             light_data.update({"ON" : True})
 
         for light in self.lights:
@@ -2578,7 +2583,7 @@ class MQTTLights(Light):
         if self.has_adaptive_state:
             self.setAdaptiveLightingOff()
         self.current_light_data = {}
-        if self.isON or self.isON == None:
+        if self.isON or self.isON is None:
 
             if self.random_turn_on_delay == 0:
                 for light in self.lights:
@@ -2590,7 +2595,7 @@ class MQTTLights(Light):
             self.isON = False
 
 
-    def turn_off_lights_with_delay(self, kwargs) -> None:
+    def turn_off_lights_with_delay(self, **kwargs) -> None:
         """ Turns off light with random delay.
         """
         light = kwargs['light']
