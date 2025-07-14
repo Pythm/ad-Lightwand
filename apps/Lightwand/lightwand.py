@@ -19,6 +19,7 @@ OFF_TRANSLATE:str = 'off'
 NIGHT_TRANSLATE:str = 'night'
 CUSTOM_TRANSLATE:str = 'custom'
 FIRE_TRANSLATE:str = 'fire'
+FALSE_ALARM_TRANSLATE:str = 'false_alarm'
 WASH_TRANSLATE:str = 'wash'
 RESET_TRANSLATE:str = 'reset'
 
@@ -66,13 +67,15 @@ class Room(Hass):
             CUSTOM_TRANSLATE = translations[language]['custom']
             global FIRE_TRANSLATE
             FIRE_TRANSLATE = translations[language]['fire']
+            global FALSE_ALARM_TRANSLATE
+            FALSE_ALARM_TRANSLATE = translations[language]['false_alarm']
             global WASH_TRANSLATE
             WASH_TRANSLATE = translations[language]['wash']
             global RESET_TRANSLATE
             RESET_TRANSLATE = translations[language]['reset']
 
         self.LIGHT_MODE:str = NORMAL_TRANSLATE
-        self.all_modes:list = [NORMAL_TRANSLATE, AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE, CUSTOM_TRANSLATE, FIRE_TRANSLATE, WASH_TRANSLATE, RESET_TRANSLATE]
+        self.all_modes:list = [NORMAL_TRANSLATE, AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE, CUSTOM_TRANSLATE, FIRE_TRANSLATE, FALSE_ALARM_TRANSLATE, WASH_TRANSLATE, RESET_TRANSLATE]
         self.getOutOfBedMode:str = NORMAL_TRANSLATE
         self.ROOM_LUX:float = 0.0
         self.OUT_LUX:float = 0.0
@@ -543,6 +546,7 @@ class Room(Hass):
                 select_name = modename
                 if modename == RESET_TRANSLATE:
                     select_name = NORMAL_TRANSLATE
+                # TODO: Only update input_select if option exist
                 try:
                     self.call_service("input_select/select_option",
                         entity_id = self.selector_input,
