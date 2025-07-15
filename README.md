@@ -182,7 +182,7 @@ Starting with version 1.5.0, a `translation.json` file has been included to allo
 3. **Define the Path**: Specify the path to your custom translation file using the configuration option: `language_file`.
 
 #### Customizing Event Listeners:
-- Within the `translation.json`, you can also specify different events for the app to listen to, rather than relying on the default "MODE_CHANGE" event.
+- Within the `translation.json`, you can also specify a different event for the app to listen to, rather than relying on the default "MODE_CHANGE" event.
 
 #### Setting Language Preferences:
 - Set your preferred language by configuring the `lightwand_language`. Available options include `"en"` as default for English and `"de"` for German. Ensure that these values match those defined in your example file.
@@ -199,6 +199,7 @@ By following these steps, you can tailor the application to better suit your lin
         "night": "night",
         "custom": "custom",
         "fire": "fire",
+        "false_alarm": "false-alarm",
         "wash": "wash",
         "reset": "reset"
     },
@@ -211,6 +212,7 @@ By following these steps, you can tailor the application to better suit your lin
         "night": "nacht",
         "custom": "manuell",
         "fire": "brand",
+        "false_alarm": "fehlalarm",
         "wash": "hell",
         "reset": "zurücksetzen"
     }

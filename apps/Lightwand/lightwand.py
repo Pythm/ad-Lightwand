@@ -19,7 +19,7 @@ OFF_TRANSLATE:str = 'off'
 NIGHT_TRANSLATE:str = 'night'
 CUSTOM_TRANSLATE:str = 'custom'
 FIRE_TRANSLATE:str = 'fire'
-FALSE_ALARM_TRANSLATE:str = 'false_alarm'
+FALSE_ALARM_TRANSLATE:str = 'false-alarm'
 WASH_TRANSLATE:str = 'wash'
 RESET_TRANSLATE:str = 'reset'
 
@@ -42,7 +42,7 @@ class Room(Hass):
         self.mqtt = None
 
         self.roomlight:list = []
-        event_listen_str:str = "MODE_CHANGE"
+        event_listen_str:str = 'MODE_CHANGE'
 
         language = self.args.get('lightwand_language', 'en')
         language_file = self.args.get('language_file', '/conf/apps/Lightwand/translations.json')
@@ -68,7 +68,7 @@ class Room(Hass):
             global FIRE_TRANSLATE
             FIRE_TRANSLATE = translations[language]['fire']
             global FALSE_ALARM_TRANSLATE
-            FALSE_ALARM_TRANSLATE = translations[language]['false_alarm']
+            FALSE_ALARM_TRANSLATE = translations[language]['false-alarm']
             global WASH_TRANSLATE
             WASH_TRANSLATE = translations[language]['wash']
             global RESET_TRANSLATE
@@ -234,7 +234,6 @@ class Room(Hass):
                 topic = room_lux_sensor_zigbee,
                 namespace = MQTT_namespace
             )
-
 
         if 'rain_sensor' in self.args:
             rain_sensor = self.args['rain_sensor']
@@ -546,15 +545,17 @@ class Room(Hass):
                 select_name = modename
                 if modename == RESET_TRANSLATE:
                     select_name = NORMAL_TRANSLATE
-                # TODO: Only update input_select if option exist
-                try:
-                    self.call_service("input_select/select_option",
-                        entity_id = self.selector_input,
-                        option = select_name,
-                        namespace = self.namespace
-                    )
-                except Exception as e:
-                    self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
+                input_select_state = self.get_state(self.selector_input, attribute="all")
+                options = input_select_state["attributes"].get("options", [])
+                if select_name in options:
+                    try:
+                        self.call_service("input_select/select_option",
+                            entity_id = self.selector_input,
+                            option = select_name,
+                            namespace = self.namespace
+                        )
+                    except Exception as e:
+                        self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
 
             if self.LIGHT_MODE in [AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE]:
                 if self.mode_turn_off_delay > 0:

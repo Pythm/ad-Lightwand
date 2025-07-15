@@ -8,7 +8,7 @@
         "night": "night",
         "custom": "custom",
         "fire": "fire",
-        "false_alarm": "false_alarm",
+        "false_alarm": "false-alarm",
         "wash": "wash",
         "reset": "reset"
     },
