@@ -111,7 +111,7 @@ class Room(Hass):
 
         # Namespaces for HASS and MQTT
         HASS_namespace:str = self.args.get('HASS_namespace', 'default')
-        MQTT_namespace:str = self.args.get('MQTT_namespace', 'default')
+        MQTT_namespace:str = self.args.get('MQTT_namespace', 'mqtt')
 
             # Presence detection (tracking)
         self.presence:dict = self.args.get('presence', {})
