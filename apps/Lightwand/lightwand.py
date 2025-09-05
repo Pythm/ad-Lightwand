@@ -302,6 +302,7 @@ class Room(Hass):
                 lux_constraint = l.get('lux_constraint', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
+                keep_on_conditions = l.get('keep_on_conditions', ['False']),
                 json_path = self.JSON_PATH,
                 usePersistentStorage = self.usePersistentStorage,
                 MQTT_namespace = MQTT_namespace,
@@ -341,6 +342,7 @@ class Room(Hass):
                 lux_constraint = l.get('lux_constraint', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
+                keep_on_conditions = l.get('keep_on_conditions', ['False']),
                 json_path = self.JSON_PATH,
                 usePersistentStorage = self.usePersistentStorage,
                 HASS_namespace = HASS_namespace,
@@ -371,6 +373,7 @@ class Room(Hass):
                 lux_constraint = l.get('lux_constraint', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
+                keep_on_conditions = l.get('keep_on_conditions', ['False']),
                 toggle = l.get('toggle',3),
                 num_dim_steps = l.get('num_dim_steps',3),
                 toggle_speed = l.get('toggle_speed',1),
@@ -1073,6 +1076,7 @@ class Light:
         lux_constraint,
         room_lux_constraint,
         conditions,
+        keep_on_conditions,
         json_path,
         usePersistentStorage,
         HASS_namespace,
@@ -1092,6 +1096,7 @@ class Light:
         self.lux_constraint = lux_constraint
         self.room_lux_constraint = room_lux_constraint
         self.conditions:list = conditions
+        self.keep_on_conditions:list = keep_on_conditions
         self.JSON_PATH:str = json_path
         self.usePersistentStorage:bool = usePersistentStorage
         self.night_motion:bool = night_motion
@@ -1144,6 +1149,7 @@ class Light:
         # Helpers to check if conditions to turn on/off light has changed
         self.wereMotion:bool = False
         self.current_OnCondition:bool = None
+        self.current_keep_on_Condition:bool = None
         self.current_LuxCondition:bool = None
 
 
@@ -1425,6 +1431,7 @@ class Light:
         """
         if not self.motion:
             self.current_OnCondition = None
+            self.current_keep_on_Condition = None
             self.current_LuxCondition = None
             self.setLightMode()
         elif type(self.motionlight) == list:
@@ -1473,6 +1480,13 @@ class Light:
                 return False
         return True
 
+    def check_keep_on_Condition(self) -> bool:
+        """ Checks conditions before turning on automated light.
+        """
+        for conditions in self.keep_on_conditions:
+            if eval(conditions):
+                return True
+        return False
 
     def checkLuxConstraints(self) -> bool:
         """ Checks Lux constraints before turning on automated light.
@@ -1497,6 +1511,7 @@ class Light:
             (lightmode == self.lightmode
             or lightmode == 'None')
             and self.current_OnCondition == self.checkOnConditions()
+            and self.current_keep_on_Condition == self.check_keep_on_Condition()
             and self.current_LuxCondition == self.checkLuxConstraints()
             and lightmode != RESET_TRANSLATE
         ):
@@ -1510,6 +1525,7 @@ class Light:
                 return
         
         self.current_OnCondition = self.checkOnConditions()
+        self.current_keep_on_Condition = self.check_keep_on_Condition()
         self.current_LuxCondition = self.checkLuxConstraints()
 
         if lightmode != self.lightmode:
@@ -1558,7 +1574,8 @@ class Light:
                     ):
                         self.setLightAutomation(automations = mode['automations'])
                     elif self.isON or self.isON is None:
-                        self.turn_off_lights()
+                        if not self.current_keep_on_Condition:
+                            self.turn_off_lights()
                     return
 
                 elif (
@@ -1681,7 +1698,8 @@ class Light:
                     self.setAdaptiveLightingOff()
                 self.turn_on_lights()
         elif self.isON or self.isON is None:
-            self.turn_off_lights()
+            if not self.current_keep_on_Condition:
+                self.turn_off_lights()
 
 
     def setMotion(self, lightmode:str = 'None') -> None:
@@ -2367,6 +2385,7 @@ class MQTTLights(Light):
         lux_constraint,
         room_lux_constraint,
         conditions,
+        keep_on_conditions,
         json_path,
         usePersistentStorage,
         MQTT_namespace,
@@ -2397,6 +2416,7 @@ class MQTTLights(Light):
             lux_constraint = lux_constraint,
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
+            keep_on_conditions = keep_on_conditions,
             json_path = json_path,
             usePersistentStorage = usePersistentStorage,
             HASS_namespace = HASS_namespace,
@@ -2617,6 +2637,7 @@ class Toggle(Light):
         lux_constraint,
         room_lux_constraint,
         conditions,
+        keep_on_conditions,
         toggle,
         num_dim_steps,
         toggle_speed,
@@ -2666,6 +2687,7 @@ class Toggle(Light):
             lux_constraint = lux_constraint,
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
+            keep_on_conditions = keep_on_conditions,
             json_path = json_path,
             usePersistentStorage = usePersistentStorage,
             HASS_namespace = HASS_namespace,
@@ -2744,7 +2766,7 @@ class Toggle(Light):
 
             self.calculateToggles(toggle_bulb = self.toggle_lightbulb)
 
-        else:
+        elif not self.current_keep_on_Condition:
             self.turn_off_lights()
             self.current_toggle = 0
 
