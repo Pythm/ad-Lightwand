@@ -167,6 +167,7 @@ class Room(Hass):
             # Helpers for last updated when two outdoor lux sensors in use
         self.lux_last_update1 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
         self.lux_last_update2 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
+        self.rain_last_update = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
 
         if 'OutLux_sensor' in self.args:
             lux_sensor = self.args['OutLux_sensor']
@@ -249,6 +250,11 @@ class Room(Hass):
             except Exception as e:
                 self.RAIN:float = 0.0
                 self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
+
+        self.CLOUD_COVER = 0
+        self.listen_event(self.weather_event, 'WEATHER_CHANGE',
+            namespace = HASS_namespace
+        )
 
             # Persistent storage for storing mode and lux data
         self.usePersistentStorage:bool = False
@@ -452,7 +458,6 @@ class Room(Hass):
         """ End initial setup for Room
         """
 
-
     def terminate(self) -> None:
         """ Writes out data to persistent storage before terminating.
         """
@@ -482,7 +487,6 @@ class Room(Hass):
             )
             with open(self.JSON_PATH, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
-
 
     def mode_event(self, event_name, data, kwargs) -> None:
         """ New mode events. Updates lights if conditions are met.
@@ -527,7 +531,6 @@ class Room(Hass):
                             oneshot = True
                         )
                         inBed = True
-
         if (
             modename in self.all_modes
             or modename == MORNING_TRANSLATE
@@ -566,12 +569,10 @@ class Room(Hass):
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_on_delay)
                     return
 
-
             self.reactToChange()
 
             if modename == RESET_TRANSLATE:
                 self.LIGHT_MODE = NORMAL_TRANSLATE
-
 
     def mode_update_from_selector(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates mode based on HA selector update
@@ -591,7 +592,6 @@ class Room(Hass):
         if modename == RESET_TRANSLATE:
             self.LIGHT_MODE = NORMAL_TRANSLATE
 
-
     def set_Mode_with_delay(self, kwargs):
         """ Sets mode with defined delay.
         """
@@ -609,7 +609,6 @@ class Room(Hass):
             self.LIGHT_MODE = NORMAL_TRANSLATE
 
         # Motion and presence
-
     def motion_state(self, entity, attribute, old, new, kwargs) -> None:
         """ Listens to motion state.
         """
@@ -631,7 +630,6 @@ class Room(Hass):
                 {sensor['motion_sensor'] : False}
             )
             self.oldMotion(sensor = sensor)
-
 
     def MQTT_motion_event(self, event_name, data, kwargs) -> None:
         """ Listens to motion MQTT event.
@@ -674,7 +672,6 @@ class Room(Hass):
                 )
                 self.oldMotion(sensor = sensor)
 
-
     def newMotion(self) -> None:
         """ Motion detected. Checks constraints given in motion and setMotion.
         """
@@ -708,7 +705,6 @@ class Room(Hass):
                 finally:
                     self.trackerhandle = None
 
-
     def oldMotion(self, sensor) -> None:
         """ Motion no longer detected in sensor. Checks other sensors in room and starts countdown to turn off light.
         """
@@ -734,7 +730,6 @@ class Room(Hass):
         else:
             self.handle = self.run_in(self.MotionEnd, 60)
 
-
     def checkMotion(self) -> bool:
         """ Check if motion is detected in any of the motion sensors.
         """
@@ -743,7 +738,6 @@ class Room(Hass):
                 return True
 
         return False
-        
 
     def out_of_bed(self, entity, attribute, old, new, kwargs) -> None:
         """ Check if all bed sensors are empty and if so change to current mode.
@@ -753,7 +747,6 @@ class Room(Hass):
                 return
         self.LIGHT_MODE = self.getOutOfBedMode
         self.reactToChange()
-
 
     def presence_change(self, entity, attribute, old, new, kwargs) -> None:
         """ Listens to tracker/person state change.
@@ -800,7 +793,6 @@ class Room(Hass):
         for light in self.roomlight:
             light.setLightMode(lightmode = self.LIGHT_MODE)
 
-
     def MotionEnd(self, kwargs) -> None:
         """ Motion / Presence countdown ended. Turns lights back to current mode.
         """
@@ -810,12 +802,10 @@ class Room(Hass):
                 light.last_motion_brightness = 0
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
-
     def state_changed(self, entity, attribute, old, new, kwargs) -> None:
         """ Update light settings when state of a HA entity is updated.
         """
         self.reactToChange()
-
 
     def reactToChange(self):
         """ This function is called when a sensor has new values and based upon mode and if motion is detected,
@@ -845,8 +835,27 @@ class Room(Hass):
 
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
-
         # Lux / weather
+    def weather_event(self, event_name, data, kwargs) -> None:
+        """ Listens for weather change from the weather app
+        """
+        if self.datetime(aware=True) - self.rain_last_update > datetime.timedelta(minutes = 20):
+            self.RAIN = data['rain']
+        self.CLOUD_COVER = data['cloud_cover']
+        if (
+            self.datetime(aware=True) - self.lux_last_update1 > datetime.timedelta(minutes = 20)
+            and self.datetime(aware=True) - self.lux_last_update2 > datetime.timedelta(minutes = 20)
+        ):
+            self.OUT_LUX = data['lux']
+            for light in self.roomlight:
+                light.outLux = self.OUT_LUX
+
+            if self.mode_delay_handler is not None:
+                if self.timer_running(self.mode_delay_handler):
+                    return
+
+            self.reactToChange()
+
     def out_lux_state(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
         """
@@ -861,7 +870,6 @@ class Room(Hass):
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self.newOutLux()
-
 
     def out_lux_event_MQTT(self, event_name, data, kwargs) -> None:
         """ Updates lux data from MQTT event.
@@ -879,7 +887,6 @@ class Room(Hass):
             if self.outLux1 != float(lux_data['value']):
                 self.outLux1 = float(lux_data['value']) # Zwave sensor
                 self.newOutLux()
-
 
     def newOutLux(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
@@ -901,7 +908,6 @@ class Room(Hass):
 
         self.lux_last_update1 = self.datetime(aware=True)
 
-
     def out_lux_state2(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
         """
@@ -916,7 +922,6 @@ class Room(Hass):
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self.newOutLux2()
-
 
     def out_lux_event_MQTT2(self, event_name, data, kwargs) -> None:
         """ Updates lux data from MQTT event.
@@ -934,7 +939,6 @@ class Room(Hass):
             if self.outLux2 != float(lux_data['value']):
                 self.outLux2 = float(lux_data['value']) # Zwave sensor
                 self.newOutLux2()
-
 
     def newOutLux2(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
@@ -956,7 +960,6 @@ class Room(Hass):
 
         self.lux_last_update2 = self.datetime(aware=True)
 
-
     def room_lux_state(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
         """
@@ -971,7 +974,6 @@ class Room(Hass):
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self.newRoomLux()
-
 
     def room_lux_event_MQTT(self, event_name, data, kwargs) -> None:
         """ Updates lux data from MQTT event.
@@ -990,7 +992,6 @@ class Room(Hass):
                 self.ROOM_LUX = float(lux_data['value']) # Zwave sensor
                 self.newRoomLux()
 
-
     def newRoomLux(self) -> None:
         """ Sets new room lux data.
         """
@@ -1002,7 +1003,6 @@ class Room(Hass):
                 return
 
         self.reactToChange()
-
 
     def update_rain_amount(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates rain amount from sensors.
@@ -1019,10 +1019,10 @@ class Room(Hass):
             except Exception as e:
                 self.log(f"Not able to get new rain amount. Exception: {e}", level = 'WARNING')
                 self.RAIN = 0.0
-            
-            for light in self.roomlight:
-                light.rain_amount = self.RAIN
-
+            else:
+                self.rain_last_update = self.datetime(aware=True)
+                for light in self.roomlight:
+                    light.rain_amount = self.RAIN
 
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
@@ -1033,12 +1033,10 @@ class Room(Hass):
         if self.LIGHT_MODE != NIGHT_TRANSLATE:
             self.check_mediaplayers_off()
 
-
     def media_off(self, entity, attribute, old, new, kwargs) -> None:
         """ Function is called when a media is turned off.
         """
         self.reactToChange()
-
 
     def check_mediaplayers_off(self) -> bool:
         """ Returns true if media player sensors is off or self.LIGHT_DATA != 'normal'/'night'.
