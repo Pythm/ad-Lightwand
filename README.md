@@ -1,20 +1,28 @@
-# Lightwand by Pythm
+# Lightwand by Pythm  
+**An AppDaemon app for advanced lighting control via Home Assistant or MQTT**  
+Set light data based on time of day, use Mode Change events or environmental conditions like lux levels, rain, and sensors like motion, presence and media players.  
 
-An AppDaemon app for extensive control of lights via [Home Assistant](https://www.home-assistant.io/) or MQTT. Set light data based on time of day or use Mode Change events to set your lights, incorporating lux levels, rain conditions, and multiple motion, presence, and media player sensors.
+![AI-Generated Illustration](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)  
 
-![Picture is generated with AI](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)
+---
 
-## Introduction
+## 📌 Key Features
+- **Mode-based automation** with `MODE_CHANGE` events
+- **Lux-based lighting** with rain and time configurations
+- **Multiple sensor inputs** for maximum flexibility
 
-Lightwand offers a flexible way to automate your lights based on various environmental conditions. With its support for MQTT and Home Assistant, it easily integrates into existing smart home setups, providing robust lighting control.
+---
 
-## Installation
+## 🧰 Installation  
 
-1. Install via HACS or git clone into your [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) `apps` directory.
-2. Add the following configuration to a `.yaml` or `.toml` file to enable the Lightwand module:
+### 1. **Install via HACS or Git**  
+- **HACS**: Add the app to your HACS repository.  
+- **Manual**: Clone the repo into your AppDaemon `apps` directory.  
 
+### 2. **Basic Configuration**  
+Add the following to your `.yaml` or `.toml` file:  
 ```yaml
-nameyourRoom:
+your_room_name:
   module: lightwand
   class: Room
   Lights:
@@ -22,51 +30,56 @@ nameyourRoom:
       - light.yourLight
 ```
 
-## Lights
-Configure all lights for a room using either `MQTTLights` to control lights directly via MQTT, or `Lights` as Home Assistant lights/switches. Optionally, if you have bulbs that dim with toggle actions, configure them under `ToggleLights`.
-Each of the different light types can have multiple `-lights:` as lists with the lights / switches to control, and under each entry you configure how the light should react to time/sensors/modes. 
+---
 
-> [!TIP]
-> You can configure multiple lights under each `-lights:` but look into creating groups in your controller instead, for a better network health.
+## 🎯 Configuration Overview  
 
+### 📌 Lights Configuration  
+Define lights using `Lights`, `MQTTLights`, or `ToggleLights`.
 
-#### MQTTLights
-To control lights via MQTT set up Appdaemon with the [MQTT plugin](https://appdaemon.readthedocs.io/en/latest/CONFIGURE.html#mqtt) to connect Appdaemon to your MQTT broker. Define the MQTT namespace with `MQTT_namespace` in the app. The app will automatically set up subscription and listen for MQTT topics.
-Developed for [zigbee2mqtt](https://www.zigbee2mqtt.io/). There you can control everything from switches to dimmers and RGB lights to Philips Hue. Check your controller or device for what data your light supports. Brightness is set in range 1-254.
-
-MQTT can also be used with [zwaveJsUi](https://github.com/zwave-js/zwave-js-ui?tab=readme-ov-file#readme). Only tested with switches and dimmable light. Brigtness is set as percentage with 'value' in range 1 to 99. 0 is off.
-
-<br>Mqtt light names are full topics for targets excluding /set, case sensitive.
-<br>Zigbee2mqtt should be something like: zigbee2mqtt/YourLightName
-<br>Zwave could be something like: zwave/YourLightName/switch_multilevel/endpoint_1/targetValue
-
-> [!TIP]
-> I recommend [MQTT Explorer](https://mqtt-explorer.com/) or similar to find MQTT topic.
-
-
-#### Home Assistant Lights
-Entities defined under `Lights` can be Home Assistant switches and lights. Use entity-id including type as name.
-
-Check your entity in [Home Assistant developer-tools -> state](https://my.home-assistant.io/redirect/developer_states/) for what your light supports when setting light_data.
-<a href="https://my.home-assistant.io/redirect/developer_states/" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/developer_states.svg" alt="Open your Home Assistant instance and show your state developer tools." /></a>
-
-
-#### ToggleLights
-ToggleLights is Home Assistant switch entities. Toggles are configured with a `toggle` number on how many times to turn on light to get wanted dim instead of light_data for dimmable lights. Input `num_dim_steps` as number of dim steps in bulb.
-
-
-## Mode change events
-> [!IMPORTANT]
-> This app listens to event "MODE_CHANGE" in Home Assistant to set different light modes with `normal` mode as default automation.
-> The use of events in Appdaemon and Home Assistant is well documented in [Appdaemon docs - Events](https://appdaemon.readthedocs.io/en/latest/APPGUIDE.html#events)
-
-To set mode from another appdaemon app simply use:
-```python
-self.fire_event("MODE_CHANGE", mode = 'your_mode_name')
+#### ✅ `Lights` (Home Assistant Entities)  
+Use Home Assistant switches/lights. Example:  
+```yaml
+Lights:
+  - lights:
+    - light.kitchen
 ```
 
-Or define scripts in Home Assistant and activate with automation or in lovelace:
+#### ✅ `MQTTLights` (Direct MQTT Control)  
+Use MQTT for devices like Zigbee2MQTT or ZwaveJS.
+```yaml
+MQTTLights:
+  - lights:
+    - zigbee2mqtt/YourLight
+```
 
+#### ✅ `ToggleLights` (Dimming via Toggles)  
+For bulbs that dim with toggle actions:  
+```yaml
+ToggleLights:
+  - lights:
+    - switch.toggle_bulb
+    toggle: 2  # Number of toggles to reach desired brightness
+    num_dim_steps: 3  # Steps in bulb dimming
+    toggle_speed: 0.8 # Set time in seconds between each toggle
+```
+> [!TIP]
+> You can configure multiple lights under each `-lights:` but look into creating groups in your controller, for a better network health.
+
+
+---
+
+## 🧭 Mode Change Events  
+
+### 🔁 Triggering Modes  
+Use `MODE_CHANGE` events to activate predefined or custom modes.  
+
+#### ✅ From AppDaemon:  
+```python
+self.fire_event("MODE_CHANGE", mode='your_mode_name')
+```
+
+#### ✅ From Home Assistant:  
 ```yaml
 day:
   alias: "your_mode_name"
@@ -76,186 +89,120 @@ day:
         mode: 'your_mode_name'
 ```
 
-> [!TIP]
-> Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate away/morning/night modes.
+> [!TIP]  
+> Check out [ModeManagement](https://github.com/Pythm/ad-ModeManagement) example code if you want to automate `away`, `morning`, or `night` modes.  
 
-> [!TIP]
-> Already using events in your automation? Check out the [translation section](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#translating-or-changing-modes) to listen for another event than "MODE_CHANGE".
+---
 
+### 📌 Predefined Mode Names  
 
-### Mode names
-> [!IMPORTANT]
-> When an event with "MODE_CHANGE" is triggered, it will check thru all defined modes for all lights in the app/Room and act accordingly: 
-> <br>- If mode is defined in room and for light it will update light with state/data defined in mode.
-> <br>- If mode is not defined in light but is present in room, light will be set to normal mode. Any lights set to media modes will be set to normal.
-> <br>- If mode is not defined in room, the lights will keep existing mode.
+| Mode Name | Behavior |  
+|----------|----------|  
+| `normal` | Default automation mode for day-to-day usage with lux constraints and conditions. |  
+| `morning` | Acts like `normal` mode but with specific light settings for mornings. |  
+| `reset` | Resets all lights to their `normal` mode settings. |  
+| `away` | Defaults to **off** with motion detection disabled. |  
+| `night` / `off` | Defaults to **off** with motion detection disabled. |  
+| `fire` / `wash` | Turns lights on to **maximum brightness**. |  
+| `custom` | Manual control—**disables all automation**. |  
 
-Modes are configured for each `-lights:` entry and can look something like this:
+> [!TIP]  
+> Already using events in your automations? Check out the [translation section](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#translating-or-changing-modes) to listen for a different event than `"MODE_CHANGE"`.  
 
-```yaml
-      light_modes:
-        - mode: morning
-          light_data: # Define specific light attributes for given mode
-            brightness: 220
-            transition: 3
-            color_temp: 427
-        - mode: decor
-          offset: -20 # Optional offset from brightness defined in normal mode
-        - mode: tv
-          state: turn_off
-        - mode: away
-          state: lux_controlled # Follows Lux to turn on/off
-        - mode: nightKid
-          state: manual # Disable all automation when this mode is active
-        - mode: night
-          automations: # Define own automation for mode.
-          - time: '00:00:00'
-          - time: '03:00:00'
-            state: turn_off
-          - time: '23:00:00'
-```
+**Custom Mode Names**  
+- With the exception of `custom` and `reset`, you can use **any** mode name in `light_modes`.  
+- You can **overwrite** default behavior by defining your own configuration.  
+- n addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
 
-With the exception of <b>`custom`</b> and <b>`reset`</b> you can create whatever mode name you wish to use when defining `light_modes` and apply your own configuration. 
+---
 
-> [!NOTE]
-> Setting mode to `custom` stops **all** automation like mediaplayer, motion and lux control and is the equivialent to full manual.
+### 🔄 Setting `Normal` vs `Reset` Mode from Automations  
+- **Normal**: Safe for automations; does **not override** manual changes.  
+- **Reset**: Forces lights back to their **original `normal` settings**.  
 
-> [!NOTE]
-> Calling `reset` mode will undo any manual changes and set lights back to normal automations. More on this below. 
+---
 
+### 🏠 Change Mode in One Room  
+To change the mode for a single room, use the mode name + `_appName`.  
+- `appName` is the name you defined for your app in the configuration.  
 
-##### Predefined mode names 
-I've set up some predefined modes with default behaviors to simplify setup. If you prefer the default behavior, there's no need to configure these modes. Simply setting lightmode to one of these names will apply the predefined action.
-
-Mode names that defaults to off:
-- `away`
-- `off`
-- `night`
-Mode names with default full brightness:
-- `fire`
-- `wash`
-
-However, if you wish for a light mode to behave differently than its default setting, you'll need to configure that specific mode in your configuration file under the light section.
-
-
-Other mode names with additional behaviour:
-- `morning` behaves as `normal` mode with condition and Lux constraints. Useful for some extra light in morning during workdays. When `morning` mode is triggered, mode will be set to `normal` after media players is turned off.
-
-- In addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
-
-> [!TIP]
-> I have created a `night-path` across multiple rooms so there will be a little bit of light if kids need to use the bathroom during nighttime. The mode is triggered from a mode selector and reset back to night after 15 minutes.
-
-> [!TIP]
-> You are free to define whatever you like even for the names with default values. Useful for rgb lighting to set a color_temp for wash, or keep some lights on during night mode.
-
-
-##### Normal vs Reset Modes
-While the distinction between normal and reset modes is subtle, it's essential to note that calling normal mode when the current mode is already set to normal will have no effect on the lights you have manually changed. Calling reset mode will force a reset to normal settings. To simplify automation and user interactions, I use the following approach:
-
-In automations that changes lighting modes automatically, I call normal mode.
-For all other cases, such as user interface interactions or mode selectors, I call reset mode.
-In this way if mode is already normal, and I perform changes to the lights, automations will not change the lights.
-
-
-### Change mode in one room
-To change only one room call the mode name + `_appName`. Appname is what you call your app in configuration.
-
-> [!TIP]
-> See AppName example on nameyourRoom in [Installation](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#installation). Given this name the mode to call to reset only that rom will be `modename_nameyourRoom`.
-
-As an option to fire an event, you can set light in rooms with defining a Home Assistant selector configured with: `selector_input`. The app will also update the selector from "MODE_CHANGE" if the mode exists as an option in the selector.
+As an alternative to firing an event, you can use a **Home Assistant selector** with `selector_input`.  
+- The app will update the selector options dynamically based on `MODE_CHANGE` events.  
 
 ```yaml
+your_room_name:
+  ...
   selector_input: input_select.livingroom_mode_light
 ```
 
-The selector does not have much logic to avoid setting a new mode like the mode change event. You can use the same selector in multiple rooms/apps and use mode name + `_appName` but for most cases I suggest creating one selector for each room you would want one.
+> [!NOTE]  
+> The selector **does not enforce** validation (e.g., preventing invalid mode names).  
+> Use `mode_name + _appName` for precise control over individual rooms.  
 
+---
 
-### Translating or Changing Modes
-Starting with version 1.5.0, a `translation.json` file has been included to allow customization of mode names according to user preference. You can modify this file to reflect your preferred terminology.
+### 🔄 Translating or Changing Modes  
 
-#### Steps to Customize Mode Names:
-1. **Modify the Translation File**: Edit the `translation.json` file to update mode names and event settings as desired.
-2. **Save in a Persistent Location**: Store the modified `translation.json` file in a location that persists across sessions.
-3. **Define the Path**: Specify the path to your custom translation file using the configuration option: `language_file`.
+#### Steps to Customize Mode Names  
+1. **Edit the Translation File**  
+   Modify the `translation.json` file to update mode names and event settings.  
+   Example:  
+   ```json
+   {
+     "en": {
+       "MODE_CHANGE": "MODE_CHANGE",
+       "normal": "normal",
+       "morning": "morning",
+       "away": "away",
+       "off": "off",
+       "night": "night",
+       "custom": "custom",
+       "fire": "fire",
+       "false_alarm": "false-alarm",
+       "wash": "wash",
+       "reset": "reset"
+     },
+     "de": {
+       "MODE_CHANGE": "MODE_CHANGE",
+       "normal": "automatik",
+       "morning": "morgen",
+       "away": "abwesend",
+       "off": "aus",
+       "night": "nacht",
+       "custom": "manuell",
+       "fire": "brand",
+       "false_alarm": "fehlalarm",
+       "wash": "hell",
+       "reset": "zurücksetzen"
+     }
+   }
+   ```
 
-#### Customizing Event Listeners:
-- Within the `translation.json`, you can also specify different events for the app to listen to, rather than relying on the default "MODE_CHANGE" event.
+#### Customizing Event Listeners  
+- In `translation.json`, you can specify a **custom event name** (e.g., `"MY_CUSTOM_EVENT"`) instead of the default `"MODE_CHANGE"`.  
 
-#### Setting Language Preferences:
-- Set your preferred language by configuring the `lightwand_language`. Available options include `"en"` as default for English and `"de"` for German. Ensure that these values match those defined in your example file.
+2. **Save the File Persistently**  
+   Store the modified `translation.json` in a location that persists across sessions (e.g., `/config/lightwand/translation.json`).  
 
-By following these steps, you can tailor the application to better suit your linguistic preferences and operational needs.
-```json
-{
-    "en": {
-        "MODE_CHANGE": "MODE_CHANGE",
-        "normal": "normal",
-        "morning": "morning",
-        "away": "away",
-        "off": "off",
-        "night": "night",
-        "custom": "custom",
-        "fire": "fire",
-        "wash": "wash",
-        "reset": "reset"
-    },
-    "de": {
-        "MODE_CHANGE": "MODE_CHANGE",
-        "normal": "automatik",
-        "morning": "morgen",
-        "away": "abwesend",
-        "off": "aus",
-        "night": "nacht",
-        "custom": "manuell",
-        "fire": "brand",
-        "wash": "hell",
-        "reset": "zurücksetzen"
-    }
-}
-```
+3. **Specify the Path and Language in Configuration**  
+   Use the `language_file` parameter and `lightwand_language` to set your preferred language in your app configuration:  
+   ```yaml
+   your_room_name:
+     ...
+     language_file: /config/lightwand/translation.json
+     lightwand_language: "en"
+   ```
 
-## Setting up how lights will behave
-This chapter will try to explain all the different options you have when configuring states and light_data, and set up automation.
+---
 
+## 📈 Configuring Light Behavior  
 
-### Chosing between state and light_data
-##### state
-Defines how light will be automated. If not defined in mode under `light_modes`, it will turn on by default. When configuring `automations` and `motionlights`, control is lux constrained and conditions need to pass.
+### 🔁 Setting `light_data`
+- **`light_data`** contains attributes like brightness, color, and transition. It defines the **specific light settings** for each scenario (e.g., automations, modes, or motion events).  
 
-- `turn_off`: Turns off light at the given time/mode.
-- `adjust`: Does not turn on or off the light but adjusts to the `light_data` configured with the state at the given time.
-- `pass` : Lights that runs a program, like the 'sunrise' effect in Philips Hue restarts the program every time it receives an command. With this state Lightwand will set light_data with the turn on command, but Lightwand will not send a new command if the light is on.
-
-> [!NOTE]
-> If a automation or mode has `adjust` as state, using motion detection will turn on the light.
-
-States only applicable for modes defined with `light_modes`:
-- `manual`: Lightwand will not do anything to the lights when in the mode with manual state.
-- `lux_controlled` Light will be on if lux is below lux_constraint.
-
-To use Adaptive Lighting in automation, motionlight or mode define state as `adaptive`.
-
-Example on how to configure modes with states.
+**Example**:  
 ```yaml
-      light_modes:
-        - mode: night
-          state: lux_controlled # Set to lux controlled during night in stead of default off for night.
-        - mode: decor
-        - mode: tv
-          state: turn_off
-```
-
-##### light_data
-contains a set of attributes to be set to the light, such as brightness, transition, color temperature, RGB color, effect, etc.
-
-> [!NOTE]
-> If you have dimmable light and only use state to turn on and off, the light will do just that and not change brightness / light_data.
-
-Example on how to configure light_data:
-```yaml
+      automations:
         light_data:
           brightness: 80
           transition: 3
@@ -264,72 +211,76 @@ Example on how to configure light_data:
             y: 0.4102
 ```
 
-> [!TIP]
-> `light_data` can be configured with every `state` except `manual`. To get lux control when using a mode include the `state: lux_controlled`.
+- To use **Adaptive Lighting** in automations, motionlights, or modes, define `state: adaptive`. [Check out the wiki for Adaptive Lighting setup](https://github.com/Pythm/ad-Lightwand/wiki/Combining-Lightwand-with-Adaptive-Lighting-Custom-Component).  
 
+---
 
-#### Use Adaptive Lighting instead of setting light_data
-Use [Adaptive Lighting ](https://github.com/basnijholt/adaptive-lighting/tree/main) custom component to control your brightness and color control for automation, motion or mode with setting state to 'adaptive'.
+### 🔁 Setting `state`  
+- **`state`**: Controls on/off behavior for lights.  
+  - **Default behavior** depends on the **mode** being used:  
+    - In **`normal` and user defined modes**, the default is **`turn_on`**.  
+    - In **`away`**, **`night`**, or **`off`** modes, the default is **`turn_off`** (as described in the "Mode Change Events" section).  
+  - If no `state` is explicitly defined, the mode's default behavior applies.  
 
-Using Adaptive Lighting with Lightwand is considered experimental but with the right configurations it should work.
+- **`turn_off`**: Turns the light off at the given time or in the specified mode.  
+- **`adjust`**: Does not turn the light on or off, but adjusts it to the `light_data` defined for the current state.  
+- **`pass`**: Lightwand will apply the `light_data` as a "turn on" command, but **will not send a new command** if the light is already on. Lights running a program (e.g., "sunrise" effect in Philips Hue) will **restart the program** every time a new command is sent.  
+- **`manual`**: Lightwand will **not interact** with the light in this mode.  
+- **`lux_controlled`**: The light will be on if **lux levels are below the defined `lux_constraint`**.  
 
-It is created a [issue #16](https://github.com/Pythm/ad-Lightwand/issues/16) where you can post any unwanted behaviour when using Adaptive Lighting.
-
-There is no need to configure Adaptive Lighting with 'detect_non_ha_changes' or 'take_over_control' when you set it up, if you only use Lightwand and Adaptive Lighting as automations for light. Lightwand is programmed to not change light if changed outside app until there is a change in sensors for room. If you change light manually then check Adaptive Lightings documetation for information if you need 'detect_non_ha_changes' or 'take_over_control'. Lightwand will set manual control with the provided "Adaptive Lighting" switch that you'll need to define. If a state or mode does not use Adaptive lighting Lightwand will update manual control to true, and then give back control when state is again `adaptive`.
-
-Automatic setting of Adaptive Lighting's "Sleep Mode" is also implemented if you prefer to have a dimmed light instead of turning it completely off during night. All you need to do is define the `adaptive_sleep_mode` switch, and have one of the states in automation, motionlight or modes beeing `adaptive`. The switch will then be activated when night mode is called and keep light at a minimum as configured in Adaptive light, instead of turning it off. This applies to both `night` and `night_` + appName modes.
-
-
-##### Important Consideration for Adaptive Lighting
-
-When setting up `min` and `max` brightness values in the configuration, keep in mind that Lightwand does not know what brightness Adaptive Lighting will set. This will impact motionlights when changing between modes and motion can turn down light. To prevent this you can define 
-
-[Check out the wiki on how to configure Adaptive Lighting](https://github.com/Pythm/ad-Lightwand/wiki/Combining-Lightwand-with-Adaptive-Lighting-Custom-Component)
-
-
-### Automating lights
-
-Setting up automation is configured by setting up an array when configuring. This is configured with a time if you input more than one entry, but can be only a `state` and/or `light_data`.
-
-When lightmode is set to `normal` Lightwand will check if you have defined `automations`. If not, the light will only be turned on and off without setting any `light_data`.
-
-Automations can also be configured for `motionlights`, and in `light_modes`.
-
-> [!NOTE]
-> For a light to turn on when the selected lightmode is a automation both `lux_constraint` and `conditions` must pass.
-
-
-#### Defining times
-Automations contains a set of times for each set of light. 
-
-Automations are based on time, which can be either solar-based (using sunrise/sunset times) or clock-based. Optionally, in addition to `time`, you can also specify `orLater` to combine solar and clock-based times for more accurate control over when lights change depending on the season. If `orLater` is defined, it will shift all subsequent times by the same timedelta as long as not time is set as `fixed`, or time has changed from using sunrise to sunset time. In the example under with clock-based time at 08:00:00 and a solar-based time at sunrise + 00:15:00 defined with `orLater`, the clock-based time at 20:00 will shift by the same amount as the time difference between 08:00 and sunrise + 15 minutes. However, if you use a sunset time instead, the timeshift will stop at the first sunset time. A new timeshift is introduced or changed every time `orLater` is used.
-
-App deletes automations that have a time that are earlier than previous automation time if a time with solar-based and clock-based time is mixed in automations and the `orLater` is not used.
-
-You can in prevent shifts and deletions with a `fixed`: True, which locks the time from being moved or deleted.
-
+**Example**:  
 ```yaml
-      automations:
-      - time: '08:00:00'
-        orLater: 'sunrise + 00:15:00'
-      - time: '20:00:00'
-        fixed: True
-        state: turn_off
+      light_modes:
+        - mode: decor
+          state: lux_controlled
+      lux_constraint: 5000
 ```
 
-> [!TIP]
-> There are ready logs inn the python file commented out with # to easily log changes to times done by the app. Search code for: `Check if your times are acting as planned. Uncomment line below to get logging on time change`. Just uncomment the log line to see what changes the app does to your timing.
+> [!TIP]  
+> To enable lux control in a mode, include `state: lux_controlled`.  
 
-> [!NOTE]
-> If time '00:00:00' is not defined a turn_off state will be default at midnight if other times is configured in automations or motionlights for lights.
+---
 
-> [!NOTE]
-> If you only provide time in automation, the state will be set to `none` and the light will turn on if conditions are met. However, if you do not provide any light_data, it will not adjust anything.
+### 📈 Automations  
+Automations are configured by defining an array of time-based rules. These can be **clock-based**, **solar-based** (using sunrise/sunset times), or a combination of both.  
 
+**Key Rules for Automations**:
+- When `lightmode` is set to `normal`, Lightwand checks for defined `light_data` and `state` in `automations`.
+- Automations can also be configured under `motionlights` and `light_modes`.  
+- **For a light to turn on** when the selected lightmode is an automation, **both `lux_constraint` and `conditions` must pass**.  
 
-### Motion behaviour
-Configure `motionlights` to define how light should react when motion is detected. A minimum configuration to have the light turn on is:
+#### Defining Times  
+- Automations use `time` to define when changes occur.  
+- Use `orLater` to combine solar and clock-based times for seasonal accuracy.  
+- If `orLater` is used, all subsequent times are shifted by the same `timedelta` unless `fixed: True` is defined.  
+- `fixed: True` locks the time from being moved or deleted.  
 
+**Example**:  
+```yaml
+      automations:
+        - time: '08:00:00'
+          orLater: 'sunrise + 00:15:00'
+        - time: '20:00:00'
+          fixed: True
+          state: turn_off
+```
+
+> [!TIP]  
+> Use the commented-out logging in the Python file to debug time changes. Search for:  
+> `Check if your times are acting as planned. Uncomment line below to get logging on time change`.  
+
+> [!NOTE]  
+> If `time: '00:00:00'` is not defined, a default `turn_off` state will be applied at midnight if other times are configured in automations or motionlights.  
+
+> [!NOTE]  
+> If only `time` is provided in automations, the light will turn on if conditions are met. However, if no `light_data` is defined, nothing will be adjusted.  
+
+---
+
+### 🌫️ Motion Behavior  
+Configure `motionlights` to define how lights react to motion detection.  
+
+**Minimum Configuration**:  
 ```yaml
   motion_sensors:
     - motion_sensor: binary_sensor.yourMotionSensor
@@ -338,9 +289,12 @@ Configure `motionlights` to define how light should react when motion is detecte
       - light.kitchen
       motionlights:
 ```
-For the light to turn on both `lux_constraint` and `conditions` must pass the test if lightmode is normal. If another mode is active it depends on how that mode is configured if light will react to motion.
 
-Automations example with motionlights where brightness is set with light_data:
+**Key Rules for Motion Behavior**:  
+- For the light to turn on, **both `lux_constraint` and `conditions` must pass** if the lightmode is `normal`.  
+- If another mode is active, behavior depends on how that mode is configured.  
+
+**Example with `motionlights` and `light_data`**:  
 ```yaml
       motionlights:
       - time: '00:00:00'
@@ -365,25 +319,25 @@ Automations example with motionlights where brightness is set with light_data:
           brightness: 3
 ```
 
-> [!NOTE]
-> When motion is active the light will not dim down. Motion detected will also not turn down brightness to set motion, in case other modes sets brightness higher.
+> [!NOTE]  
+> When motion is active, the light will **not dim down**. Motion detection will also **not reduce brightness** if another mode sets brightness higher.  
 
-> [!NOTE]
-> If media players is on or night* / off mode is active motion detection is deactivated.
+> [!NOTE]  
+> If **media players are on** or **night/off mode** is active, motion detection is **deactivated**.  
 
+---
 
-### Configure light modes
-The different modes is configured under `light_modes` as an array. They can be defined with `automations` for different light settings during the day, `light_data` or with a simple state: `lux_controlled`, `turn_off` or `manual`.
+### 🔄 Configuring Light Modes  
+Light modes are defined under `light_modes` as an array. They can include:  
+- `automations` for time-based settings  
+- `light_data` for specific attributes  
+- `state` (e.g., `lux_controlled`, `turn_off`, or `manual`)  
 
-In addition to configuring `automations` / `light_data` or `state` you can also prevent motion detection from changing the light with `noMotion: True` configured in the mode.
-
-
-An example with the different ways to configure modes:
-
+**Example with Multiple Configurations**:  
 ```yaml
       light_modes:
         - mode: morning
-          light_data: # Define specific light attributes for given mode
+          light_data:
             brightness: 220
             transition: 3
             color_temp: 427
@@ -392,121 +346,97 @@ An example with the different ways to configure modes:
         - mode: tv
           state: turn_off
         - mode: away
-          state: lux_controlled # Follows Lux to turn on/off
+          state: lux_controlled
         - mode: nightKid
-          state: manual # Disable all automation when this mode is active
+          state: manual
         - mode: night
-          automations: # Define own automation for mode. Lux constraints and defined conditions must be meet.
-          - time: '00:00:00'
-          - time: '03:00:00'
-            state: turn_off
-          - time: '23:00:00'
+          automations:
+            - time: '00:00:00'
+            - time: '03:00:00'
+              state: turn_off
+            - time: '23:00:00'
         - mode: low_with_Automation
           automations:
             - light_data:
                 brightness: 20
 ```
 
+> [!TIP]  
+> Use `noMotion: True` in a mode to **prevent motion detection** from altering the light.  
 
-### Additional options and configurations
-There are several options and configurations to take more control over how light reacts.
+---
 
-An option to dim light slowly up or down is to use `dimrate` in addition to `light_data` in automations, to set brightness transition -/+ 1 brightness per x minutes. Dimming from previous timed brightness until brightness is met.
+### 🛠️ Additional Options and Configurations  
 
-You can define an `offset` to dimmable lights to increase or decrease brightness when `motionlights` or `light_modes` is active. This offset is applied to the brighness defined in light_data when configuring with automations.
+There are several options to fine-tune how lights behave:  
 
+#### **Dimming with `dimrate`**  
+Use `dimrate` in automations to control how quickly brightness changes (e.g., `dimrate: 2` = 1 brightness unit per 2 minutes). The light will **dim from the last timed brightness** until the target brightness is met.  
 
-Offset is configured like this:
+#### **Adjust Brightness with `offset`**  
+Use `offset` to dynamically increase or decrease brightness for dimmable lights when `motionlights` or `light_modes` are active. The offset is applied to the brightness defined in `light_data`.  
+
+**Example**:  
 ```yaml
-      motionlights:
-        offset: 35
+  motionlights:
+    offset: 35
 ```
 
-> [!NOTE]
-> If the current mode is not configured with automations, motionlight with offset will not activate.
+> [!NOTE]  
+> If the current mode is **not configured with automations**, `motionlights` with `offset` will **not activate**.  
 
 
-#### Defining options
-`options` is an array with choices that can be configured for the room. Some options can also be configured under each `-lights` entry.
+#### **Room-Level Options**  
+- `exclude_from_custom`: Excludes the room from `custom` and `wash` modes (useful for outdoor or kid’s rooms).  
+- `prevent_off_to_normal`: Keeps lights `off` if a new mode is `normal`.  
+- `prevent_night_to_morning`: Keeps lights in `night` mode if a new mode is `morning` or `normal`.  
+- `dim_while_motion`: Enables dimming of lights when motion is detected.
 
-These options apply to both room and for each light:
-- Enable motion detection during night mode with `night_motion`
-- Enable light to dim down when motion is detected with `dim_while_motion`.
+> [!TIP]  
+> If preventing normal mode use `reset` mode or set lightmode for spesific room to get back to normal.
 
-These options apply only to the whole room:
-- `exclude_from_custom` will exclude the room from 'custom' mode and 'wash' mode. Can be useful for rooms you forget to adjust light, like outdoor lights and kid's bedroom. Exclude from custom applies to the whole room, even if configured for one light.
-- `prevent_off_to_normal` is to keep lights `off` if new mode is `normal`. Reset to normal operation with `reset` mode.
-- `prevent_night_to_morning` is to keep lights in night mode for room when new mode is `morning` or `normal`. Reset to normal operation with `reset` mode.
+#### **Light-Level Options**  
+- `night_motion`: Enables motion detection during `night` mode.  
 
-When you configure holliday lights you can add `enable_light_control` to those lights. This is a HA input_boolean or other with on/off state. By design this only reads state on reboot/startup and if state is off, the lights will not be added to room. You can then keep the configuration for next year, but disable all those switches ticking on and off during the whole year, or free them up to other things, with one HA switch.
+#### **Holiday Lights Control**  
+Use `enable_light_control` to toggle holiday lights via an `input_boolean` or similar entity.  
 
-> [!TIP]
-> I use one switch to disable xmas lights and also to hide any buttons with modes created for xmas in Home Assistant Frontend.
-
+**Example**:  
 ```yaml
-  #Configure in room
+  # Configure in room
   options:
     - exclude_from_custom
     - dim_while_motion
     - prevent_off_to_normal
     - prevent_night_to_morning
-
   MQTTLights:
     - lights:
       - zigbee2mqtt/ENTRE_Spot
       # Configure in light
       options:
         - night_motion
-
       enable_light_control: input_boolean.xmas_light_control
 ```
 
+> [!TIP]  
+> Use one `input_boolean` switch to disable holiday lights and hide related modes in the Home Assistant frontend.  
 
-## Sensors
-MQTT sensor names are full topics for targets excluding /set, case sensitive. App will subscribe to MQTT topics. Home Assistant sensors uses entity-id as sensor name.
+---
 
-### Motion Sensors and Presence trackers
-You can define time after sensor no longer detects motion before it turns light back with `delay` in seconds. This defauts to 60 seconds. You can also define constraints to each sensor as an if statement that must be true for motion to activate. Inherits Appdaemon API to self.
+## 🌦️ Sensors & Constraints  
 
-Trackers will trigger 'presence' mode when new == home and sets 'away' mode if all trackers defined in room is not home. When presence is detected it will go to 'normal' mode if old state is 'away' and 'presence' is not defined in light_mode. Trackers will not change mode unless it is normal or away.
+### 🌤️ Weather Sensors  
 
-```yaml
-  motion_sensors:
-    - motion_sensor: binary_sensor.yourMotionSensor
-  MQTT_motion_sensors:
-    - motion_sensor: zigbee2mqtt/KITCHEN_sensor
-      delay: 60
-      motion_constraints: "self.now_is_between('06:50:00', '23:00:00') and self.get_tracker_state('person.wife') == 'home' or self.get_state('switch.kitch_espresso') == 'on' "
-  presence:
-    - tracker: person.wife
-      tracker_constraints: "self.now_is_between('06:30:00', '23:00:00') "
-```
+#### 📌 Notes  
+- **Weather Data**: Use the [ad-Weather](https://github.com/Pythm/ad-Weather) app for **optimal integration**. It consolidates all your weather sensors into a single app and publishes events for other apps to consume.  
+  > ⚠️ **Important**: If you configure weather sensors **directly in Lightwand**, they will **take precedence** over the `ad-Weather` app.  
 
-> [!TIP]
-> Tracker will set mode as away when not home but there is no restrictions on calling new modes or normal when away.
+You can define **two outdoor lux sensors**. The second sensor can be defined with a suffix of `_2`. The app will use the **higher lux value** or the **last updated value** if the other sensor hasn't updated in the last 15 minutes. Use `OutLux_sensor` for Home Assistant sensors and `OutLuxMQTT` for MQTT sensors.
 
+- Only **one room lux sensor** can be defined, and it can be either an MQTT or Home Assistant entity.  
+- **Rain sensors** currently only support Home Assistant entities.  
 
-With `bed_sensor` light mode will stay at nigth mode until bed is exited, to then turn on normal operations when bed is exited.
-There is also an option to set `out_of_bed_delay` if you have unstable bedsensors and need to give them some extra seconds to see if the sensor detects again.
-
-### Media Players
-Sorted by priority if more than one media player is defined in a room. Can be any sensor or switch with an on/off state. Define the name of the mode for each sensor and define light attributes in `light_modes`. The "media mode" will set the light and keep it as the media mode when motion is detected, as well as during morning, normal, and night* modes. Calling any other modes will set the light to the new mode. If any of the morning, normal, or night* modes are called when the media is on, the media mode will be active again.
-
-> [!TIP]
-> Input `delay` option when a TV reports a 'on' state shortly after being turned off and then reported a 'off' state again to avoid lights dimming up and down and up again.
-
-```yaml
-  mediaplayers:
-    - mediaplayer: binary_sensor.yourXboxGamerTag
-      mode: pc
-    - mediaplayer: media_player.tv
-      mode: tv
-      delay: 0
-```
-
-### Weather sensors
-You can configure two outdoor lux sensors with the second ending with '_2' and it will keep the highest lux or last if other is not updated last 15 minutes. There can only be one room lux sensor but it can be either MQTT or Home Assistant sensor. Rain sensor can for now only be Home Assistant sensor.
-
+**Example**:  
 ```yaml
   OutLux_sensor: sensor.lux_sensor
   OutLuxMQTT_2: zigbee2mqtt/OutdoorHueLux
@@ -515,74 +445,146 @@ You can configure two outdoor lux sensors with the second ending with '_2' and i
   rain_sensor: sensor.netatmo_rain
 ```
 
-### Conditions and constraints
-You can use Lux sensors to control or constrain lights. Optionally you can provide IF statements to be meet for light to turn on at normal/morning/motion mode or with automations defined. Inherits Appdaemon Api as ADapi.
-<br>I use this on some of the lights in my livingroom and kitchen for when my wife is not home but without using the presence tracker because I do not want to set my rooms as away.
-You can define any statement you want so I have not figured out a better way than to create a 'listen_sensors' list for the sensors you use in statement so light can be updated when the condition changes.
+---
 
+### 📡 Motion Sensors and Presence Trackers  
+
+You can define the **time delay** (in seconds) after motion detection before the light turns off. The **default is 60 seconds**. You can also define **motion constraints** for each sensor using an python `if` statement. These constraints must be `true` for motion to activate.  
+
+**Example**:  
+```yaml
+  motion_sensors:
+    - motion_sensor: binary_sensor.yourMotionSensor
+  MQTT_motion_sensors:
+    - motion_sensor: zigbee2mqtt/KITCHEN_sensor
+      delay: 60
+      motion_constraints: "self.now_is_between('06:50:00', '23:00:00') and self.get_tracker_state('person.wife') == 'home' or self.get_state('switch.kitch_espresso') == 'on' "
+```
+
+> [!TIP]  
+> Tracker will set mode as `away` when not home, but there are **no restrictions** on calling new modes or switching to `normal` when in `away` mode.  
+
+For **presence tracking**, define the trackers in the `presence` section. When a tracker is `home`, the app will switch to `normal` mode (if `presence` is not defined in `light_modes`). If all defined trackers are **not home**, the app will switch to `away` mode.  
+
+**Example**:  
+```yaml
+  presence:
+    - tracker: person.wife
+      tracker_constraints: "self.now_is_between('06:30:00', '23:00:00') "
+```
+
+> [!NOTE]  
+> Trackers will **not change modes** unless the current mode is `normal` or `away`.  
+
+---
+
+### 🛏️ Bed Sensors and `out_of_bed_delay`  
+- The `bed_sensor` feature keeps the light in `night` mode until the bed is exited.  
+- You can define `out_of_bed_delay` (in seconds) to give unstable bed sensors time to stabilize.  
+
+**Example**:  
+```yaml
+  bed_sensor: binary_sensor.bed_occupied
+  out_of_bed_delay: 30
+```
+
+---
+
+### 📺 Media Players  
+
+Sorted by **priority** if more than one media player is defined in a room. You can use any entity with an `on/off` state (e.g., sensors, switches).  
+
+- Define the **mode name** for each media player.  
+- Define `light_data` in `light_modes` for the corresponding mode.  
+
+**Behavior**:  
+- The "media mode" will **override** normal lighting behavior when motion is detected, during `morning`, `normal`, or `night*` modes.
+
+> [!TIP]  
+> Define a `delay` for media players that report `on` states shortly after being turned off. This prevents lights from dimming up and down repeatedly.  
+
+**Example**:  
+```yaml
+  mediaplayers:
+    - mediaplayer: binary_sensor.yourXboxGamerTag
+      mode: pc
+    - mediaplayer: media_player.tv
+      mode: tv
+      delay: 30
+```
+
+---
+
+## 🛠️ Advanced Configurations  
+
+### 📌 Conditions and Constraints  
+
+You can use **lux sensors** to control or constrain lights. Optionally, you can define `IF` statements that must be met for the light to turn on during `normal`, `morning`, or `motion` modes, or when automations are triggered. The app inherits the **AppDaemon API** as `self.ADapi`.  
+
+> **Example Use Case**:  
+> I use this on some lights in my living room and kitchen to detect if my wife is **not home**, without setting the room to `away` mode.  
+
+To define custom conditions, create a `listen_sensors` list for the sensors you use in your statements. The app will update the light when any condition changes.  
+
+**Example**:  
 ```yaml
   listen_sensors:
     - person.wife
-  #Some light data...
-      conditions:
-        - "self.ADapi.get_tracker_state('person.wife') == 'home'"
-      lux_constraint: 12000
-      room_lux_constraint: 100
+  # Some light data...
+  conditions:
+    - "self.ADapi.get_tracker_state('person.wife') == 'home'"
+  keep_on_conditions:
+    - "self.ADapi.get_tracker_state('person.wife') == 'home'"
+  lux_constraint: 12000
+  room_lux_constraint: 100
 ```
 
-## Manual changes to lights
-If you manage to configure every light to your liking, normal automation should be sufficient for day-to-day use without intervention. However, there are days when you'll need something else. To avoid creating a mode for every possible scenario, I've tried to keep the automations so that if you set or adjust lights manually, they will stay until:
--Motion inclusive given delay has ended
--Lux levels go from below to above lux constraint. They will remain on if turned on when lux is above.
--Mode is changed
--Time automation is executed when conditions are met (e.g., if lux is above the constraint, automation will not execute)
+> [!NOTE]  
+> - The `conditions` block keeps the light **off** if all conditions are `true`.  
+> - The `keep_on_conditions` block keeps the light **on** if **any** condition is `true`.  
 
-> [!NOTE]
-> If you define more than one light in the list the app only listens for changes in the first light in the list. In the example below the app will only detect changes to spot1. If you then only turn on spot2, the reset mode will not work.
+---
 
+### 🔄 Manual Changes to Lights  
+
+If you've configured all your lights to your liking, the normal automation should suffice for day-to-day use. However, there are times when you may need to make **manual adjustments**, such as for special events or when the automation doesn't match your needs.  
+
+> [!NOTE]  
+> Manual changes will **persist** until:  
+> - The **motion delay** ends.  
+> - **Lux levels** rise above the `lux_constraint`.  
+> - A **new mode** is activated.  
+> - A **time-based automation** runs (e.g., if lux is above the constraint, the automation will not execute).  
+
+> [!WARNING]  
+> If you define **multiple lights** in a list, the app will **only listen to the first light** in the list. For example:  
+> ```yaml
+>   - lights:
+>     - light.spot1
+>     - light.spot2
+> ```  
+> The app will **only detect changes to `light.spot1`**. If you turn on `light.spot2` only, the `reset` mode will **not work**.  
+
+> [!TIP]  
+> To **reset** to the default automation, call the `reset` mode or `reset + _appName`.  
+
+---
+
+### 🔄 Persistent Storage  
+Use `json_path` to save light states and modes across restarts:  
 ```yaml
-    - lights:
-      - light.spot1
-      - light.spot2
+json_path: /path/to/storage/
 ```
 
-> [!TIP]
-> To reset back to normal automation you can call mode `reset` or  `reset` + _appName
+### 🧱 Namespaces  
+Define MQTT/HASS namespaces if not using defaults:  
+```yaml
+MQTT_namespace: mqtt
+HASS_namespace: default
+```
 
-
-## Persistent storage
-Define a path to store json files with `json_path` for persistent storage to recall last MQTT data and current lightmode for room on reboot. It writes data on terminate/reboot to store current mode for room and outdoor lux, room lux, and if lights is on or off for lights where needed.
-
-Toggle lights automation will break if persistent storage is not configured. It is used to store current toggles.
-
-This will increase writing to disk so it is not recomended for devices running on a SD card.
-
-If it is not configured the lightmode will be set to normal/away/media depending on presence tracking and if media player is on.
-
-
-## Namespace
-If you have defined a namespace for MQTT other than default you need to define your namespace with `MQTT_namespace`. Same for HASS you need to define your namespace with `HASS_namespace`.
-
-
-## Maintaining a Healthy Network and Infrastructure
-When controlling multiple lights simultaneously, especially those that don't natively support transition commands, you may experience network congestion. This is because the controller needs to send multiple commands to each dimmer, generating significant traffic.
-
-To mitigate this issue, consider grouping zigbee devices together in your zigbee2mqtt controller and referencing them by a group name under `MQTTlights`. This approach can help reduce network strain compared to listing all individual devices.
-
-#### Add delays
-If you experience problems that not all lights responds every time to mode changes you can add delays to see if it helps to distribute the network traffic over time. You have then two options.
-
-##### Add delay to activate modes
-An option for room configuration is to add delay in seconds on mode change. The modes that will wait with the option `mode_turn_off_delay` is away, off and night. The modes that will change after delay with option `mode_turn_on_delay` is modes: normal and morning.
-
-> [!TIP]
-> Setting different delays to rooms will help not to flood the zigbee/zwave network if you have a lot of lights.
-
-You can also use this delay if you want to keep the light on/off for longer in some rooms when you exit or come home.
-
-> [!NOTE]
-> Motion, Precence (trackers) and when listening to state changes with 'listen_sensors', will override any delay if app reacts to state change.
-
+### 🔄 Delays & Network Health  
+Add delays to avoid network congestion:  
 ```yaml
   mode_turn_off_delay: 2
   mode_turn_on_delay: 2
@@ -590,20 +592,24 @@ You can also use this delay if you want to keep the light on/off for longer in s
 
 ##### Add delay to every change
 You can also add a random delay `random_turn_on_delay` defined with an number, and the lights in the room, will be turned on/off randomly between zero and the given number in seconds. This applies to every change, including motion.
-
 > [!IMPORTANT]
 > Try to avoid setting this in rooms that sets the light turn on by motion. This delay is also added to turn on/off lights when motion is detected.
-
 ```yaml
   random_turn_on_delay: 2
 ```
+---
 
+## 📌 Notes & Tips  
+- Use **MQTT Explorer** to find device topics.  
+- **Group Zigbee devices** in your controller to reduce network load.  
+- **Adaptive Lighting** can be used with `adaptive_switch` and `adaptive_sleep_mode`.  
 
-# Get started
+---
+
+## 📚 Get started
 Easisest to start off with is to copy this example and update with your sensors and lights and build from that. There is a lot of list/dictionaries that needs to be correctly indented. And remember: All sections and configurations are optional, so you use only what is applicable.
 
 ## App configuration
-
 ```yaml
 your_room_name:
   module: lightwand
@@ -613,30 +619,26 @@ your_room_name:
   language_file: /conf/apps/Lightwand/translations.json
   lightwand_language: no
 
-
   # Namespaces for MQTT and HASS if other than default.
   MQTT_namespace: mqtt
   HASS_namespace: hass
-
   # Lux sensors for lux control and constraint
   OutLux_sensor: sensor.lux_sensor
-  OutLuxMQTT_2: zigbee2mqtt/OutdoorHueLux
-  RoomLux_sensor: sensor.lux_sensor
+  OutLux_sensor_2: sensor.lux_sensor2
+  OutLuxMQTT: zigbee2mqtt/OutdoorLux
+  OutLuxMQTT_2: zigbee2mqtt/OutdoorLux2
+  RoomLux_sensor: sensor.room_lux_sensor
   RoomLuxMQTT: zwave/KITCHEN_sensor/sensor_multilevel/endpoint_0/Illuminance
-
   # HA sensor for detection of rain. If rain is detected, it will raise lux constraint by * 1.5
   rain_sensor: sensor.netatmo_rain
-
   # Listen to sensors to update Lights when there is a change
   listen_sensors:
     - person.wife
-
   # Exclude the room from custom mode or allow motion detection during night
   options:
     - exclude_from_custom
     - night_motion
     - dim_while_motion
-
   # Motion sensors.
   # Input delay in seconds before light turns back from motion to 'mode' light
   # motion_constraints takes an if statement that must be true for motion to activate. Inherits Appdaemon API to self
@@ -650,7 +652,6 @@ your_room_name:
     - motion_sensor: zigbee2mqtt/
       delay: 60
       motion_constraints: "self.now_is_between('06:30:00', '21:00:00')"
-
   # Presence tracker detection. Configuration is same as motion sensors
   # Sets mode as away for room if all trackers are not equal to 'home'.
   # Sets mode to presence if defined in light_modes or normal if not defined when returning home
@@ -661,7 +662,6 @@ your_room_name:
     - tracker: person.yourself
       delay: 60
       tracker_constraints: "self.now_is_between('06:30:00', '22:00:00') "
-
   # Media players. Sorted by priority if more than one mediaplayer is defined in room. Can be any sensor or switch with on/off state
   # Define name of mode here and define light attributes in 'light_modes'
   mediaplayers:
@@ -669,17 +669,14 @@ your_room_name:
       mode: pc
     - mediaplayer: media_player.tv
       mode: tv
-
   # Add delay to turn on/off lights.
   mode_turn_off_delay: 2
   mode_turn_on_delay: 2
-
   # Configure lights and switches as Lights. Lights that dim with toggle is configured with 'ToggleLights' insted of 'Lights'
   MQTTLights:
     # Configure as many light with different settings you wish in a room and each lights configuration can have many lights/switches
     - lights:
       - zigbee2mqtt/hue
-
       automations:
       - time: '06:30:00'
         light_data:
@@ -708,7 +705,6 @@ your_room_name:
           effect: fireplace
       - time: '23:00:00'
         state: turn_off
-
       # Configure motion lights
       motionlights:
       - time: '06:30:00'
@@ -728,7 +724,6 @@ your_room_name:
       - time: '23:00:00'
         state: turn_off # Turn off at given time even when motion.
         fixed: True
-
       light_modes:
         - mode: night_kid
           light_data:
@@ -753,7 +748,6 @@ your_room_name:
         - mode: tv
           state: lux_controlled
           offset: -50
-
   ToggleLights:
     - lights:
       - switch.toggle_bulb
@@ -765,11 +759,9 @@ your_room_name:
           toggle: 3
         - mode: gaming
           state: turn_off
-
       # Lux constraints will only check when a new update to light is sent, like motion/presence, media player on/off or normal mode
       lux_constraint: 12000
       room_lux_constraint: 100
-
       # Conditions as if statement to be meet for light to turn on at normal/morning/motion mode or with automations defined
       # Inherits Appdaemon Api as ADapi.
       conditions:
@@ -806,7 +798,6 @@ key | optional | type | default | introduced in | description
 `random_turn_on_delay` | True | int | | v1.3.2 | Add delay to turn on and off
 `adaptive_switch` | True | string | | v1.3.3 | HA switch to turn on/off Adaptive Lighting
 `adaptive_sleep_mode` | True | string | | v1.3.4 | HA switch to turn on/off Adaptive Lightings sleep mode
-
 ### Key definitions to add to motion and presence sensors
 key | optional | type | default | introduced in | description
 -- | -- | -- | -- | -- | --
@@ -814,7 +805,6 @@ key | optional | type | default | introduced in | description
 `delay` | True | int | 60 | v1.0.0 | Input delay in seconds before light turns back from motion to current mode
 `motion_constraints` | True | string | | v1.0.0 | if statement that must be true for motion to activate. Inherits Appdaemon API to self
 `bed_sensor` | True | sensor | | v1.1.6 | This will wait until bed is exited to turn on light in room when night ended
-
 ### Key definitions to add to Lights
 key | optional | type | default | introduced in | description
 -- | -- | -- | -- | -- | --
@@ -826,4 +816,17 @@ key | optional | type | default | introduced in | description
 `room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint
 `conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi
 `toggle_speed` | True | float | 1 | v1.1.4 | Set time in seconds between each toggle. Supports sub second with 0.x
+---
 
+## 📦 Contributing  
+- **Report issues** on [GitHub](https://github.com/Pythm/ad-Lightwand)  
+- **Suggest features** via pull requests  
+
+---
+
+## 📝 License  
+MIT License. See [LICENSE](LICENSE) file for details.  
+
+---  
+**Lightwand by [Pythm](https://github.com/Pythm)**  
+*Automate your lights with precision and flexibility.*

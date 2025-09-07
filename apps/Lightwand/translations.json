@@ -8,6 +8,7 @@
         "night": "night",
         "custom": "custom",
         "fire": "fire",
+        "false_alarm": "false-alarm",
         "wash": "wash",
         "reset": "reset"
     },
@@ -20,6 +21,7 @@
         "night": "nacht",
         "custom": "manuell",
         "fire": "brand",
+        "false_alarm": "fehlalarm",
         "wash": "hell",
         "reset": "zurücksetzen"
     }

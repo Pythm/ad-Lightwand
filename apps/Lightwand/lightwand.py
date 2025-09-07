@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.5.2"
+__version__ = "1.5.3"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import datetime
@@ -19,6 +19,7 @@ OFF_TRANSLATE:str = 'off'
 NIGHT_TRANSLATE:str = 'night'
 CUSTOM_TRANSLATE:str = 'custom'
 FIRE_TRANSLATE:str = 'fire'
+FALSE_ALARM_TRANSLATE:str = 'false-alarm'
 WASH_TRANSLATE:str = 'wash'
 RESET_TRANSLATE:str = 'reset'
 
@@ -41,7 +42,7 @@ class Room(Hass):
         self.mqtt = None
 
         self.roomlight:list = []
-        event_listen_str:str = "MODE_CHANGE"
+        event_listen_str:str = 'MODE_CHANGE'
 
         language = self.args.get('lightwand_language', 'en')
         language_file = self.args.get('language_file', '/conf/apps/Lightwand/translations.json')
@@ -66,13 +67,15 @@ class Room(Hass):
             CUSTOM_TRANSLATE = translations[language]['custom']
             global FIRE_TRANSLATE
             FIRE_TRANSLATE = translations[language]['fire']
+            global FALSE_ALARM_TRANSLATE
+            FALSE_ALARM_TRANSLATE = translations[language]['false-alarm']
             global WASH_TRANSLATE
             WASH_TRANSLATE = translations[language]['wash']
             global RESET_TRANSLATE
             RESET_TRANSLATE = translations[language]['reset']
 
         self.LIGHT_MODE:str = NORMAL_TRANSLATE
-        self.all_modes:list = [NORMAL_TRANSLATE, AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE, CUSTOM_TRANSLATE, FIRE_TRANSLATE, WASH_TRANSLATE, RESET_TRANSLATE]
+        self.all_modes:list = [NORMAL_TRANSLATE, AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE, CUSTOM_TRANSLATE, FIRE_TRANSLATE, FALSE_ALARM_TRANSLATE, WASH_TRANSLATE, RESET_TRANSLATE]
         self.getOutOfBedMode:str = NORMAL_TRANSLATE
         self.ROOM_LUX:float = 0.0
         self.OUT_LUX:float = 0.0
@@ -108,7 +111,7 @@ class Room(Hass):
 
         # Namespaces for HASS and MQTT
         HASS_namespace:str = self.args.get('HASS_namespace', 'default')
-        MQTT_namespace:str = self.args.get('MQTT_namespace', 'default')
+        MQTT_namespace:str = self.args.get('MQTT_namespace', 'mqtt')
 
             # Presence detection (tracking)
         self.presence:dict = self.args.get('presence', {})
@@ -164,6 +167,7 @@ class Room(Hass):
             # Helpers for last updated when two outdoor lux sensors in use
         self.lux_last_update1 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
         self.lux_last_update2 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
+        self.rain_last_update = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
 
         if 'OutLux_sensor' in self.args:
             lux_sensor = self.args['OutLux_sensor']
@@ -232,7 +236,6 @@ class Room(Hass):
                 namespace = MQTT_namespace
             )
 
-
         if 'rain_sensor' in self.args:
             rain_sensor = self.args['rain_sensor']
             self.listen_state(self.update_rain_amount, rain_sensor,
@@ -247,6 +250,11 @@ class Room(Hass):
             except Exception as e:
                 self.RAIN:float = 0.0
                 self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
+
+        self.CLOUD_COVER = 0
+        self.listen_event(self.weather_event, 'WEATHER_CHANGE',
+            namespace = HASS_namespace
+        )
 
             # Persistent storage for storing mode and lux data
         self.usePersistentStorage:bool = False
@@ -294,6 +302,7 @@ class Room(Hass):
                 lux_constraint = l.get('lux_constraint', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
+                keep_on_conditions = l.get('keep_on_conditions', ['False']),
                 json_path = self.JSON_PATH,
                 usePersistentStorage = self.usePersistentStorage,
                 MQTT_namespace = MQTT_namespace,
@@ -333,6 +342,7 @@ class Room(Hass):
                 lux_constraint = l.get('lux_constraint', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
+                keep_on_conditions = l.get('keep_on_conditions', ['False']),
                 json_path = self.JSON_PATH,
                 usePersistentStorage = self.usePersistentStorage,
                 HASS_namespace = HASS_namespace,
@@ -363,6 +373,7 @@ class Room(Hass):
                 lux_constraint = l.get('lux_constraint', None),
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
+                keep_on_conditions = l.get('keep_on_conditions', ['False']),
                 toggle = l.get('toggle',3),
                 num_dim_steps = l.get('num_dim_steps',3),
                 toggle_speed = l.get('toggle_speed',1),
@@ -450,7 +461,6 @@ class Room(Hass):
         """ End initial setup for Room
         """
 
-
     def terminate(self) -> None:
         """ Writes out data to persistent storage before terminating.
         """
@@ -480,7 +490,6 @@ class Room(Hass):
             )
             with open(self.JSON_PATH, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
-
 
     def mode_event(self, event_name, data, kwargs) -> None:
         """ New mode events. Updates lights if conditions are met.
@@ -525,7 +534,6 @@ class Room(Hass):
                             oneshot = True
                         )
                         inBed = True
-
         if (
             modename in self.all_modes
             or modename == MORNING_TRANSLATE
@@ -543,14 +551,17 @@ class Room(Hass):
                 select_name = modename
                 if modename == RESET_TRANSLATE:
                     select_name = NORMAL_TRANSLATE
-                try:
-                    self.call_service("input_select/select_option",
-                        entity_id = self.selector_input,
-                        option = select_name,
-                        namespace = self.namespace
-                    )
-                except Exception as e:
-                    self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
+                input_select_state = self.get_state(self.selector_input, attribute="all")
+                options = input_select_state["attributes"].get("options", [])
+                if select_name in options:
+                    try:
+                        self.call_service("input_select/select_option",
+                            entity_id = self.selector_input,
+                            option = select_name,
+                            namespace = self.namespace
+                        )
+                    except Exception as e:
+                        self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
 
             if self.LIGHT_MODE in [AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE]:
                 if self.mode_turn_off_delay > 0:
@@ -561,12 +572,10 @@ class Room(Hass):
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_on_delay)
                     return
 
-
             self.reactToChange()
 
             if modename == RESET_TRANSLATE:
                 self.LIGHT_MODE = NORMAL_TRANSLATE
-
 
     def mode_update_from_selector(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates mode based on HA selector update
@@ -586,7 +595,6 @@ class Room(Hass):
         if modename == RESET_TRANSLATE:
             self.LIGHT_MODE = NORMAL_TRANSLATE
 
-
     def set_Mode_with_delay(self, kwargs):
         """ Sets mode with defined delay.
         """
@@ -604,7 +612,6 @@ class Room(Hass):
             self.LIGHT_MODE = NORMAL_TRANSLATE
 
         # Motion and presence
-
     def motion_state(self, entity, attribute, old, new, kwargs) -> None:
         """ Listens to motion state.
         """
@@ -626,7 +633,6 @@ class Room(Hass):
                 {sensor['motion_sensor'] : False}
             )
             self.oldMotion(sensor = sensor)
-
 
     def MQTT_motion_event(self, event_name, data, kwargs) -> None:
         """ Listens to motion MQTT event.
@@ -669,7 +675,6 @@ class Room(Hass):
                 )
                 self.oldMotion(sensor = sensor)
 
-
     def newMotion(self) -> None:
         """ Motion detected. Checks constraints given in motion and setMotion.
         """
@@ -703,7 +708,6 @@ class Room(Hass):
                 finally:
                     self.trackerhandle = None
 
-
     def oldMotion(self, sensor) -> None:
         """ Motion no longer detected in sensor. Checks other sensors in room and starts countdown to turn off light.
         """
@@ -729,7 +733,6 @@ class Room(Hass):
         else:
             self.handle = self.run_in(self.MotionEnd, 60)
 
-
     def checkMotion(self) -> bool:
         """ Check if motion is detected in any of the motion sensors.
         """
@@ -738,7 +741,6 @@ class Room(Hass):
                 return True
 
         return False
-        
 
     def out_of_bed(self, entity, attribute, old, new, kwargs) -> None:
         """ Check if all bed sensors are empty and if so change to current mode.
@@ -748,7 +750,6 @@ class Room(Hass):
                 return
         self.LIGHT_MODE = self.getOutOfBedMode
         self.reactToChange()
-
 
     def presence_change(self, entity, attribute, old, new, kwargs) -> None:
         """ Listens to tracker/person state change.
@@ -795,7 +796,6 @@ class Room(Hass):
         for light in self.roomlight:
             light.setLightMode(lightmode = self.LIGHT_MODE)
 
-
     def MotionEnd(self, kwargs) -> None:
         """ Motion / Presence countdown ended. Turns lights back to current mode.
         """
@@ -805,12 +805,10 @@ class Room(Hass):
                 light.last_motion_brightness = 0
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
-
     def state_changed(self, entity, attribute, old, new, kwargs) -> None:
         """ Update light settings when state of a HA entity is updated.
         """
         self.reactToChange()
-
 
     def reactToChange(self):
         """ This function is called when a sensor has new values and based upon mode and if motion is detected,
@@ -840,8 +838,27 @@ class Room(Hass):
 
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
-
         # Lux / weather
+    def weather_event(self, event_name, data, kwargs) -> None:
+        """ Listens for weather change from the weather app
+        """
+        if self.datetime(aware=True) - self.rain_last_update > datetime.timedelta(minutes = 20):
+            self.RAIN = data['rain']
+        self.CLOUD_COVER = data['cloud_cover']
+        if (
+            self.datetime(aware=True) - self.lux_last_update1 > datetime.timedelta(minutes = 20)
+            and self.datetime(aware=True) - self.lux_last_update2 > datetime.timedelta(minutes = 20)
+        ):
+            self.OUT_LUX = data['lux']
+            for light in self.roomlight:
+                light.outLux = self.OUT_LUX
+
+            if self.mode_delay_handler is not None:
+                if self.timer_running(self.mode_delay_handler):
+                    return
+
+            self.reactToChange()
+
     def out_lux_state(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
         """
@@ -856,7 +873,6 @@ class Room(Hass):
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self.newOutLux()
-
 
     def out_lux_event_MQTT(self, event_name, data, kwargs) -> None:
         """ Updates lux data from MQTT event.
@@ -874,7 +890,6 @@ class Room(Hass):
             if self.outLux1 != float(lux_data['value']):
                 self.outLux1 = float(lux_data['value']) # Zwave sensor
                 self.newOutLux()
-
 
     def newOutLux(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
@@ -896,7 +911,6 @@ class Room(Hass):
 
         self.lux_last_update1 = self.datetime(aware=True)
 
-
     def out_lux_state2(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
         """
@@ -911,7 +925,6 @@ class Room(Hass):
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self.newOutLux2()
-
 
     def out_lux_event_MQTT2(self, event_name, data, kwargs) -> None:
         """ Updates lux data from MQTT event.
@@ -929,7 +942,6 @@ class Room(Hass):
             if self.outLux2 != float(lux_data['value']):
                 self.outLux2 = float(lux_data['value']) # Zwave sensor
                 self.newOutLux2()
-
 
     def newOutLux2(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
@@ -951,7 +963,6 @@ class Room(Hass):
 
         self.lux_last_update2 = self.datetime(aware=True)
 
-
     def room_lux_state(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
         """
@@ -966,7 +977,6 @@ class Room(Hass):
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self.newRoomLux()
-
 
     def room_lux_event_MQTT(self, event_name, data, kwargs) -> None:
         """ Updates lux data from MQTT event.
@@ -985,7 +995,6 @@ class Room(Hass):
                 self.ROOM_LUX = float(lux_data['value']) # Zwave sensor
                 self.newRoomLux()
 
-
     def newRoomLux(self) -> None:
         """ Sets new room lux data.
         """
@@ -997,7 +1006,6 @@ class Room(Hass):
                 return
 
         self.reactToChange()
-
 
     def update_rain_amount(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates rain amount from sensors.
@@ -1014,10 +1022,10 @@ class Room(Hass):
             except Exception as e:
                 self.log(f"Not able to get new rain amount. Exception: {e}", level = 'WARNING')
                 self.RAIN = 0.0
-            
-            for light in self.roomlight:
-                light.rain_amount = self.RAIN
-
+            else:
+                self.rain_last_update = self.datetime(aware=True)
+                for light in self.roomlight:
+                    light.rain_amount = self.RAIN
 
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
@@ -1028,12 +1036,10 @@ class Room(Hass):
         if self.LIGHT_MODE != NIGHT_TRANSLATE:
             self.check_mediaplayers_off()
 
-
     def media_off(self, entity, attribute, old, new, kwargs) -> None:
         """ Function is called when a media is turned off.
         """
         self.reactToChange()
-
 
     def check_mediaplayers_off(self) -> bool:
         """ Returns true if media player sensors is off or self.LIGHT_DATA != 'normal'/'night'.
@@ -1051,7 +1057,7 @@ class Room(Hass):
                             and light.checkLuxConstraints()
                         ):
                             light.setLightMode(lightmode = mediaplayer['mode'])
-                        else:
+                        elif not light.current_keep_on_Condition:
                             light.turn_off_lights()
                             
                     return False
@@ -1070,6 +1076,7 @@ class Light:
         lux_constraint,
         room_lux_constraint,
         conditions,
+        keep_on_conditions,
         json_path,
         usePersistentStorage,
         HASS_namespace,
@@ -1089,6 +1096,7 @@ class Light:
         self.lux_constraint = lux_constraint
         self.room_lux_constraint = room_lux_constraint
         self.conditions:list = conditions
+        self.keep_on_conditions:list = keep_on_conditions
         self.JSON_PATH:str = json_path
         self.usePersistentStorage:bool = usePersistentStorage
         self.night_motion:bool = night_motion
@@ -1141,6 +1149,7 @@ class Light:
         # Helpers to check if conditions to turn on/off light has changed
         self.wereMotion:bool = False
         self.current_OnCondition:bool = None
+        self.current_keep_on_Condition:bool = None
         self.current_LuxCondition:bool = None
 
 
@@ -1422,6 +1431,7 @@ class Light:
         """
         if not self.motion:
             self.current_OnCondition = None
+            self.current_keep_on_Condition = None
             self.current_LuxCondition = None
             self.setLightMode()
         elif type(self.motionlight) == list:
@@ -1470,6 +1480,13 @@ class Light:
                 return False
         return True
 
+    def check_keep_on_Condition(self) -> bool:
+        """ Checks conditions before turning on automated light.
+        """
+        for conditions in self.keep_on_conditions:
+            if eval(conditions):
+                return True
+        return False
 
     def checkLuxConstraints(self) -> bool:
         """ Checks Lux constraints before turning on automated light.
@@ -1494,6 +1511,7 @@ class Light:
             (lightmode == self.lightmode
             or lightmode == 'None')
             and self.current_OnCondition == self.checkOnConditions()
+            and self.current_keep_on_Condition == self.check_keep_on_Condition()
             and self.current_LuxCondition == self.checkLuxConstraints()
             and lightmode != RESET_TRANSLATE
         ):
@@ -1507,6 +1525,7 @@ class Light:
                 return
         
         self.current_OnCondition = self.checkOnConditions()
+        self.current_keep_on_Condition = self.check_keep_on_Condition()
         self.current_LuxCondition = self.checkLuxConstraints()
 
         if lightmode != self.lightmode:
@@ -1555,7 +1574,8 @@ class Light:
                     ):
                         self.setLightAutomation(automations = mode['automations'])
                     elif self.isON or self.isON is None:
-                        self.turn_off_lights()
+                        if not self.current_keep_on_Condition:
+                            self.turn_off_lights()
                     return
 
                 elif (
@@ -1670,6 +1690,7 @@ class Light:
         if (
             self.current_OnCondition
             and self.current_LuxCondition
+            or self.current_keep_on_Condition
         ):
             if self.automations:
                 self.setLightAutomation(automations = self.automations)
@@ -1678,7 +1699,8 @@ class Light:
                     self.setAdaptiveLightingOff()
                 self.turn_on_lights()
         elif self.isON or self.isON is None:
-            self.turn_off_lights()
+            if not self.current_keep_on_Condition:
+                self.turn_off_lights()
 
 
     def setMotion(self, lightmode:str = 'None') -> None:
@@ -2078,6 +2100,7 @@ class Light:
         elif (
             automations[target_num]['state'] != 'adjust'
             and (self.isON or self.isON is None)
+            and not self.current_keep_on_Condition
         ):
             self.turn_off_lights()
 
@@ -2364,6 +2387,7 @@ class MQTTLights(Light):
         lux_constraint,
         room_lux_constraint,
         conditions,
+        keep_on_conditions,
         json_path,
         usePersistentStorage,
         MQTT_namespace,
@@ -2394,6 +2418,7 @@ class MQTTLights(Light):
             lux_constraint = lux_constraint,
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
+            keep_on_conditions = keep_on_conditions,
             json_path = json_path,
             usePersistentStorage = usePersistentStorage,
             HASS_namespace = HASS_namespace,
@@ -2614,6 +2639,7 @@ class Toggle(Light):
         lux_constraint,
         room_lux_constraint,
         conditions,
+        keep_on_conditions,
         toggle,
         num_dim_steps,
         toggle_speed,
@@ -2663,6 +2689,7 @@ class Toggle(Light):
             lux_constraint = lux_constraint,
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
+            keep_on_conditions = keep_on_conditions,
             json_path = json_path,
             usePersistentStorage = usePersistentStorage,
             HASS_namespace = HASS_namespace,
@@ -2741,7 +2768,7 @@ class Toggle(Light):
 
             self.calculateToggles(toggle_bulb = self.toggle_lightbulb)
 
-        else:
+        elif not self.current_keep_on_Condition:
             self.turn_off_lights()
             self.current_toggle = 0
 
