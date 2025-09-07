@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.5.2"
+__version__ = "1.5.3"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import datetime
@@ -1057,7 +1057,7 @@ class Room(Hass):
                             and light.checkLuxConstraints()
                         ):
                             light.setLightMode(lightmode = mediaplayer['mode'])
-                        else:
+                        elif not light.current_keep_on_Condition:
                             light.turn_off_lights()
                             
                     return False
@@ -1690,6 +1690,7 @@ class Light:
         if (
             self.current_OnCondition
             and self.current_LuxCondition
+            or self.current_keep_on_Condition
         ):
             if self.automations:
                 self.setLightAutomation(automations = self.automations)
@@ -2099,6 +2100,7 @@ class Light:
         elif (
             automations[target_num]['state'] != 'adjust'
             and (self.isON or self.isON is None)
+            and not self.current_keep_on_Condition
         ):
             self.turn_off_lights()
 
