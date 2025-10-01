@@ -491,7 +491,7 @@ class Room(Hass):
             with open(self.JSON_PATH, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
 
-    def mode_event(self, event_name, data, kwargs) -> None:
+    def mode_event(self, event_name, data, **kwargs) -> None:
         """ New mode events. Updates lights if conditions are met.
         """
         modename, roomname = split_around_underscore(data['mode'])
@@ -521,11 +521,11 @@ class Room(Hass):
         inBed = False
         if str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE:
             if (
-                modename in [MORNING_TRANSLATE, NORMAL_TRANSLATE]
+                modename in (MORNING_TRANSLATE, NORMAL_TRANSLATE)
                 and self.prevent_night_to_morning
             ):
                 return
-            if modename not in [NIGHT_TRANSLATE, OFF_TRANSLATE]:
+            if modename not in (NIGHT_TRANSLATE, OFF_TRANSLATE):
                 for bed_sensor in self.bed_sensors:
                     if self.get_state(bed_sensor) == 'on':
                         self.listen_state(self.out_of_bed, bed_sensor,
@@ -563,11 +563,11 @@ class Room(Hass):
                     except Exception as e:
                         self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
 
-            if self.LIGHT_MODE in [AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE]:
+            if self.LIGHT_MODE in (AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE):
                 if self.mode_turn_off_delay > 0:
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_off_delay)
                     return
-            elif self.LIGHT_MODE in [NORMAL_TRANSLATE, MORNING_TRANSLATE]:
+            elif self.LIGHT_MODE in (NORMAL_TRANSLATE, MORNING_TRANSLATE):
                 if self.mode_turn_on_delay > 0:
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_on_delay)
                     return
@@ -608,7 +608,7 @@ class Room(Hass):
 
         self.reactToChange()
 
-        if self.LIGHT_MODE in [NORMAL_TRANSLATE, RESET_TRANSLATE, RESET_TRANSLATE]:
+        if self.LIGHT_MODE in (NORMAL_TRANSLATE, RESET_TRANSLATE, RESET_TRANSLATE):
             self.LIGHT_MODE = NORMAL_TRANSLATE
 
         # Motion and presence
@@ -634,7 +634,7 @@ class Room(Hass):
             )
             self.oldMotion(sensor = sensor)
 
-    def MQTT_motion_event(self, event_name, data, kwargs) -> None:
+    def MQTT_motion_event(self, event_name, data, **kwargs) -> None:
         """ Listens to motion MQTT event.
         """
         motion_data = json.loads(data['payload'])
@@ -764,7 +764,7 @@ class Room(Hass):
                         self.reactToChange()
                     return
 
-            if self.LIGHT_MODE in [NORMAL_TRANSLATE, AWAY_TRANSLATE]:
+            if self.LIGHT_MODE in (NORMAL_TRANSLATE, AWAY_TRANSLATE):
                 self.LIGHT_MODE = NORMAL_TRANSLATE
                 if (
                     'presence' in self.all_modes
@@ -839,17 +839,17 @@ class Room(Hass):
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
         # Lux / weather
-    def weather_event(self, event_name, data, kwargs) -> None:
+    def weather_event(self, event_name, data, **kwargs) -> None:
         """ Listens for weather change from the weather app
         """
         if self.datetime(aware=True) - self.rain_last_update > datetime.timedelta(minutes = 20):
-            self.RAIN = data['rain']
-        self.CLOUD_COVER = data['cloud_cover']
+            self.RAIN = float(data['rain'])
+        self.CLOUD_COVER = int(data['cloud_cover'])
         if (
             self.datetime(aware=True) - self.lux_last_update1 > datetime.timedelta(minutes = 20)
             and self.datetime(aware=True) - self.lux_last_update2 > datetime.timedelta(minutes = 20)
         ):
-            self.OUT_LUX = data['lux']
+            self.OUT_LUX = float(data['lux'])
             for light in self.roomlight:
                 light.outLux = self.OUT_LUX
 
@@ -872,26 +872,21 @@ class Room(Hass):
         except Exception as e:
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
-            self.newOutLux()
+            self._newOutLux()
 
-    def out_lux_event_MQTT(self, event_name, data, kwargs) -> None:
+    def out_lux_event_MQTT(self, event_name, data, **kwargs) -> None:
         """ Updates lux data from MQTT event.
         """
         lux_data = json.loads(data['payload'])
-        if 'illuminance_lux' in lux_data:
-            if self.outLux1 != float(lux_data['illuminance_lux']):
-                self.outLux1 = float(lux_data['illuminance_lux']) # Zigbee sensor
-                self.newOutLux()
-        elif 'illuminance' in lux_data:
-            if self.outLux1 != float(lux_data['illuminance']):
-                self.outLux1 = float(lux_data['illuminance']) # Zigbee sensor
-                self.newOutLux()
-        elif 'value' in lux_data:
-            if self.outLux1 != float(lux_data['value']):
-                self.outLux1 = float(lux_data['value']) # Zwave sensor
-                self.newOutLux()
+        match lux_data:
+            case {'illuminance': illuminance} if self.outLux1 != float(illuminance):
+                self.outLux1 = float(illuminance) # Zigbee sensor
+                self._newOutLux()
+            case {'value': value} if self.outLux1 != float(value):
+                self.outLux1 = float(value) # Zwave sensor
+                self._newOutLux()
 
-    def newOutLux(self) -> None:
+    def _newOutLux(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
         """
         if (
@@ -924,26 +919,21 @@ class Room(Hass):
         except Exception as e:
             self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
-            self.newOutLux2()
+            self._newOutLux2()
 
-    def out_lux_event_MQTT2(self, event_name, data, kwargs) -> None:
+    def out_lux_event_MQTT2(self, event_name, data, **kwargs) -> None:
         """ Updates lux data from MQTT event.
         """
         lux_data = json.loads(data['payload'])
-        if 'illuminance_lux' in lux_data:
-            if self.outLux2 != float(lux_data['illuminance_lux']):
-                self.outLux2 = float(lux_data['illuminance_lux']) # Zigbee sensor
-                self.newOutLux2()
-        elif 'illuminance' in lux_data:
-            if self.outLux2 != float(lux_data['illuminance']):
-                self.outLux2 = float(lux_data['illuminance']) # Zigbee sensor
-                self.newOutLux2()
-        elif 'value' in lux_data:
-            if self.outLux2 != float(lux_data['value']):
-                self.outLux2 = float(lux_data['value']) # Zwave sensor
-                self.newOutLux2()
+        match lux_data:
+            case {'illuminance': illuminance} if self.outLux2 != float(illuminance):
+                self.outLux2 = float(illuminance) # Zigbee sensor
+                self._newOutLux2()
+            case {'value': value} if self.outLux2 != float(value):
+                self.outLux2 = float(value) # Zwave sensor
+                self._newOutLux2()
 
-    def newOutLux2(self) -> None:
+    def _newOutLux2(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
         """
         if (
@@ -978,21 +968,16 @@ class Room(Hass):
         else:
             self.newRoomLux()
 
-    def room_lux_event_MQTT(self, event_name, data, kwargs) -> None:
+    def room_lux_event_MQTT(self, event_name, data, **kwargs) -> None:
         """ Updates lux data from MQTT event.
         """
         lux_data = json.loads(data['payload'])
-        if 'illuminance_lux' in lux_data:
-            if self.ROOM_LUX != float(lux_data['illuminance_lux']):
-                self.ROOM_LUX = float(lux_data['illuminance_lux']) # Zigbee sensor
+        match lux_data:
+            case {'illuminance': illuminance} if self.ROOM_LUX != float(illuminance):
+                self.ROOM_LUX = float(illuminance) # Zigbee sensor
                 self.newRoomLux()
-        elif 'illuminance' in lux_data:
-            if self.ROOM_LUX != float(lux_data['illuminance']):
-                self.ROOM_LUX = float(lux_data['illuminance']) # Zigbee sensor
-                self.newRoomLux()
-        elif 'value' in lux_data:
-            if self.ROOM_LUX != float(lux_data['value']):
-                self.ROOM_LUX = float(lux_data['value']) # Zwave sensor
+            case {'value': value} if self.ROOM_LUX != float(value):
+                self.ROOM_LUX = float(value) # Zwave sensor
                 self.newRoomLux()
 
     def newRoomLux(self) -> None:
@@ -1046,7 +1031,7 @@ class Room(Hass):
             If not it updates lightmode to the first detected media player.
         """
         if (
-            self.LIGHT_MODE in [NORMAL_TRANSLATE, NIGHT_TRANSLATE, RESET_TRANSLATE]
+            self.LIGHT_MODE in (NORMAL_TRANSLATE, NIGHT_TRANSLATE, RESET_TRANSLATE)
             or str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE
         ):
             for mediaplayer in self.mediaplayers:
@@ -2445,7 +2430,7 @@ class MQTTLights(Light):
                 self.isON = lightwand_data[lights[0]]['isON']
 
 
-    def light_event_MQTT(self, event_name, data, kwargs) -> None:
+    def light_event_MQTT(self, event_name, data, **kwargs) -> None:
         """ Listens to updates to MQTT lights.
         """
         try:

@@ -729,7 +729,6 @@ your_room_name:
           light_data:
             brightness: 10
         - mode: presence
-        - mode: motion
           automations:
           - time: '00:00:00'
             light_data:
