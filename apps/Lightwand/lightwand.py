@@ -3,86 +3,56 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "1.5.3"
+__version__ = "2.0.0"
 
 from appdaemon.plugins.hass.hassapi import Hass
-import datetime
+from datetime import timedelta
 import json
 import csv
 import math
 import copy
+import os
+from typing import List, Dict, Tuple, Optional, Set, Any, Callable
 
-NORMAL_TRANSLATE:str = 'normal'
-MORNING_TRANSLATE:str = 'morning'
-AWAY_TRANSLATE:str = 'away'
-OFF_TRANSLATE:str = 'off'
-NIGHT_TRANSLATE:str = 'night'
-CUSTOM_TRANSLATE:str = 'custom'
-FIRE_TRANSLATE:str = 'fire'
-FALSE_ALARM_TRANSLATE:str = 'false-alarm'
-WASH_TRANSLATE:str = 'wash'
-RESET_TRANSLATE:str = 'reset'
+from translations_lightmodes import translations
+from lightwand_utils import split_around_underscore
 
-@staticmethod
-def split_around_underscore(input_string):
-    index = input_string.find('_')
-    
-    if index != -1:
-        part_before = input_string[:index]
-        part_after = input_string[index + 1:]
-        return part_before, part_after
-    else:
-        return None, None
-
-
+MOTION = ('on', 'open')
+MOTION_OFF = ('off', 'closed')
 class Room(Hass):
 
     def initialize(self):
-
         self.mqtt = None
 
         self.roomlight:list = []
-        event_listen_str:str = 'MODE_CHANGE'
 
-        language = self.args.get('lightwand_language', 'en')
-        language_file = self.args.get('language_file', '/conf/apps/Lightwand/translations.json')
-        try:
-            with open(language_file) as lang:
-                translations = json.load(lang)
-        except FileNotFoundError:
-            self.log("Translation file not found", level = 'DEBUG')
-        else:
-            event_listen_str = translations[language]['MODE_CHANGE']
-            global NORMAL_TRANSLATE
-            NORMAL_TRANSLATE = translations[language]['normal']
-            global MORNING_TRANSLATE
-            MORNING_TRANSLATE = translations[language]['morning']
-            global AWAY_TRANSLATE
-            AWAY_TRANSLATE = translations[language]['away']
-            global OFF_TRANSLATE
-            OFF_TRANSLATE = translations[language]['off']
-            global NIGHT_TRANSLATE
-            NIGHT_TRANSLATE = translations[language]['night']
-            global CUSTOM_TRANSLATE
-            CUSTOM_TRANSLATE = translations[language]['custom']
-            global FIRE_TRANSLATE
-            FIRE_TRANSLATE = translations[language]['fire']
-            global FALSE_ALARM_TRANSLATE
-            FALSE_ALARM_TRANSLATE = translations[language]['false-alarm']
-            global WASH_TRANSLATE
-            WASH_TRANSLATE = translations[language]['wash']
-            global RESET_TRANSLATE
-            RESET_TRANSLATE = translations[language]['reset']
+        if 'language_file' in self.args:
+            language_file = self.args['language_file']
+            translations.set_file_path(language_file)
+        if 'lightwand_language' in self.args:
+            user_lang = self.args['lightwand_language']
+            translations.set_language(user_lang)
 
-        self.LIGHT_MODE:str = NORMAL_TRANSLATE
-        self.all_modes:list = [NORMAL_TRANSLATE, AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE, CUSTOM_TRANSLATE, FIRE_TRANSLATE, FALSE_ALARM_TRANSLATE, WASH_TRANSLATE, RESET_TRANSLATE]
-        self.getOutOfBedMode:str = NORMAL_TRANSLATE
+        self.LIGHT_MODE:str = 'None'
+        # All known modes that the room can enter
+        self.all_modes: Set[str] = {
+            translations.normal,
+            translations.away,
+            translations.off,
+            translations.night,
+            translations.custom,
+            translations.fire,
+            translations.false_alarm,
+            translations.wash,
+            translations.reset,
+        }
+        self.getOutOfBedMode:str = translations.normal
+
         self.ROOM_LUX:float = 0.0
         self.OUT_LUX:float = 0.0
         self.RAIN:float = 0.0
-        self.JSON_PATH:str = ''
 
-        self.exclude_from_custom:bool = self.args.get('exclude_from_custom', False) # Old configuration of exclude from custom...
+        self.exclude_from_custom:bool = self.args.get('exclude_from_custom', False)
         night_motion:bool = False
         dim_while_motion:bool = False
         self.prevent_off_to_normal:bool = False
@@ -97,7 +67,6 @@ class Room(Hass):
             self.prevent_night_to_morning = 'prevent_night_to_morning' in self.args['options']
         room_night_motion:bool = night_motion
         room_dim_while_motion:bool = dim_while_motion
-
 
         self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
         self.mode_turn_on_delay:int = self.args.get('mode_turn_on_delay',0)
@@ -124,10 +93,9 @@ class Room(Hass):
 
         for tracker in self.presence:
             if self.get_state(tracker['tracker']) == 'home':
-                self.LIGHT_MODE = NORMAL_TRANSLATE
                 break
             else:
-                self.LIGHT_MODE = AWAY_TRANSLATE
+                self.LIGHT_MODE = translations.away
 
             # Motion detection
         self.handle = None
@@ -140,7 +108,7 @@ class Room(Hass):
                 motion_sensor = motion_sensor
             )
             self.all_motion_sensors.update(
-                {motion_sensor['motion_sensor'] : self.get_state(motion_sensor['motion_sensor']) == 'on'}
+                {motion_sensor['motion_sensor'] : self.get_state(motion_sensor['motion_sensor']) in MOTION}
             )
 
         if 'MQTT_motion_sensors' in self.args:
@@ -164,10 +132,10 @@ class Room(Hass):
             # Weather sensors
         self.outLux1:float = 0.0
         self.outLux2:float = 0.0
+        now = self.datetime(aware=True)
             # Helpers for last updated when two outdoor lux sensors in use
-        self.lux_last_update1 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
-        self.lux_last_update2 = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
-        self.rain_last_update = self.datetime(aware=True) - datetime.timedelta(minutes = 20)
+        self.lux_last_update1 = now - timedelta(minutes = 20)
+        self.lux_last_update2 = now - timedelta(minutes = 20)
 
         if 'OutLux_sensor' in self.args:
             lux_sensor = self.args['OutLux_sensor']
@@ -178,12 +146,8 @@ class Room(Hass):
                 namespace = HASS_namespace)
             try:
                 self.OUT_LUX = float(new_lux)
-            except ValueError as ve:
-                self.OUT_LUX:float = 0.0
-                self.log(f"Not able to set Rain amount. Exception: {ve}", level = 'DEBUG')
-            except Exception as e:
-                self.OUT_LUX:float = 0.0
-                self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
+            except (ValueError, TypeError):
+                pass
 
         if 'OutLuxMQTT' in self.args:
             if not self.mqtt:
@@ -219,12 +183,8 @@ class Room(Hass):
                 namespace = HASS_namespace)
             try:
                 self.ROOM_LUX = float(new_lux)
-            except ValueError as ve:
-                self.ROOM_LUX:float = 0.0
-                self.log(f"Not able to set Rain amount. Exception: {ve}", level = 'DEBUG')
-            except Exception as e:
-                self.ROOM_LUX:float = 0.0
-                self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
+            except (ValueError, TypeError):
+                pass
 
         if 'RoomLuxMQTT' in self.args:
             if not self.mqtt:
@@ -236,47 +196,9 @@ class Room(Hass):
                 namespace = MQTT_namespace
             )
 
-        if 'rain_sensor' in self.args:
-            rain_sensor = self.args['rain_sensor']
-            self.listen_state(self.update_rain_amount, rain_sensor,
-                namespace = HASS_namespace
-            )
-            new_rain_amount = self.get_state(rain_sensor)
-            try:
-                self.RAIN = float(new_rain_amount)
-            except ValueError as ve:
-                self.RAIN:float = 0.0
-                self.log(f"Not able to set Rain amount. Exception: {ve}", level = 'DEBUG')
-            except Exception as e:
-                self.RAIN:float = 0.0
-                self.log(f"Not able to set Rain amount. Exception: {e}", level = 'INFO')
-
-        self.CLOUD_COVER = 0
         self.listen_event(self.weather_event, 'WEATHER_CHANGE',
             namespace = HASS_namespace
         )
-
-            # Persistent storage for storing mode and lux data
-        self.usePersistentStorage:bool = False
-        if 'json_path' in self.args:
-            self.JSON_PATH:str = self.args['json_path']
-            self.JSON_PATH += str(self.name) + '.json'
-            self.usePersistentStorage = True
-
-            lightwand_data:dict = {}
-            try:
-                with open(self.JSON_PATH, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-            except FileNotFoundError:
-                lightwand_data = {"mode" : NORMAL_TRANSLATE,
-                                "out_lux" : 0,
-                                "room_lux" : 0}
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-
-            self.LIGHT_MODE = lightwand_data['mode']
-            self.OUT_LUX = float(lightwand_data['out_lux'])
-            self.ROOM_LUX = float(lightwand_data['room_lux'])
 
             # Configuration of MQTT Lights
         lights = self.args.get('MQTTLights', [])
@@ -303,8 +225,6 @@ class Room(Hass):
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
                 keep_on_conditions = l.get('keep_on_conditions', ['False']),
-                json_path = self.JSON_PATH,
-                usePersistentStorage = self.usePersistentStorage,
                 MQTT_namespace = MQTT_namespace,
                 HASS_namespace = HASS_namespace,
                 night_motion = night_motion,
@@ -343,8 +263,6 @@ class Room(Hass):
                 room_lux_constraint = l.get('room_lux_constraint', None),
                 conditions = l.get('conditions', ['True']),
                 keep_on_conditions = l.get('keep_on_conditions', ['False']),
-                json_path = self.JSON_PATH,
-                usePersistentStorage = self.usePersistentStorage,
                 HASS_namespace = HASS_namespace,
                 night_motion = night_motion,
                 adaptive_switch = l.get('adaptive_switch', adaptive_switch),
@@ -378,18 +296,52 @@ class Room(Hass):
                 num_dim_steps = l.get('num_dim_steps',3),
                 toggle_speed = l.get('toggle_speed',1),
                 prewait_toggle = l.get('prewait_toggle', 0),
-                json_path = self.JSON_PATH,
-                usePersistentStorage = self.usePersistentStorage,
                 HASS_namespace = HASS_namespace
             )
             self.roomlight.append(light)
 
+        self.usePersistentStorage:bool = False
+
+        self.selector_input = self.args.get("selector_input", None)
+        if self.selector_input is not None:
+            self.listen_state(self.mode_update_from_selector, self.selector_input,
+                namespace = HASS_namespace
+            )
+            self.LIGHT_MODE = self.get_state(self.selector_input, namespace = HASS_namespace)
+
+            input_select_state = self.get_state(self.selector_input, attribute="all")
+            current_options = input_select_state["attributes"].get("options", [])
+            selector_input_options = list(current_options)
+            for mode in self.all_modes:
+                if mode not in selector_input_options:
+                    selector_input_options.append(mode)
+
+        else:
+            # Persistent storage for storing mode and lux data
+            self.usePersistentStorage = True
+
+            self.json_storage:str = f"{self.AD.config_dir}/persistent/Lightwand/{self.name}.json"
+            if not os.path.exists(self.json_storage):
+                os.makedirs(self.json_storage)
+        
+            lightwand_data:dict = {}
+            try:
+                with open(self.json_storage, 'r') as json_read:
+                    lightwand_data = json.load(json_read)
+            except FileNotFoundError:
+                lightwand_data = {"mode" : translations.normal,}
+                with open(self.json_storage, 'w') as json_write:
+                    json.dump(lightwand_data, json_write, indent = 4)
+
+            self.LIGHT_MODE = lightwand_data['mode']
 
             # Makes a list of all valid modes for room
         for light in self.roomlight:
+            light.random_turn_on_delay = random_turn_on_delay
+
             for mode in light.light_modes:
                 if not mode['mode'] in self.all_modes:
-                    self.all_modes.append(mode['mode'])
+                    self.all_modes.add(mode['mode'])
                     modename, roomname = split_around_underscore(mode['mode'])
                     if (
                         modename is not None
@@ -400,7 +352,16 @@ class Room(Hass):
                             "You can read more about this change in version 1.4.4 in the documentation. ",
                             level = 'WARNING'
                         )
-            light.random_turn_on_delay = random_turn_on_delay
+                if self.selector_input is not None and mode['mode'] not in selector_input_options:
+                    selector_input_options.append(mode['mode'])
+
+        if self.selector_input is not None:
+            if selector_input_options != current_options:
+                self.call_service("input_select/set_options",
+                    entity_id = self.selector_input,
+                    options = selector_input_options,
+                    namespace = HASS_namespace
+                )
 
             # Listen sensors for when to update lights based on 'conditions'
         self.listen_sensors = self.args.get('listen_sensors', [])
@@ -440,23 +401,16 @@ class Room(Hass):
                 level = 'WARNING'
             )
         # Sets lights at startup
-        self.reactToChange()
-    
+        #self.reactToChange()
+
         """ This listens to events fired as MODE_CHANGE with data beeing mode = 'yourmode'
             self.fire_event('MODE_CHANGE', mode = 'normal')
             If you already have implemented someting similar in your Home Assistant setup you can easily change
             MODE_CHANGE in translation.json to receive whatever data you are sending            
         """
-        self.listen_event(self.mode_event, event_listen_str,
+        self.listen_event(self.mode_event, translations.MODE_CHANGE,
             namespace = HASS_namespace
         )
-
-        self.selector_input = None
-        if 'selector_input' in self.args:
-            self.selector_input = self.args['selector_input']
-            self.listen_state(self.mode_update_from_selector, self.selector_input,
-                namespace = HASS_namespace
-            )
 
         """ End initial setup for Room
         """
@@ -466,29 +420,13 @@ class Room(Hass):
         """
         if self.usePersistentStorage:
 
-            with open(self.JSON_PATH, 'r') as json_read:
+            with open(self.json_storage, 'r') as json_read:
                 lightwand_data = json.load(json_read)
-            
-            for light in self.roomlight:
-                if (
-                    light.adjustLight_enabled
-                    or type(light).__name__ == 'MQTTLights'
-                ):
-                    if light.lights[0] in lightwand_data:
-                        lightwand_data[light.lights[0]].update(
-                            {"isON" : light.isON}
-                        )
-                elif type(light).__name__ == 'Toggle':
-                    if light.lights[0] in lightwand_data:
-                        lightwand_data[light.lights[0]].update(
-                            {"toggle" : light.current_toggle}
-                        )
+
             lightwand_data.update(
-                {"mode" : self.LIGHT_MODE,
-                "out_lux" : self.OUT_LUX,
-                "room_lux" : self.ROOM_LUX}
+                {"mode" : self.LIGHT_MODE}
             )
-            with open(self.JSON_PATH, 'w') as json_write:
+            with open(self.json_storage, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
 
     def mode_event(self, event_name, data, **kwargs) -> None:
@@ -504,28 +442,28 @@ class Room(Hass):
             return
 
         if (
-            self.LIGHT_MODE == OFF_TRANSLATE
-            and modename == NORMAL_TRANSLATE
+            self.LIGHT_MODE == translations.off
+            and modename == translations.normal
             and self.prevent_off_to_normal
         ):
             return
 
         if self.exclude_from_custom:
             if (
-                modename == CUSTOM_TRANSLATE
-                or modename == WASH_TRANSLATE
+                modename == translations.custom
+                or modename == translations.wash
             ):
                 return
 
         # Check if old light mode is night and bed is occupied.
         inBed = False
-        if str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE:
+        if str(self.LIGHT_MODE)[:len(translations.night)] == translations.night:
             if (
-                modename in (MORNING_TRANSLATE, NORMAL_TRANSLATE)
+                modename in (translations.morning, translations.normal)
                 and self.prevent_night_to_morning
             ):
                 return
-            if modename not in (NIGHT_TRANSLATE, OFF_TRANSLATE):
+            if modename not in (translations.night, translations.off):
                 for bed_sensor in self.bed_sensors:
                     if self.get_state(bed_sensor) == 'on':
                         self.listen_state(self.out_of_bed, bed_sensor,
@@ -536,11 +474,11 @@ class Room(Hass):
                         inBed = True
         if (
             modename in self.all_modes
-            or modename == MORNING_TRANSLATE
+            or modename == translations.morning
         ):
-            if modename == MORNING_TRANSLATE:
-                if not MORNING_TRANSLATE in self.all_modes:
-                    modename = NORMAL_TRANSLATE
+            if modename == translations.morning:
+                if not translations.morning in self.all_modes:
+                    modename = translations.normal
             if inBed:
                 self.getOutOfBedMode = modename
                 return
@@ -549,8 +487,8 @@ class Room(Hass):
 
             if self.selector_input is not None:
                 select_name = modename
-                if modename == RESET_TRANSLATE:
-                    select_name = NORMAL_TRANSLATE
+                if modename == translations.reset:
+                    select_name = translations.normal
                 input_select_state = self.get_state(self.selector_input, attribute="all")
                 options = input_select_state["attributes"].get("options", [])
                 if select_name in options:
@@ -563,19 +501,19 @@ class Room(Hass):
                     except Exception as e:
                         self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
 
-            if self.LIGHT_MODE in (AWAY_TRANSLATE, OFF_TRANSLATE, NIGHT_TRANSLATE):
+            if self.LIGHT_MODE in (translations.away, translations.off, translations.night):
                 if self.mode_turn_off_delay > 0:
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_off_delay)
                     return
-            elif self.LIGHT_MODE in (NORMAL_TRANSLATE, MORNING_TRANSLATE):
+            elif self.LIGHT_MODE in (translations.normal, translations.morning):
                 if self.mode_turn_on_delay > 0:
                     self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_on_delay)
                     return
 
             self.reactToChange()
 
-            if modename == RESET_TRANSLATE:
-                self.LIGHT_MODE = NORMAL_TRANSLATE
+            if modename == translations.reset:
+                self.LIGHT_MODE = translations.normal
 
     def mode_update_from_selector(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates mode based on HA selector update
@@ -592,8 +530,8 @@ class Room(Hass):
             self.LIGHT_MODE = modename
             self.reactToChange()
 
-        if modename == RESET_TRANSLATE:
-            self.LIGHT_MODE = NORMAL_TRANSLATE
+        if modename == translations.reset:
+            self.LIGHT_MODE = translations.normal
 
     def set_Mode_with_delay(self, kwargs):
         """ Sets mode with defined delay.
@@ -608,8 +546,8 @@ class Room(Hass):
 
         self.reactToChange()
 
-        if self.LIGHT_MODE in (NORMAL_TRANSLATE, RESET_TRANSLATE, RESET_TRANSLATE):
-            self.LIGHT_MODE = NORMAL_TRANSLATE
+        if self.LIGHT_MODE in (translations.normal, translations.reset):
+            self.LIGHT_MODE = translations.normal
 
         # Motion and presence
     def motion_state(self, entity, attribute, old, new, kwargs) -> None:
@@ -617,7 +555,7 @@ class Room(Hass):
         """
         sensor = kwargs['motion_sensor']
 
-        if new == 'on':
+        if new in MOTION:
             if 'motion_constraints' in sensor:
                 if not eval(sensor['motion_constraints']):
                     return
@@ -626,8 +564,8 @@ class Room(Hass):
             )
             self.newMotion()
         elif (
-            new == 'off'
-            and self.all_motion_sensors[sensor['motion_sensor']]
+            new in MOTION_OFF and
+            self.all_motion_sensors[sensor['motion_sensor']]
             ):
             self.all_motion_sensors.update(
                 {sensor['motion_sensor'] : False}
@@ -681,9 +619,9 @@ class Room(Hass):
         if self.check_mediaplayers_off():
             for light in self.roomlight:
                 if (
-                    (str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
+                    (str(self.LIGHT_MODE)[:len(translations.night)] != translations.night
                     or light.night_motion)
-                    and self.LIGHT_MODE != OFF_TRANSLATE
+                    and self.LIGHT_MODE != translations.off
                 ):
                     if light.motionlight:
                         light.setMotion(lightmode = self.LIGHT_MODE)
@@ -759,13 +697,13 @@ class Room(Hass):
         if new == 'home':
             if 'tracker_constraints' in tracker:
                 if not eval(tracker['tracker_constraints']):
-                    if self.LIGHT_MODE == AWAY_TRANSLATE:
-                        self.LIGHT_MODE = NORMAL_TRANSLATE
+                    if self.LIGHT_MODE == translations.away:
+                        self.LIGHT_MODE = translations.normal
                         self.reactToChange()
                     return
 
-            if self.LIGHT_MODE in (NORMAL_TRANSLATE, AWAY_TRANSLATE):
-                self.LIGHT_MODE = NORMAL_TRANSLATE
+            if self.LIGHT_MODE in (translations.normal, translations.away):
+                self.LIGHT_MODE = translations.normal
                 if (
                     'presence' in self.all_modes
                     and self.check_mediaplayers_off()
@@ -791,7 +729,7 @@ class Room(Hass):
                 if self.get_state(tracker['tracker']) == 'home':
                     self.reactToChange()
                     return
-            self.LIGHT_MODE = AWAY_TRANSLATE
+            self.LIGHT_MODE = translations.away
 
         for light in self.roomlight:
             light.setLightMode(lightmode = self.LIGHT_MODE)
@@ -817,9 +755,9 @@ class Room(Hass):
         if self.check_mediaplayers_off():
             for light in self.roomlight:
                 if (
-                    (str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
+                    (str(self.LIGHT_MODE)[:len(translations.night)] != translations.night
                     or light.night_motion)
-                    and self.LIGHT_MODE != OFF_TRANSLATE
+                    and self.LIGHT_MODE != translations.off
                 ):
                     if self.handle is not None:
                         if self.timer_running(self.handle):
@@ -842,12 +780,11 @@ class Room(Hass):
     def weather_event(self, event_name, data, **kwargs) -> None:
         """ Listens for weather change from the weather app
         """
-        if self.datetime(aware=True) - self.rain_last_update > datetime.timedelta(minutes = 20):
-            self.RAIN = float(data['rain'])
-        self.CLOUD_COVER = int(data['cloud_cover'])
+        self.RAIN = float(data['rain'])
+        now = self.datetime(aware=True)
         if (
-            self.datetime(aware=True) - self.lux_last_update1 > datetime.timedelta(minutes = 20)
-            and self.datetime(aware=True) - self.lux_last_update2 > datetime.timedelta(minutes = 20)
+            now - self.lux_last_update1 > timedelta(minutes = 20) and
+            now - self.lux_last_update2 > timedelta(minutes = 20)
         ):
             self.OUT_LUX = float(data['lux'])
             for light in self.roomlight:
@@ -889,8 +826,9 @@ class Room(Hass):
     def _newOutLux(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
         """
+        now = self.datetime(aware=True)
         if (
-            self.datetime(aware=True) - self.lux_last_update2 > datetime.timedelta(minutes = 15)
+            now - self.lux_last_update2 > timedelta(minutes = 15)
             or self.outLux1 >= self.outLux2
         ):
             self.OUT_LUX = self.outLux1
@@ -904,7 +842,7 @@ class Room(Hass):
 
             self.reactToChange()
 
-        self.lux_last_update1 = self.datetime(aware=True)
+        self.lux_last_update1 = now
 
     def out_lux_state2(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
@@ -936,8 +874,9 @@ class Room(Hass):
     def _newOutLux2(self) -> None:
         """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
         """
+        now = self.datetime(aware=True)
         if (
-            self.datetime(aware=True) - self.lux_last_update1 > datetime.timedelta(minutes = 15)
+            now - self.lux_last_update1 > timedelta(minutes = 15)
             or self.outLux2 >= self.outLux1
         ):
             self.OUT_LUX = self.outLux2
@@ -951,7 +890,7 @@ class Room(Hass):
 
             self.reactToChange()
 
-        self.lux_last_update2 = self.datetime(aware=True)
+        self.lux_last_update2 = now
 
     def room_lux_state(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates lux data from sensors.
@@ -992,33 +931,13 @@ class Room(Hass):
 
         self.reactToChange()
 
-    def update_rain_amount(self, entity, attribute, old, new, kwargs) -> None:
-        """ Updates rain amount from sensors.
-        """
-        if new != old:
-            try:
-                self.RAIN = float(new)
-            except ValueError as ve:
-                self.log(f"Rain amount unavailable. ValueError: {ve}", level = 'DEBUG')
-                self.RAIN = 0.0
-            except TypeError as te:
-                self.log(f"Rain amount unavailable. TypeError: {te}", level = 'DEBUG')
-                self.RAIN = 0.0
-            except Exception as e:
-                self.log(f"Not able to get new rain amount. Exception: {e}", level = 'WARNING')
-                self.RAIN = 0.0
-            else:
-                self.rain_last_update = self.datetime(aware=True)
-                for light in self.roomlight:
-                    light.rain_amount = self.RAIN
-
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
         """ Function is called when a media is turned on.
         """
-        if self.LIGHT_MODE == MORNING_TRANSLATE:
-            self.LIGHT_MODE = NORMAL_TRANSLATE
-        if self.LIGHT_MODE != NIGHT_TRANSLATE:
+        if self.LIGHT_MODE == translations.morning:
+            self.LIGHT_MODE = translations.normal
+        if self.LIGHT_MODE != translations.night:
             self.check_mediaplayers_off()
 
     def media_off(self, entity, attribute, old, new, kwargs) -> None:
@@ -1031,8 +950,8 @@ class Room(Hass):
             If not it updates lightmode to the first detected media player.
         """
         if (
-            self.LIGHT_MODE in (NORMAL_TRANSLATE, NIGHT_TRANSLATE, RESET_TRANSLATE)
-            or str(self.LIGHT_MODE)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE
+            self.LIGHT_MODE in (translations.normal, translations.night, translations.reset)
+            or str(self.LIGHT_MODE)[:len(translations.night)] == translations.night
         ):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
@@ -1062,8 +981,6 @@ class Light:
         room_lux_constraint,
         conditions,
         keep_on_conditions,
-        json_path,
-        usePersistentStorage,
         HASS_namespace,
         night_motion,
         adaptive_switch,
@@ -1082,8 +999,6 @@ class Light:
         self.room_lux_constraint = room_lux_constraint
         self.conditions:list = conditions
         self.keep_on_conditions:list = keep_on_conditions
-        self.JSON_PATH:str = json_path
-        self.usePersistentStorage:bool = usePersistentStorage
         self.night_motion:bool = night_motion
         self.dim_while_motion:bool = dim_while_motion
         self.random_turn_on_delay:int = 0
@@ -1095,7 +1010,7 @@ class Light:
         self.outLux:float = 0.0
         self.roomLux:float = 0.0
         self.rain_amount:float = 0.0
-        self.lightmode:str = NORMAL_TRANSLATE
+        self.lightmode:str = translations.normal
         self.times_to_adjust_light:list = []
         self.dimHandler = None
         self.motion:bool = False
@@ -1211,26 +1126,11 @@ class Light:
         self.ADapi.run_daily(self.rundaily_Automation_Adjustments, '00:01:00')
 
         for time in self.times_to_adjust_light:
-            if not self.ADapi.now_is_between(time, '00:01:00'):
+            if self.ADapi.parse_time(time) > self.ADapi.time():
                 self.ADapi.run_once(self.run_daily_lights, time)
 
         if not self.has_adaptive_state:
             self.adaptive_switch = None
-
-            # Persistent storage
-        if self.usePersistentStorage and self.adjustLight_enabled:
-            with open(self.JSON_PATH, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-
-            if not self.lights[0] in lightwand_data:
-                lightwand_data.update(
-                    { self.lights[0] : {"isON" : self.isOn}}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-            elif self.isON is None:
-                self.isON = lightwand_data[self.lights[0]]['isON'] == 'on'
-
 
         """ End initial setup for lights
         """
@@ -1262,7 +1162,7 @@ class Light:
             Set up some default behaviour.
         """
         automationsToDelete:list = []
-        timeToAdd: timedelta = datetime.timedelta(minutes = 0)
+        timeToAdd: timedelta = timedelta(minutes = 0)
         calculateFromSunrise:bool = False
         calculateFromSunset:bool = False
 
@@ -1306,10 +1206,10 @@ class Light:
 
                 automation.pop('orLater')
 
-            elif timeToAdd > datetime.timedelta(minutes = 0):
+            elif timeToAdd > timedelta(minutes = 0):
                 changeTime = False
                 if 'fixed' in automation:
-                    timeToAdd = datetime.timedelta(minutes = 0)
+                    timeToAdd = timedelta(minutes = 0)
                 elif str(automation['time'])[:7] == 'sunrise':
                     if calculateFromSunrise:
                         changeTime = True
@@ -1317,7 +1217,7 @@ class Light:
                 elif str(automation['time'])[:6] == 'sunset':
                     if calculateFromSunrise:
                         calculateFromSunrise = False
-                        timeToAdd = datetime.timedelta(minutes = 0)
+                        timeToAdd = timedelta(minutes = 0)
                     elif calculateFromSunset:
                         changeTime = True
 
@@ -1360,11 +1260,11 @@ class Light:
 
                 if prv_brightness > brightness:
                     stopDimMin:int = math.ceil((prv_brightness - brightness) * automation['dimrate'])
-                    stopDimTime = self.ADapi.parse_datetime(automation['time']) + datetime.timedelta(minutes = stopDimMin)
+                    stopDimTime = self.ADapi.parse_datetime(automation['time']) + timedelta(minutes = stopDimMin)
                     automation['stop'] = str(stopDimTime.time())
                 elif prv_brightness < brightness:
                     stopDimMin:int = math.ceil((brightness - prv_brightness) * automation['dimrate'])
-                    stopDimTime = self.ADapi.parse_datetime(automation['time']) + datetime.timedelta(minutes = stopDimMin)
+                    stopDimTime = self.ADapi.parse_datetime(automation['time']) + timedelta(minutes = stopDimMin)
                     automation['stop'] = str(stopDimTime.time())
 
             if 'light_data' in automation:
@@ -1429,9 +1329,9 @@ class Light:
                 and self.motion
             ):
                 if (
-                    (str(self.lightmode)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
+                    (str(self.lightmode)[:len(translations.night)] != translations.night
                     or self.night_motion)
-                    and self.lightmode != OFF_TRANSLATE
+                    and self.lightmode != translations.off
                 ):
                     self.setMotion()
 
@@ -1439,16 +1339,13 @@ class Light:
     def find_time(self, automation:list) -> int:
         """ Helper to find correct list item with light data based on time.
         """
+        now_notAware = self.ADapi.datetime()
         prev_time = '00:00:00'
         target_num:int = 0
-        for target_num, automations in enumerate(automation):
+        for target_num, automations in enumerate(automation): 
             if self.ADapi.now_is_between(prev_time, automations['time']):
                 testtid = self.ADapi.parse_time(automations['time'])
-                if (
-                    datetime.datetime.today().hour == testtid.hour
-                    and datetime.datetime.today().minute == testtid.minute
-                    and datetime.datetime.today().second == testtid.second
-                ):
+                if now_notAware.replace(microsecond = 0) == testtid.replace(microsecond = 0):
                     pass
                 elif target_num != 0:
                     target_num -= 1
@@ -1498,7 +1395,7 @@ class Light:
             and self.current_OnCondition == self.checkOnConditions()
             and self.current_keep_on_Condition == self.check_keep_on_Condition()
             and self.current_LuxCondition == self.checkLuxConstraints()
-            and lightmode != RESET_TRANSLATE
+            and lightmode != translations.reset
         ):
             if self.motionlight:
                 if not self.wereMotion:
@@ -1523,8 +1420,8 @@ class Light:
                 self.dimHandler = None
             
             if (
-                str(lightmode)[:len(NIGHT_TRANSLATE)] != NIGHT_TRANSLATE
-                and str(self.lightmode)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE
+                str(lightmode)[:len(translations.night)] != translations.night
+                and str(self.lightmode)[:len(translations.night)] == translations.night
                 and self.adaptive_sleep_mode is not None
             ):
                 self.ADapi.turn_off(self.adaptive_sleep_mode)
@@ -1532,15 +1429,15 @@ class Light:
         if lightmode == 'None':
             lightmode = self.lightmode
         
-        if lightmode == MORNING_TRANSLATE:
+        if lightmode == translations.morning:
             # Only do morning mode if Lux and conditions are valid
             if (
                 not self.current_OnCondition
                 or not self.current_LuxCondition
             ):
-                lightmode = NORMAL_TRANSLATE
+                lightmode = translations.normal
 
-        if lightmode == CUSTOM_TRANSLATE:
+        if lightmode == translations.custom:
             # Custom mode will break any automation and keep light as is
             if self.has_adaptive_state:
                 self.setAdaptiveLightingOff()
@@ -1643,15 +1540,15 @@ class Light:
 
             # Default turn off if away/off/night is not defined as a mode in light
         if (
-            lightmode == AWAY_TRANSLATE
-            or lightmode == OFF_TRANSLATE
+            lightmode == translations.away
+            or lightmode == translations.off
         ):
             self.lightmode = lightmode
             if self.isON or self.isON is None:
                 self.turn_off_lights()
             return
 
-        elif str(lightmode)[:len(NIGHT_TRANSLATE)] == NIGHT_TRANSLATE:
+        elif str(lightmode)[:len(translations.night)] == translations.night:
             self.lightmode = lightmode
             if self.adaptive_sleep_mode is not None:
                 self.ADapi.turn_on(self.adaptive_sleep_mode)
@@ -1661,8 +1558,8 @@ class Light:
 
             # Default turn on maximum light if not fire/wash is defined as a mode in light
         elif (
-            lightmode == FIRE_TRANSLATE
-            or lightmode == WASH_TRANSLATE
+            lightmode == translations.fire
+            or lightmode == translations.wash
         ):
             self.lightmode = lightmode
             if self.has_adaptive_state:
@@ -1671,7 +1568,7 @@ class Light:
             return
 
             # Mode is normal or not valid for light. Checks Lux and Conditions constraints and does defined automations for light
-        self.lightmode = NORMAL_TRANSLATE
+        self.lightmode = translations.normal
         if (
             self.current_OnCondition
             and self.current_LuxCondition
@@ -1692,16 +1589,16 @@ class Light:
         """ Sets motion lights when motion is detected.
         """
         if (
-            lightmode == OFF_TRANSLATE
-            or lightmode == CUSTOM_TRANSLATE
+            lightmode == translations.off
+            or lightmode == translations.custom
         ):
             self.lightmode = lightmode
             return
 
         if lightmode == 'None':
             lightmode = self.lightmode
-        elif lightmode == RESET_TRANSLATE:
-            lightmode = NORMAL_TRANSLATE
+        elif lightmode == translations.reset:
+            lightmode = translations.normal
 
         mode_brightness:int = 0
         offset:int = 0
@@ -1741,7 +1638,7 @@ class Light:
         self.lightmode = lightmode
 
             # Get light data if lightmode is not normal automations
-        if lightmode != NORMAL_TRANSLATE:
+        if lightmode != translations.normal:
             for mode in self.light_modes:
                 """ Finds out if new lightmode is configured for light and executes
                 """
@@ -1842,8 +1739,8 @@ class Light:
                             return
 
             if (
-                lightmode == FIRE_TRANSLATE
-                or lightmode == WASH_TRANSLATE
+                lightmode == translations.fire
+                or lightmode == translations.wash
             ):
                 if self.has_adaptive_state:
                     self.setAdaptiveLightingOff()
@@ -2147,12 +2044,13 @@ class Light:
         targetBrightness:int = 0
         brightnessvalue:str = 'brightness'
 
+        now_notAware = self.ADapi.datetime()
         target_num = self.find_time(automation = automation)
         timeDate = self.ADapi.parse_datetime(automation[target_num]['time'],
             today = True
         )
 
-        timedifference = math.floor(((datetime.datetime.now() - timeDate).total_seconds())/60)
+        timedifference = math.floor(((now_notAware - timeDate).total_seconds())/60)
 
         if 'brightness' in automation[target_num -1]['light_data']:
             originalBrightness = automation[target_num -1]['light_data']['brightness']
@@ -2174,7 +2072,7 @@ class Light:
                 return targetBrightness
 
             if self.dimHandler is None:
-                runtime = datetime.datetime.now() + datetime.timedelta(minutes = int(automation[target_num]['dimrate']))
+                runtime = now_notAware + timedelta(minutes = int(automation[target_num]['dimrate']))
                 self.dimHandler = self.ADapi.run_every(self.dimBrightnessByOne, runtime, automation[target_num]['dimrate'] *60,
                     targetBrightness = targetBrightness,
                     brightnessvalue = brightnessvalue
@@ -2191,7 +2089,7 @@ class Light:
                 return targetBrightness
 
             if self.dimHandler is None:
-                runtime = datetime.datetime.now() + datetime.timedelta(minutes = int(automation[target_num]['dimrate']))
+                runtime = now_notAware + timedelta(minutes = int(automation[target_num]['dimrate']))
                 self.dimHandler = self.ADapi.run_every(self.increaseBrightnessByOne,
                     start = runtime,
                     interval = automation[target_num]['dimrate'] *60,
@@ -2373,8 +2271,6 @@ class MQTTLights(Light):
         room_lux_constraint,
         conditions,
         keep_on_conditions,
-        json_path,
-        usePersistentStorage,
         MQTT_namespace,
         HASS_namespace,
         night_motion,
@@ -2404,31 +2300,12 @@ class MQTTLights(Light):
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
             keep_on_conditions = keep_on_conditions,
-            json_path = json_path,
-            usePersistentStorage = usePersistentStorage,
             HASS_namespace = HASS_namespace,
             night_motion = night_motion,
             adaptive_switch = adaptive_switch,
             adaptive_sleep_mode = adaptive_sleep_mode,
             dim_while_motion = dim_while_motion
         )
-
-            # Persistent storage
-        if usePersistentStorage:
-            with open(json_path, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-
-            if not lights[0] in lightwand_data:
-                self.turn_on_lights()
-                self.isON = True
-                lightwand_data.update(
-                    { self.lights[0] : {"isON" : self.isON}}
-                )
-                with open(self.JSON_PATH, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-            else:
-                self.isON = lightwand_data[lights[0]]['isON']
-
 
     def light_event_MQTT(self, event_name, data, **kwargs) -> None:
         """ Listens to updates to MQTT lights.
@@ -2629,8 +2506,6 @@ class Toggle(Light):
         num_dim_steps,
         toggle_speed,
         prewait_toggle,
-        json_path,
-        usePersistentStorage,
         HASS_namespace
     ):
 
@@ -2642,29 +2517,7 @@ class Toggle(Light):
             self.toggle_speed = float(toggle_speed)
         except(ValueError, TypeError):
             self.toggle_speed:float = 1
-        self.prewait_toggle:float = prewait_toggle
-
-            # Persistent storage
-        if usePersistentStorage:
-            with open(json_path, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-
-            if not lights[0] in lightwand_data:
-                if self.ADapi.get_state(lights[0]) == 'on':
-                    self.current_toggle = self.toggle_lightbulb
-                else:
-                    self.current_toggle = 0
-                lightwand_data.update(
-                    { lights[0] : {"toggle" : self.current_toggle}}
-                )
-                with open(json_path, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-            self.current_toggle = lightwand_data[lights[0]]['toggle']
-
-        else:
-            if self.ADapi.get_state(lights[0]) == 'on':
-                self.current_toggle = self.toggle_lightbulb   
-
+        self.prewait_toggle:float = prewait_toggle  
 
         super().__init__(self.ADapi,
             lights = lights,
@@ -2675,14 +2528,14 @@ class Toggle(Light):
             room_lux_constraint = room_lux_constraint,
             conditions = conditions,
             keep_on_conditions = keep_on_conditions,
-            json_path = json_path,
-            usePersistentStorage = usePersistentStorage,
             HASS_namespace = HASS_namespace,
             night_motion = False,
             adaptive_switch = None,
             adaptive_sleep_mode = None,
             dim_while_motion = False
         )
+        if self.isOn:
+            self.current_toggle = self.toggle_lightbulb 
 
 
     def setLightMode(self, lightmode:str = 'None') -> None:
@@ -2691,15 +2544,15 @@ class Toggle(Light):
         if lightmode == 'None':
             lightmode = self.lightmode
 
-        if lightmode == MORNING_TRANSLATE:
+        if lightmode == translations.morning:
             if (
                 not self.checkOnConditions()
                 or not self.checkLuxConstraints()
             ):
-                lightmode = NORMAL_TRANSLATE
+                lightmode = translations.normal
                 return
 
-        if lightmode == CUSTOM_TRANSLATE:
+        if lightmode == translations.custom:
             self.lightmode = lightmode
             return
 
@@ -2720,9 +2573,9 @@ class Toggle(Light):
                 return
 
         if (
-            lightmode == AWAY_TRANSLATE
-            or lightmode == OFF_TRANSLATE
-            or lightmode == NIGHT_TRANSLATE
+            lightmode == translations.away
+            or lightmode == translations.off
+            or lightmode == translations.night
         ):
             self.lightmode = lightmode
             self.turn_off_lights()
@@ -2731,8 +2584,8 @@ class Toggle(Light):
             return
 
         elif (
-            lightmode == FIRE_TRANSLATE
-            or lightmode == WASH_TRANSLATE
+            lightmode == translations.fire
+            or lightmode == translations.wash
         ):
             self.lightmode = lightmode
 
@@ -2743,7 +2596,7 @@ class Toggle(Light):
 
             return
 
-        self.lightmode = NORMAL_TRANSLATE
+        self.lightmode = translations.normal
         if (
             self.checkOnConditions()
             and self.checkLuxConstraints()
@@ -2775,8 +2628,8 @@ class Toggle(Light):
                 Do not do motion mode if current mode is starting with night or is off
             """
             if (
-                lightmode == OFF_TRANSLATE
-                or lightmode == CUSTOM_TRANSLATE
+                lightmode == translations.off
+                or lightmode == translations.custom
             ):
                 return
 
