@@ -320,10 +320,10 @@ class Room(Hass):
             # Persistent storage for storing mode and lux data
             self.usePersistentStorage = True
 
-            self.json_storage:str = f"{self.AD.config_dir}/persistent/Lightwand/{self.name}.json"
+            self.json_storage:str = f"{self.AD.config_dir}/persistent/Lightwand/"
             if not os.path.exists(self.json_storage):
                 os.makedirs(self.json_storage)
-        
+            self.json_storage += f"{self.name}.json"
             lightwand_data:dict = {}
             try:
                 with open(self.json_storage, 'r') as json_read:
@@ -419,15 +419,19 @@ class Room(Hass):
         """ Writes out data to persistent storage before terminating.
         """
         if self.usePersistentStorage:
+            try:
+                with open(self.json_storage, 'r') as json_read:
+                    lightwand_data = json.load(json_read)
 
-            with open(self.json_storage, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-
-            lightwand_data.update(
-                {"mode" : self.LIGHT_MODE}
-            )
-            with open(self.json_storage, 'w') as json_write:
-                json.dump(lightwand_data, json_write, indent = 4)
+                lightwand_data.update(
+                    {"mode" : self.LIGHT_MODE}
+                )
+                with open(self.json_storage, 'w') as json_write:
+                    json.dump(lightwand_data, json_write, indent = 4)
+            except FileNotFoundError:
+                lightwand_data = {"mode" : translations.normal,}
+                with open(self.json_storage, 'w') as json_write:
+                    json.dump(lightwand_data, json_write, indent = 4)
 
     def mode_event(self, event_name, data, **kwargs) -> None:
         """ New mode events. Updates lights if conditions are met.
@@ -702,27 +706,43 @@ class Room(Hass):
                         self.reactToChange()
                     return
 
-            if self.LIGHT_MODE in (translations.normal, translations.away):
+            if self.LIGHT_MODE in (translations.normal, translations.away) and self.check_mediaplayers_off():
                 self.LIGHT_MODE = translations.normal
+
                 if (
                     'presence' in self.all_modes
                     and self.check_mediaplayers_off()
                 ):
+
                     if self.trackerhandle is not None:
                         if self.timer_running(self.trackerhandle):
                             try:
                                 self.cancel_timer(self.trackerhandle)
                             except Exception as e:
                                 self.log(f"Was not able to stop timer for {tracker['tracker']}: {e}", level = 'DEBUG')
-                            finally:
-                                self.trackerhandle = None
+                            self.trackerhandle = None
+
                     for light in self.roomlight:
                         light.setLightMode(lightmode = 'presence')
-                    if 'delay' in tracker:
-                        self.trackerhandle = self.run_in(self.MotionEnd, int(tracker['delay']))
-                    else:
-                        self.trackerhandle = self.run_in(self.MotionEnd, 300)
-                    return
+                else:
+                    for light in self.roomlight:
+                        if light.motionlight:
+                            light.setMotion(lightmode = self.LIGHT_MODE)
+                    if self.handle is not None:
+                        if self.timer_running(self.handle):
+                            try:
+                                self.cancel_timer(self.handle)
+                            except Exception as e:
+                                self.log(
+                                    f"Was not able to stop timer when motion detected for {self.handle}: {e}",
+                                    level = 'DEBUG'
+                                )
+                            self.handle = None
+                if 'delay' in tracker:
+                    self.trackerhandle = self.run_in(self.MotionEnd, int(tracker['delay']))
+                else:
+                    self.trackerhandle = self.run_in(self.MotionEnd, 300)
+                return
 
         elif old == 'home':
             for tracker in self.presence:
