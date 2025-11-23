@@ -1,5 +1,5 @@
 # Lightwand by Pythm  
-**An AppDaemon app for advanced lighting control via Home Assistant or MQTT**  
+**An [AppDaemon](https://github.com/AppDaemon/appdaemon) app for advanced lighting control via Home Assistant or MQTT**  
 Set light data based on time of day, use Mode Change events or environmental conditions like lux levels, rain, and sensors like motion, presence and media players.  
 
 ![AI-Generated Illustration](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)  
@@ -13,14 +13,29 @@ Set light data based on time of day, use Mode Change events or environmental con
 
 ---
 
-## 🧰 Installation  
+## 📱 Supported Platforms
 
-### 1. **Install via HACS or Git**  
-- **HACS**: Add the app to your HACS repository.  
+This app is designed to work with:
+
+- [AppDaemon](https://github.com/AppDaemon/appdaemon)
+- [Home Assistant](https://www.home-assistant.io/)
+
+Home Assistant is a popular open-source home automation platform that offers a wide range of features and integrations with various smart home devices. If you're not already using Home Assistant, I recommend checking it out.
+
+AppDaemon is a loosely coupled, multi-threaded, sandboxed Python execution environment for writing automation apps for various types of home automation software, including Home Assistant and MQTT.
+
+---
+
+## 🧰 Installation
+
+### 1. Have Home Assistant and Appdaemon up and running
+
+### 2. **Install via HACS or Git**  
+- **HACS**: Add the app with HACS. Make sure `app_dir` in `appdaemon.yaml` points to where HACS downloads it to.
 - **Manual**: Clone the repo into your AppDaemon `apps` directory.  
 
-### 2. **Basic Configuration**  
-Add the following to your `.yaml` or `.toml` file:  
+### 3. **Basic Configuration**  
+Add the following to your `.yaml` file:  
 ```yaml
 your_room_name:
   module: lightwand
@@ -127,7 +142,9 @@ To change the mode for a single room, use the mode name + `_appName`.
 - `appName` is the name you defined for your app in the configuration.  
 
 As an alternative to firing an event, you can use a **Home Assistant selector** with `selector_input`.  
-- The app will update the selector options dynamically based on `MODE_CHANGE` events.  
+- The app will update the selector options dynamically based on `MODE_CHANGE` events.
+- Version 2.0.0 and later auto populates the selector_input with valid modes for the room.
+- Lightwand will read the state on the selector_input on restarts to keep the mode. 
 
 ```yaml
 your_room_name:
@@ -143,57 +160,28 @@ your_room_name:
 
 ### 🔄 Translating or Changing Modes  
 
-#### Steps to Customize Mode Names  
-1. **Edit the Translation File**  
+#### Steps to Customize Mode Names
+1. **Save the File Persistently**
+   Store the supplied examplefile `translation.json` in a location that persists across sessions and updates (e.g., `/config/lightwand/translation.json`).
+
+2. **Edit the Translation File**  
    Modify the `translation.json` file to update mode names and event settings.  
-   Example:  
-   ```json
-   {
-     "en": {
-       "MODE_CHANGE": "MODE_CHANGE",
-       "normal": "normal",
-       "morning": "morning",
-       "away": "away",
-       "off": "off",
-       "night": "night",
-       "custom": "custom",
-       "fire": "fire",
-       "false_alarm": "false-alarm",
-       "wash": "wash",
-       "reset": "reset"
-     },
-     "de": {
-       "MODE_CHANGE": "MODE_CHANGE",
-       "normal": "automatik",
-       "morning": "morgen",
-       "away": "abwesend",
-       "off": "aus",
-       "night": "nacht",
-       "custom": "manuell",
-       "fire": "brand",
-       "false_alarm": "fehlalarm",
-       "wash": "hell",
-       "reset": "zurücksetzen"
-     }
-   }
-   ```
 
-#### Customizing Event Listeners  
-- In `translation.json`, you can specify a **custom event name** (e.g., `"MY_CUSTOM_EVENT"`) instead of the default `"MODE_CHANGE"`.  
+   > [!TIP]  
+   > In `translation.json`, you can specify a **custom event name** (e.g., `"LIGHT_MODE"`) instead of the default `"MODE_CHANGE"` to match your existing automation9.  
 
-2. **Save the File Persistently**  
-   Store the modified `translation.json` in a location that persists across sessions (e.g., `/config/lightwand/translation.json`).  
 
 3. **Specify the Path and Language in Configuration**  
-   Use the `language_file` parameter and `lightwand_language` to set your preferred language in your app configuration:  
+   Use the `language_file` parameter and `lightwand_language` to set your preferred language in your one of your room app configuration:  
    ```yaml
    your_room_name:
      ...
      language_file: /config/lightwand/translation.json
      lightwand_language: "en"
    ```
-
+   The app creates a singelton that can be imported by other apps to listen to the same modes.
 ---
+
 
 ## 📈 Configuring Light Behavior  
 
@@ -449,7 +437,7 @@ You can define **two outdoor lux sensors**. The second sensor can be defined wit
 
 ### 📡 Motion Sensors and Presence Trackers  
 
-You can define the **time delay** (in seconds) after motion detection before the light turns off. The **default is 60 seconds**. You can also define **motion constraints** for each sensor using an python `if` statement. These constraints must be `true` for motion to activate.  
+You can define the **time delay** (in seconds) after motion detection before the light turns off. The **default is 60 seconds**. You can also define **motion constraints** for each sensor using an python `if` statement checked againts the ast_evaluator.py. These constraints must be `true` for motion to activate. 
 
 **Example**:  
 ```yaml
@@ -819,7 +807,7 @@ key | optional | type | default | introduced in | description
 
 ## 📦 Contributing  
 - **Report issues** on [GitHub](https://github.com/Pythm/ad-Lightwand)  
-- **Suggest features** via pull requests  
+- **Suggest features** via pull requests on the dev branch
 
 ---
 

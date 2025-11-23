@@ -16,9 +16,11 @@ from typing import List, Dict, Tuple, Optional, Set, Any, Callable
 
 from translations_lightmodes import translations
 from lightwand_utils import split_around_underscore
+from ast_evaluator import safe_eval
+from weather_data import LightwandWeather
 
 MOTION = ('on', 'open')
-MOTION_OFF = ('off', 'closed')
+
 class Room(Hass):
 
     def initialize(self):
@@ -48,9 +50,8 @@ class Room(Hass):
         }
         self.getOutOfBedMode:str = translations.normal
 
-        self.ROOM_LUX:float = 0.0
-        self.OUT_LUX:float = 0.0
-        self.RAIN:float = 0.0
+        self.room_lux:float = 0.0
+        self.out_lux:float = 0.0
 
         self.exclude_from_custom:bool = self.args.get('exclude_from_custom', False)
         night_motion:bool = False
@@ -130,8 +131,21 @@ class Room(Hass):
         self.out_of_bed_delay:int = self.args.get('out_of_bed_delay', 0)
 
             # Weather sensors
-        self.outLux1:float = 0.0
-        self.outLux2:float = 0.0
+        self.weather = LightwandWeather(
+            api = self,
+            HASS_namespace = HASS_namespace,
+            MQTT_namespace = MQTT_namespace,
+            lux_sensor = self.args.get('OutLux_sensor'),
+            lux_sensor_mqtt = self.args.get('OutLuxMQTT'),
+            lux_sensor_2 = self.args.get('OutLux_sensor_2'),
+            lux_sensor_2_mqtt = self.args.get('OutLuxMQTT_2'),
+            room_lux_sensor = self.args.get('RoomLux_sensor'),
+            room_lux_sensor_mqtt = self.args.get('RoomLuxMQTT'),
+        )
+
+        ### TODO Remove from here ###
+        self.out_lux_1:float = 0.0
+        self.out_lux_2:float = 0.0
         now = self.datetime(aware=True)
             # Helpers for last updated when two outdoor lux sensors in use
         self.lux_last_update1 = now - timedelta(minutes = 20)
@@ -145,7 +159,7 @@ class Room(Hass):
             new_lux = self.get_state(lux_sensor,
                 namespace = HASS_namespace)
             try:
-                self.OUT_LUX = float(new_lux)
+                self.out_lux = float(new_lux)
             except (ValueError, TypeError):
                 pass
 
@@ -182,7 +196,7 @@ class Room(Hass):
             new_lux = self.get_state(lux_sensor,
                 namespace = HASS_namespace)
             try:
-                self.ROOM_LUX = float(new_lux)
+                self.room_lux = float(new_lux)
             except (ValueError, TypeError):
                 pass
 
@@ -319,10 +333,12 @@ class Room(Hass):
         else:
             # Persistent storage for storing mode and lux data
             self.usePersistentStorage = True
-
-            self.json_storage:str = f"{self.AD.config_dir}/persistent/Lightwand/"
-            if not os.path.exists(self.json_storage):
-                os.makedirs(self.json_storage)
+            if 'json_path' in self.args:
+                self.json_storage = self.args['json_path']
+            else:
+                self.json_storage:str = f"{self.AD.config_dir}/persistent/lightwand/"
+                if not os.path.exists(self.json_storage):
+                    os.makedirs(self.json_storage)
             self.json_storage += f"{self.name}.json"
             lightwand_data:dict = {}
             try:
@@ -372,8 +388,8 @@ class Room(Hass):
 
             # Update lux
         for light in self.roomlight:
-            light.roomLux = self.ROOM_LUX
-            light.outLux = self.OUT_LUX
+            light.roomLux = self.room_lux
+            light.outLux = self.out_lux
 
             # Media players for setting mediaplayer mode
         for mediaplayer in self.mediaplayers:
@@ -401,7 +417,8 @@ class Room(Hass):
                 level = 'WARNING'
             )
         # Sets lights at startup
-        #self.reactToChange()
+        self.check_mediaplayers_off()
+        #self.reactToChange() ###
 
         """ This listens to events fired as MODE_CHANGE with data beeing mode = 'yourmode'
             self.fire_event('MODE_CHANGE', mode = 'normal')
@@ -412,12 +429,11 @@ class Room(Hass):
             namespace = HASS_namespace
         )
 
-        """ End initial setup for Room
-        """
+        """ End initial setup for Room """
 
     def terminate(self) -> None:
-        """ Writes out data to persistent storage before terminating.
-        """
+        """ Writes out data to persistent storage before terminating. """
+
         if self.usePersistentStorage:
             try:
                 with open(self.json_storage, 'r') as json_read:
@@ -434,8 +450,8 @@ class Room(Hass):
                     json.dump(lightwand_data, json_write, indent = 4)
 
     def mode_event(self, event_name, data, **kwargs) -> None:
-        """ New mode events. Updates lights if conditions are met.
-        """
+        """ New mode events. Updates lights if conditions are met. """
+
         modename, roomname = split_around_underscore(data['mode'])
         if modename is None:
             modename = data['mode']
@@ -467,7 +483,7 @@ class Room(Hass):
                 and self.prevent_night_to_morning
             ):
                 return
-            if modename not in (translations.night, translations.off):
+            if modename not in (translations.night, translations.off, translations.reset):
                 for bed_sensor in self.bed_sensors:
                     if self.get_state(bed_sensor) == 'on':
                         self.listen_state(self.out_of_bed, bed_sensor,
@@ -520,8 +536,8 @@ class Room(Hass):
                 self.LIGHT_MODE = translations.normal
 
     def mode_update_from_selector(self, entity, attribute, old, new, kwargs) -> None:
-        """ Updates mode based on HA selector update
-        """
+        """ Updates mode based on HA selector update. """
+
         modename, roomname = split_around_underscore(new)
         if modename is None:
             modename = new
@@ -538,8 +554,8 @@ class Room(Hass):
             self.LIGHT_MODE = translations.normal
 
     def set_Mode_with_delay(self, kwargs):
-        """ Sets mode with defined delay.
-        """
+        """ Sets mode with defined delay. """
+
         if self.mode_delay_handler is not None:
             if self.timer_running(self.mode_delay_handler):
                 try:
@@ -555,71 +571,74 @@ class Room(Hass):
 
         # Motion and presence
     def motion_state(self, entity, attribute, old, new, kwargs) -> None:
-        """ Listens to motion state.
-        """
-        sensor = kwargs['motion_sensor']
+        """ Listens to motion state. """
 
+        sensor = kwargs['motion_sensor']
         if new in MOTION:
-            if 'motion_constraints' in sensor:
-                if not eval(sensor['motion_constraints']):
-                    return
-            self.all_motion_sensors.update(
-                {sensor['motion_sensor'] : True}
-            )
-            self.newMotion()
-        elif (
-            new in MOTION_OFF and
-            self.all_motion_sensors[sensor['motion_sensor']]
-            ):
-            self.all_motion_sensors.update(
-                {sensor['motion_sensor'] : False}
-            )
-            self.oldMotion(sensor = sensor)
+            motion_data:dict = {'occupancy': True}
+        else:
+            motion_data:dict = {'occupancy': False}
+
+        self._process_sensor(sensor, motion_data)
 
     def MQTT_motion_event(self, event_name, data, **kwargs) -> None:
-        """ Listens to motion MQTT event.
-        """
+        """ Listens to motion MQTT event.  """
+
         motion_data = json.loads(data['payload'])
         sensor = kwargs['motion_sensor']
 
         """ Test your MQTT settings. Uncomment line below to get logging when motion detected """
         #self.log(f"Motion detected: {sensor} Motion Data: {motion_data}") # FOR TESTING ONLY
 
-        if 'occupancy' in motion_data:
-            if motion_data['occupancy']:
-                if 'motion_constraints' in sensor:
-                    if not eval(sensor['motion_constraints']):
-                        return
-                self.all_motion_sensors.update(
-                    {sensor['motion_sensor'] : True}
-                )
-                self.newMotion()
-            elif self.all_motion_sensors[sensor['motion_sensor']]:
-                self.all_motion_sensors.update(
-                    {sensor['motion_sensor'] : False}
-                )
-                self.oldMotion(sensor = sensor)
-        elif 'value' in motion_data:
-            if motion_data['value'] == 8:
-                if 'motion_constraints' in sensor:
-                    if not eval(sensor['motion_constraints']):
-                        return
-                self.all_motion_sensors.update(
-                    {sensor['motion_sensor'] : True}
-                )
-                self.newMotion()
-            elif (
-                motion_data['value'] == 0
-                and self.all_motion_sensors[sensor['motion_sensor']]
-            ):
-                self.all_motion_sensors.update(
-                    {sensor['motion_sensor'] : False}
-                )
-                self.oldMotion(sensor = sensor)
+        self._process_sensor(sensor, motion_data)
 
-    def newMotion(self) -> None:
-        """ Motion detected. Checks constraints given in motion and setMotion.
-        """
+    def _process_sensor(self, sensor: dict, motion_data):
+        sensor_id = sensor["motion_sensor"]
+
+        match motion_data:
+            case {"occupancy": True}:
+                self._activate(sensor_id, sensor)
+
+            case {"occupancy": False}:
+                self._deactivate(sensor_id, sensor)
+
+            case {"value": 8}:
+                self._activate(sensor_id, sensor)
+
+            case {"value": 0}:
+                self._deactivate(sensor_id, sensor)
+
+            case {"contact": False}:
+                self._activate(sensor_id, sensor)
+
+            case {"contact": True}:
+                self._deactivate(sensor_id, sensor)
+
+    def _activate(self, sensor_id: str, sensor: dict) -> None:
+        """Mark the sensor as active, call newMotion. """
+
+        constraints_ok = True
+        if "motion_constraints" in sensor:
+            try:
+                constraints_ok = safe_eval(sensor["motion_constraints"], {"self": self})
+            except Exception as exc:
+                self.log(f"Constraint eval error for {sensor_id}: {exc}", level="INFO")
+                return
+
+        if not constraints_ok:
+            return
+
+        self.all_motion_sensors[sensor_id] = True
+        self._newMotion()
+
+    def _deactivate(self, sensor_id: str, sensor: dict) -> None:
+        """Mark the sensor as inactive, call oldMotion. """
+
+        if self.all_motion_sensors.get(sensor_id, False):
+            self.all_motion_sensors[sensor_id] = False
+            self._oldMotion(sensor=sensor)
+
+    def _newMotion(self) -> None:
         if self.check_mediaplayers_off():
             for light in self.roomlight:
                 if (
@@ -641,19 +660,8 @@ class Room(Hass):
                     )
                 self.handle = None
 
-        if self.trackerhandle is not None:
-            if self.timer_running(self.trackerhandle):
-                try:
-                    self.cancel_timer(self.trackerhandle)
-                except Exception as e:
-                    self.log(f"Was not able to stop timer for {tracker['tracker']}: {e}", level = 'DEBUG')
-                finally:
-                    self.trackerhandle = None
-
-    def oldMotion(self, sensor) -> None:
-        """ Motion no longer detected in sensor. Checks other sensors in room and starts countdown to turn off light.
-        """
-        if self.checkMotion():
+    def _oldMotion(self, sensor) -> None:
+        if self._checkMotion():
             return
 
         if self.trackerhandle is not None:
@@ -662,22 +670,17 @@ class Room(Hass):
                     self.cancel_timer(self.trackerhandle)
                 except Exception as e:
                     self.log(f"Was not able to stop timer for {tracker['tracker']}: {e}", level = 'DEBUG')
-                finally:
-                    self.trackerhandle = None
+                self.trackerhandle = None
         if self.handle is not None:
             if self.timer_running(self.handle):
                 try:
                     self.cancel_timer(self.handle)
                 except Exception as e:
                     self.log(f"Was not able to stop timer for {sensor['motion_sensor']}: {e}", level = 'DEBUG')
-        if 'delay' in sensor:
-            self.handle = self.run_in(self.MotionEnd, int(sensor['delay']))
-        else:
-            self.handle = self.run_in(self.MotionEnd, 60)
+        sensor_delay:int = getattr(sensor, 'delay', 60)
+        self.handle = self.run_in(self.MotionEnd, sensor_delay)
 
-    def checkMotion(self) -> bool:
-        """ Check if motion is detected in any of the motion sensors.
-        """
+    def _checkMotion(self) -> bool:
         for sens in self.all_motion_sensors:
             if self.all_motion_sensors[sens]:
                 return True
@@ -685,8 +688,8 @@ class Room(Hass):
         return False
 
     def out_of_bed(self, entity, attribute, old, new, kwargs) -> None:
-        """ Check if all bed sensors are empty and if so change to current mode.
-        """
+        """ Check if all bed sensors are empty and if so change to current mode. """
+
         for bed_sensor in self.bed_sensors:
             if self.get_state(bed_sensor) == 'on':
                 return
@@ -694,54 +697,43 @@ class Room(Hass):
         self.reactToChange()
 
     def presence_change(self, entity, attribute, old, new, kwargs) -> None:
-        """ Listens to tracker/person state change.
-        """
+        """ Listens to tracker/person state change. """
+
         tracker:dict = kwargs['tracker']
 
         if new == 'home':
-            if 'tracker_constraints' in tracker:
-                if not eval(tracker['tracker_constraints']):
-                    if self.LIGHT_MODE == translations.away:
-                        self.LIGHT_MODE = translations.normal
-                        self.reactToChange()
+            constraints_ok = True
+            if "tracker_constraints" in tracker:
+                try:
+                    constraints_ok = safe_eval(tracker["tracker_constraints"], {"self": self})
+                except Exception as exc:
+                    self.log(f"Constraint eval error for {tracker['tracker']}: {exc}", level="INFO")
                     return
+
+            if not constraints_ok:
+                if self.LIGHT_MODE == translations.away:
+                    self.LIGHT_MODE = translations.normal
+                    self.reactToChange()
+                return
 
             if self.LIGHT_MODE in (translations.normal, translations.away) and self.check_mediaplayers_off():
                 self.LIGHT_MODE = translations.normal
 
-                if (
-                    'presence' in self.all_modes
-                    and self.check_mediaplayers_off()
-                ):
+                if self.trackerhandle is not None:
+                    if self.timer_running(self.trackerhandle):
+                        try:
+                            self.cancel_timer(self.trackerhandle)
+                        except Exception as e:
+                            self.log(f"Was not able to stop timer for {tracker['tracker']}: {e}", level = 'DEBUG')
+                        self.trackerhandle = None
 
-                    if self.trackerhandle is not None:
-                        if self.timer_running(self.trackerhandle):
-                            try:
-                                self.cancel_timer(self.trackerhandle)
-                            except Exception as e:
-                                self.log(f"Was not able to stop timer for {tracker['tracker']}: {e}", level = 'DEBUG')
-                            self.trackerhandle = None
-
+                if 'presence' in self.all_modes:
                     for light in self.roomlight:
                         light.setLightMode(lightmode = 'presence')
                 else:
-                    for light in self.roomlight:
-                        if light.motionlight:
-                            light.setMotion(lightmode = self.LIGHT_MODE)
-                    if self.handle is not None:
-                        if self.timer_running(self.handle):
-                            try:
-                                self.cancel_timer(self.handle)
-                            except Exception as e:
-                                self.log(
-                                    f"Was not able to stop timer when motion detected for {self.handle}: {e}",
-                                    level = 'DEBUG'
-                                )
-                            self.handle = None
-                if 'delay' in tracker:
-                    self.trackerhandle = self.run_in(self.MotionEnd, int(tracker['delay']))
-                else:
-                    self.trackerhandle = self.run_in(self.MotionEnd, 300)
+                    self._newMotion()
+                tracker_delay:int = getattr(tracker, 'delay', 300)
+                self.trackerhandle = self.run_in(self.MotionEnd, tracker_delay)
                 return
 
         elif old == 'home':
@@ -755,8 +747,8 @@ class Room(Hass):
             light.setLightMode(lightmode = self.LIGHT_MODE)
 
     def MotionEnd(self, kwargs) -> None:
-        """ Motion / Presence countdown ended. Turns lights back to current mode.
-        """
+        """ Motion / Presence countdown ended. Turns lights back to current mode. """
+
         if self.check_mediaplayers_off():
             for light in self.roomlight:
                 light.motion = False
@@ -764,14 +756,14 @@ class Room(Hass):
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
     def state_changed(self, entity, attribute, old, new, kwargs) -> None:
-        """ Update light settings when state of a HA entity is updated.
-        """
+        """ Update light settings when state of a HA entity is updated. """
+
         self.reactToChange()
 
     def reactToChange(self):
         """ This function is called when a sensor has new values and based upon mode and if motion is detected,
-            it will either call 'setMotion' or 'setLightMode' to adjust lights based on the updated sensors.
-        """
+            it will either call 'setMotion' or 'setLightMode' to adjust lights based on the updated sensors. """
+
         if self.check_mediaplayers_off():
             for light in self.roomlight:
                 if (
@@ -787,7 +779,7 @@ class Room(Hass):
                                 light.setLightMode(lightmode = self.LIGHT_MODE)
                             continue
 
-                    if self.checkMotion():
+                    if self._checkMotion():
                         if light.motionlight:
                             light.setMotion(lightmode = self.LIGHT_MODE)
                         else:
@@ -798,17 +790,17 @@ class Room(Hass):
 
         # Lux / weather
     def weather_event(self, event_name, data, **kwargs) -> None:
-        """ Listens for weather change from the weather app
-        """
-        self.RAIN = float(data['rain'])
+        """ Listens for weather change from the weather app.
+            https://github.com/Pythm/ad-Weather """
+
         now = self.datetime(aware=True)
         if (
             now - self.lux_last_update1 > timedelta(minutes = 20) and
             now - self.lux_last_update2 > timedelta(minutes = 20)
         ):
-            self.OUT_LUX = float(data['lux'])
+            self.out_lux = float(data['lux'])
             for light in self.roomlight:
-                light.outLux = self.OUT_LUX
+                light.outLux = self.out_lux
 
             if self.mode_delay_handler is not None:
                 if self.timer_running(self.mode_delay_handler):
@@ -817,44 +809,36 @@ class Room(Hass):
             self.reactToChange()
 
     def out_lux_state(self, entity, attribute, old, new, kwargs) -> None:
-        """ Updates lux data from sensors.
-        """
         try:
-            if self.outLux1 != float(new):
-                self.outLux1 = float(new)
+            if self.out_lux_1 != float(new):
+                self.out_lux_1 = float(new)
         except ValueError as ve:
             self.log(f"Not able to get new outlux. ValueError: {ve}", level = 'DEBUG')
         except TypeError as te:
             self.log(f"Not able to get new outlux. TypeError: {te}", level = 'DEBUG')
-        except Exception as e:
-            self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self._newOutLux()
 
     def out_lux_event_MQTT(self, event_name, data, **kwargs) -> None:
-        """ Updates lux data from MQTT event.
-        """
         lux_data = json.loads(data['payload'])
         match lux_data:
-            case {'illuminance': illuminance} if self.outLux1 != float(illuminance):
-                self.outLux1 = float(illuminance) # Zigbee sensor
+            case {'illuminance': illuminance} if self.out_lux_1 != float(illuminance):
+                self.out_lux_1 = float(illuminance) # Zigbee sensor
                 self._newOutLux()
-            case {'value': value} if self.outLux1 != float(value):
-                self.outLux1 = float(value) # Zwave sensor
+            case {'value': value} if self.out_lux_1 != float(value):
+                self.out_lux_1 = float(value) # Zwave sensor
                 self._newOutLux()
 
     def _newOutLux(self) -> None:
-        """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
-        """
         now = self.datetime(aware=True)
         if (
             now - self.lux_last_update2 > timedelta(minutes = 15)
-            or self.outLux1 >= self.outLux2
+            or self.out_lux_1 >= self.out_lux_2
         ):
-            self.OUT_LUX = self.outLux1
+            self.out_lux = self.out_lux_1
 
             for light in self.roomlight:
-                light.outLux = self.OUT_LUX
+                light.outLux = self.out_lux
 
             if self.mode_delay_handler is not None:
                 if self.timer_running(self.mode_delay_handler):
@@ -865,11 +849,9 @@ class Room(Hass):
         self.lux_last_update1 = now
 
     def out_lux_state2(self, entity, attribute, old, new, kwargs) -> None:
-        """ Updates lux data from sensors.
-        """
         try:
-            if self.outLux2 != float(new):
-                self.outLux2 = float(new)
+            if self.out_lux_2 != float(new):
+                self.out_lux_2 = float(new)
         except ValueError as ve:
             self.log(f"Not able to get new outlux. ValueError: {ve}", level = 'DEBUG')
         except TypeError as te:
@@ -880,29 +862,25 @@ class Room(Hass):
             self._newOutLux2()
 
     def out_lux_event_MQTT2(self, event_name, data, **kwargs) -> None:
-        """ Updates lux data from MQTT event.
-        """
         lux_data = json.loads(data['payload'])
         match lux_data:
-            case {'illuminance': illuminance} if self.outLux2 != float(illuminance):
-                self.outLux2 = float(illuminance) # Zigbee sensor
+            case {'illuminance': illuminance} if self.out_lux_2 != float(illuminance):
+                self.out_lux_2 = float(illuminance) # Zigbee sensor
                 self._newOutLux2()
-            case {'value': value} if self.outLux2 != float(value):
-                self.outLux2 = float(value) # Zwave sensor
+            case {'value': value} if self.out_lux_2 != float(value):
+                self.out_lux_2 = float(value) # Zwave sensor
                 self._newOutLux2()
 
     def _newOutLux2(self) -> None:
-        """ Sets new lux data after comparing sensor 1 and 2 and time since the other was last updated.
-        """
         now = self.datetime(aware=True)
         if (
             now - self.lux_last_update1 > timedelta(minutes = 15)
-            or self.outLux2 >= self.outLux1
+            or self.out_lux_2 >= self.out_lux_1
         ):
-            self.OUT_LUX = self.outLux2
+            self.out_lux = self.out_lux_2
 
             for light in self.roomlight:
-                light.outLux = self.OUT_LUX
+                light.outLux = self.out_lux
 
             if self.mode_delay_handler is not None:
                 if self.timer_running(self.mode_delay_handler):
@@ -913,37 +891,29 @@ class Room(Hass):
         self.lux_last_update2 = now
 
     def room_lux_state(self, entity, attribute, old, new, kwargs) -> None:
-        """ Updates lux data from sensors.
-        """
         try:
-            if self.ROOM_LUX != float(new):
-                self.ROOM_LUX = float(new)
+            if self.room_lux != float(new):
+                self.room_lux = float(new)
         except ValueError as ve:
             self.log(f"Not able to get new outlux. ValueError: {ve}", level = 'DEBUG')
         except TypeError as te:
             self.log(f"Not able to get new outlux. TypeError: {te}", level = 'DEBUG')
-        except Exception as e:
-            self.log(f"Not able to get new outlux. Exception: {e}", level = 'WARNING')
         else:
             self.newRoomLux()
 
     def room_lux_event_MQTT(self, event_name, data, **kwargs) -> None:
-        """ Updates lux data from MQTT event.
-        """
         lux_data = json.loads(data['payload'])
         match lux_data:
-            case {'illuminance': illuminance} if self.ROOM_LUX != float(illuminance):
-                self.ROOM_LUX = float(illuminance) # Zigbee sensor
+            case {'illuminance': illuminance} if self.room_lux != float(illuminance):
+                self.room_lux = float(illuminance) # Zigbee sensor
                 self.newRoomLux()
-            case {'value': value} if self.ROOM_LUX != float(value):
-                self.ROOM_LUX = float(value) # Zwave sensor
+            case {'value': value} if self.room_lux != float(value):
+                self.room_lux = float(value) # Zwave sensor
                 self.newRoomLux()
 
     def newRoomLux(self) -> None:
-        """ Sets new room lux data.
-        """
         for light in self.roomlight:
-            light.roomLux = self.ROOM_LUX
+            light.roomLux = self.room_lux
 
         if self.mode_delay_handler is not None:
             if self.timer_running(self.mode_delay_handler):
@@ -953,22 +923,18 @@ class Room(Hass):
 
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
-        """ Function is called when a media is turned on.
-        """
         if self.LIGHT_MODE == translations.morning:
             self.LIGHT_MODE = translations.normal
         if self.LIGHT_MODE != translations.night:
             self.check_mediaplayers_off()
 
     def media_off(self, entity, attribute, old, new, kwargs) -> None:
-        """ Function is called when a media is turned off.
-        """
         self.reactToChange()
 
     def check_mediaplayers_off(self) -> bool:
         """ Returns true if media player sensors is off or self.LIGHT_DATA != 'normal'/'night'.
-            If not it updates lightmode to the first detected media player.
-        """
+            If not it updates lightmode to the first detected media player. """
+
         if (
             self.LIGHT_MODE in (translations.normal, translations.night, translations.reset)
             or str(self.LIGHT_MODE)[:len(translations.night)] == translations.night
@@ -989,8 +955,7 @@ class Room(Hass):
 
 
 class Light:
-    """ Parent class for lights
-    """
+    """ Parent class for lights. """
 
     def __init__(self, api,
         lights,
