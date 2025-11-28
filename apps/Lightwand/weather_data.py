@@ -1,6 +1,7 @@
 from datetime import timedelta
 
-LUX_STALE_MINUTES   = 15
+LUX_STALE_MINUTES = 15
+MIN_REACT_MINUTES = 2
 
 class LightwandWeather:
 
@@ -25,7 +26,7 @@ class LightwandWeather:
         self.out_lux_2:float = 0.0
         self.out_lux_1_last_update = now - timedelta(minutes = LUX_STALE_MINUTES)
         self.out_lux_2_last_update = now - timedelta(minutes = LUX_STALE_MINUTES)
-
+        self.last_react_update = now - timedelta(minutes=MIN_REACT_MINUTES)
         self.room_lux:float = 0.0
         self.rain:float = 0.0
 
@@ -104,6 +105,7 @@ class LightwandWeather:
             now - self.out_lux_2_last_update > timedelta(minutes = LUX_STALE_MINUTES)
         ):
             self.out_lux = float(data['lux'])
+            self._reactToChange()
 
     def _out_lux_updated(self, entity, attribute, old, new, kwargs) -> None:
         try:
@@ -146,6 +148,7 @@ class LightwandWeather:
             return
         if value != self.room_lux:
             self.room_lux = value
+            self._reactToChange()
 
     def _room_lux_mqtt_event(self, event_name, data, **kwargs) -> None:
         self._handle_mqtt_lux(data, attr='room_lux')
@@ -196,8 +199,20 @@ class LightwandWeather:
                 self.out_lux_2_last_update = now
             elif attr == 'room_lux':
                 self.room_lux = value
+                self._reactToChange()
 
     def _choose_lux(self, new, other, other_last):
         now = self.ADapi.datetime(aware=True)
         if now - other_last > timedelta(minutes=LUX_STALE_MINUTES) or new >= other:
             self.out_lux = new
+            self._reactToChange()
+
+    def _reactToChange(self) -> None:
+        if self.ADapi.mode_delay_handler is not None:
+            if self.ADapi.timer_running(self.ADapi.mode_delay_handler):
+                return
+
+        now = self.ADapi.datetime(aware=True)
+        if now - self.last_react_update > timedelta(minutes=MIN_REACT_MINUTES):
+            self.ADapi.reactToChange()
+            self.last_react_update = now
