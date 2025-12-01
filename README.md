@@ -466,14 +466,12 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 
 ---
 
-### 🛏️ Bed Sensors and `out_of_bed_delay`  
-- The `bed_sensor` feature keeps the light in `night` mode until the bed is exited.  
-- You can define `out_of_bed_delay` (in seconds) to give unstable bed sensors time to stabilize.  
+### 🛏️ Bed Sensors   
+- The `bed_sensor` feature keeps the light in `night` mode until the bed is exited.
 
 **Example**:  
 ```yaml
   bed_sensor: binary_sensor.bed_occupied
-  out_of_bed_delay: 30
 ```
 
 ---

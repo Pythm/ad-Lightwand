@@ -16,9 +16,6 @@ def build_light(api,
                 random_turn_on_delay,
                 weather) -> Light:
 
-    if spec.options and spec.options.get('exclude_from_custom'):
-        api.exclude_from_custom = True
-
     light_spec = {
         'lights': spec.lights,
         'light_modes': spec.light_modes,

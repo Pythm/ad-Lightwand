@@ -6,8 +6,8 @@ State = Literal['turn_off', 'turn_on', 'adjust', 'lux_controlled', 'manual', 'pa
 
 def filter_none(d: dict) -> dict:
     """Return a new dict that contains only the keys with non-None values."""
-    return {k: v for k, v in d.items() if v is not None}
 
+    return {k: v for k, v in d.items() if v is not None}
 
 @dataclass
 class MotionSensor:
@@ -16,9 +16,15 @@ class MotionSensor:
     motion_constraints: Optional[str] = None
 
 @dataclass
+class TrackerSensor:
+    tracker: str
+    delay: int = 0
+    tracker_constraints: Optional[str] = None
+
+@dataclass
 class LightMode:
     mode: Optional[str] = None
-    offset: Optional[int] = None
+    offset: int = 0
     state: State = 'none'
     light_data: Optional[Dict[str, Any]] = None
     automations: Optional[List[Automation]] = None
@@ -56,10 +62,22 @@ class LightMode:
 
     def brightness_kwargs(self) -> dict:
         """Return a dict with only the brightness settings that are set."""
+
         return filter_none({
             'max_brightness': self.max_brightness_pct,
             'min_brightness': self.min_brightness_pct,
         })
+
+    def resolve_brightness_to_255(self) -> int:
+        """ Helper to convert a brightness into a comparable 0-255 integer. """
+
+        if self.state == 'adaptive' and self.max_brightness_pct is not None:
+            return int((mode.max_brightness_pct / 100.0) * 255)
+
+        if self.brightness is not None:
+            return brightness
+
+        return 0
 
 @dataclass(init=False)
 class Automation:
