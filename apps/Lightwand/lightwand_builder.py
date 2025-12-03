@@ -27,7 +27,7 @@ def automation_from_obj(obj: Any) -> Automation:
     raise ValueError(f"Unsupported automation entry: {obj!r}")
 
 
-def _build_light_mode(d: dict, default_name: str = 'internal_mode') -> LightMode:
+def _build_light_mode(d: dict, default_name: str = 'none') -> LightMode:
     data = d.copy()
     if 'mode' not in data:
         data['mode'] = default_name

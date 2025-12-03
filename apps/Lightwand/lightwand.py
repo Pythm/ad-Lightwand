@@ -505,7 +505,7 @@ class Room(Hass):
         is_night_mode = self.LIGHT_MODE.startswith(translations.night)
 
         for light in self.roomlight:
-            use_motion = self._decide_if_motion(
+            use_motion = self._decide_to_activate_motion(
                 light,
                 is_night_mode,
                 True
@@ -629,7 +629,7 @@ class Room(Hass):
         is_night_mode = self.LIGHT_MODE.startswith(translations.night)
 
         for light in self.roomlight:
-            use_motion = self._decide_if_motion(
+            use_motion = self._decide_to_activate_motion(
                 light,
                 is_night_mode,
                 motion_active
@@ -639,7 +639,7 @@ class Room(Hass):
             else:
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
-    def _decide_if_motion(
+    def _decide_to_activate_motion(
         self,
         light,
         is_night_mode: bool,

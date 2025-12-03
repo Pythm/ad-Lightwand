@@ -72,10 +72,10 @@ class LightMode:
         """ Helper to convert a brightness into a comparable 0-255 integer. """
 
         if self.state == 'adaptive' and self.max_brightness_pct is not None:
-            return int((mode.max_brightness_pct / 100.0) * 255)
+            return int((self.max_brightness_pct / 100.0) * 255)
 
         if self.brightness is not None:
-            return brightness
+            return self.brightness
 
         return 0
 
