@@ -540,7 +540,7 @@ If you've configured all your lights to your liking, the normal automation shoul
 > - The **motion delay** ends.  
 > - **Lux levels** rise above the `lux_constraint`.  
 > - A **new mode** is activated.  
-> - A **time-based automation** runs (e.g., if lux is above the constraint, the automation will not execute).  
+> - A **time-based automation** runs.  
 
 > [!WARNING]  
 > If you define **multiple lights** in a list, the app will **only listen to the first light** in the list. For example:  
@@ -557,10 +557,7 @@ If you've configured all your lights to your liking, the normal automation shoul
 ---
 
 ### 🔄 Persistent Storage  
-Use `json_path` to save light states and modes across restarts:  
-```yaml
-json_path: /path/to/storage/
-```
+Each lightwand app will store the current light mode and read it on initialization. If an input selector is defined it will update on every mode change for the room. If not it will fall back to use json files and write only on termination. Default location for json files is ```pyton {self.AD.config_dir}/persistent/lightwand/ ```. You can overrule this by defining `json_path`.
 
 ### 🧱 Namespaces  
 Define MQTT/HASS namespaces if not using defaults:  

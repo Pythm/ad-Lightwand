@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Literal, Optional, Union
+from pydantic import BaseModel, Field, root_validator, ConfigDict
 
 State = Literal['turn_off', 'turn_on', 'adjust', 'lux_controlled', 'manual', 'pass', 'none', 'adaptive']
 
@@ -9,17 +10,24 @@ def filter_none(d: dict) -> dict:
 
     return {k: v for k, v in d.items() if v is not None}
 
-@dataclass
-class MotionSensor:
-    motion_sensor: str
+class Sensor(BaseModel):
+    sensor: str
     delay: int = 0
-    motion_constraints: Optional[str] = None
+    constraints: Optional[str] = None
+    handler: Any | None = None
 
-@dataclass
-class TrackerSensor:
-    tracker: str
-    delay: int = 0
-    tracker_constraints: Optional[str] = None
+    @classmethod
+    def from_yaml(cls, d: Mapping[str, Any]) -> "Sensor":
+        d = dict(d)
+        if "motion_sensor" in d:
+            d["sensor"] = d.pop("motion_sensor")
+        if "tracker" in d:
+            d["sensor"] = d.pop("tracker")
+        if "motion_constraints" in d:
+            d["constraints"] = d.pop("motion_constraints")
+        if "tracker_constraints" in d:
+            d["constraints"] = d.pop("tracker_constraints")
+        return cls(**d)
 
 @dataclass
 class LightMode:

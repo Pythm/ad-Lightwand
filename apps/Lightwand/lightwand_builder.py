@@ -1,5 +1,5 @@
 from typing import Any, Dict
-from lightwand_config import LightSpec, MotionSensor, Automation, LightMode
+from lightwand_config import LightSpec, Automation, LightMode
 
 def automation_from_obj(obj: Any) -> Automation:
 
@@ -7,23 +7,7 @@ def automation_from_obj(obj: Any) -> Automation:
         return Automation(state=obj)
     if isinstance(obj, dict):
         return Automation(**obj)
-    """
-    if isinstance(obj, str):
-        # bare string → LightMode(state=...)
-        if obj in Automation.__dataclass_fields__:
-            return Automation(light_mode=LightMode(state=obj))
-        return Automation({}, light_mode=LightMode(state=obj))
 
-    if isinstance(obj, dict):
-        auto_kwargs: dict[str, Any] = {}
-        lm_kwargs: dict[str, Any] = {}
-        for k, v in obj.items():
-            if k in Automation.__dataclass_fields__:
-                auto_kwargs[k] = v
-            else:
-                lm_kwargs[k] = v
-        return Automation(**auto_kwargs, light_mode=LightMode(**lm_kwargs))
-    """
     raise ValueError(f"Unsupported automation entry: {obj!r}")
 
 
