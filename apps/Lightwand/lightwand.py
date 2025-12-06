@@ -136,18 +136,17 @@ class Room(Hass):
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
-            spec.mqtt_topic = raw.get('mqtt_topic', True)
-            light = build_light(self,
-                                spec,
-                                MQTT_namespace,
-                                HASS_namespace,
-                                self.mqtt,
-                                adaptive_switch,
-                                adaptive_sleep_mode,
-                                night_motion,
-                                dim_while_motion,
-                                random_turn_on_delay,
-                                self.weather)
+            light = build_light(api = self,
+                                spec = spec,
+                                mqtt_namespace = MQTT_namespace,
+                                hass_namespace = HASS_namespace,
+                                mqtt_plugin = self.mqtt,
+                                adaptive_switch = adaptive_switch,
+                                adaptive_sleep_mode = adaptive_sleep_mode,
+                                night_motion = night_motion,
+                                dim_while_motion = dim_while_motion,
+                                random_turn_on_delay = random_turn_on_delay,
+                                weather = self.weather)
             self.roomlight.append(light)
 
         for raw in self.args.get('Lights', []):
@@ -156,17 +155,17 @@ class Room(Hass):
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
-            light = build_light(self,
-                                spec,
-                                MQTT_namespace,
-                                HASS_namespace,
-                                self.mqtt,
-                                adaptive_switch,
-                                adaptive_sleep_mode,
-                                night_motion,
-                                dim_while_motion,
-                                random_turn_on_delay,
-                                self.weather)
+            light = build_light(api = self,
+                                spec = spec,
+                                mqtt_namespace = MQTT_namespace,
+                                hass_namespace = HASS_namespace,
+                                mqtt_plugin = None,
+                                adaptive_switch = adaptive_switch,
+                                adaptive_sleep_mode = adaptive_sleep_mode,
+                                night_motion = night_motion,
+                                dim_while_motion = dim_while_motion,
+                                random_turn_on_delay = random_turn_on_delay,
+                                weather = self.weather)
             self.roomlight.append(light)
 
         for raw in self.args.get('ToggleLights', []):
@@ -179,19 +178,18 @@ class Room(Hass):
             spec.num_dim_steps = raw.get('num_dim_steps', 3)
             spec.toggle_speed = raw.get('toggle_speed', 1)
             spec.prewait_toggle = raw.get('prewait_toggle', 0)
-            light = build_light(self,
-                                spec,
-                                MQTT_namespace,
-                                HASS_namespace,
-                                self.mqtt,
-                                adaptive_switch,
-                                adaptive_sleep_mode,
-                                night_motion,
-                                dim_while_motion,
-                                random_turn_on_delay,
-                                self.weather)
+            light = build_light(api = self,
+                                spec = spec,
+                                mqtt_namespace = MQTT_namespace,
+                                hass_namespace = HASS_namespace,
+                                mqtt_plugin = None,
+                                adaptive_switch = adaptive_switch,
+                                adaptive_sleep_mode = adaptive_sleep_mode,
+                                night_motion = night_motion,
+                                dim_while_motion = dim_while_motion,
+                                random_turn_on_delay = random_turn_on_delay,
+                                weather = self.weather)
             self.roomlight.append(light)
-
 
         # Makes a list of all valid modes for room
         for light in self.roomlight:
@@ -300,12 +298,6 @@ class Room(Hass):
 
         if self.usePersistentStorage:
             try:
-                #with open(self.json_storage, 'r') as json_read:
-                #    lightwand_data = json.load(json_read)
-
-                #lightwand_data.update(
-                #    {"mode" : self.LIGHT_MODE}
-                #)
                 lightwand_data: dict = {"mode" : self.LIGHT_MODE}
                 with open(self.json_storage, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)

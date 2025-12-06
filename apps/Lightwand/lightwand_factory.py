@@ -34,7 +34,7 @@ def build_light(api,
         'weather': weather,
     }
 
-    if getattr(spec, 'mqtt_topic', None):
+    if mqtt_plugin is not None:
         return MQTTLight(api,
             **light_spec,
             MQTT_namespace=mqtt_namespace,
