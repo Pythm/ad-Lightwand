@@ -207,7 +207,7 @@ your_room_name:
             y: 0.4102
 ```
 
-- To use **Adaptive Lighting** in automations, motionlights, or modes, define `state: adaptive`. [Check out the wiki for Adaptive Lighting setup](https://github.com/Pythm/ad-Lightwand/wiki/Combining-Lightwand-with-Adaptive-Lighting-Custom-Component).  
+- To use **Adaptive Lighting** in automations, motionlights, or modes, define `state: adaptive`. [Check out the wiki for Adaptive Lighting setup](https://github.com/Pythm/ad-Lightwand/wiki/Combining-Lightwand-with-Adaptive-Lighting-Custom-Component).
 
 ---
 

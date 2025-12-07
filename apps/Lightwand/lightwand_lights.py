@@ -459,6 +459,7 @@ class Light:
                 motion_brightness_compare = self.current_light_data.get('brightness', self.brightness) 
                 if not self.wereMotion:
                     motion_brightness_compare += light_properties.offset
+
         else: # No change since last motion
             return
 
@@ -466,15 +467,15 @@ class Light:
             mode = self.light_modes_by_name.get(lightmode)
             if mode is not None:
                 if mode.automations:
-                    light_properties, mode_brightness_compare = self.getLightAutomationData(
+                    light_properties_for_mode, mode_brightness_compare = self.getLightAutomationData(
                         automations=mode.automations
                     )
                 else:
-                    light_properties = mode.light_properties
-                    mode_brightness_compare = light_properties.resolve_brightness_to_255()
+                    light_properties_for_mode = mode.light_properties
+                    mode_brightness_compare = light_properties_for_mode.resolve_brightness_to_255()
                 
-                if mode_brightness_compare == 0 and light_properties.offset > 0:
-                    mode_brightness_compare = motion_brightness_compare + light_properties.offset
+                if mode_brightness_compare == 0 and light_properties_for_mode.offset > 0:
+                    mode_brightness_compare = motion_brightness_compare + light_properties_for_mode.offset
 
                 if mode.noMotion:
                     self.motion = False
@@ -482,8 +483,11 @@ class Light:
                         self.setLightMode(lightmode=lightmode)
                     return
 
-                if light_properties.state == 'adaptive' and self.brightness != 0 and self.lightmode == lightmode:
+                if light_properties_for_mode.state == 'adaptive' and self.brightness != 0 and self.lightmode == lightmode:
                     mode_brightness_compare = self.brightness
+
+                else:
+                    light_properties = light_properties_for_mode
 
                 if light_properties.state in ('manual', 'pass'):
                     if self.lightmode != lightmode:

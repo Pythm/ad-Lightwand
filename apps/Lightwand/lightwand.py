@@ -29,7 +29,7 @@ MOTION = ('on', 'open')
 class Room(Hass):
 
     def initialize(self):
-        self.mqtt = self.get_plugin_api("MQTT")
+        self.mqtt = self.get_plugin_api('MQTT')
         # Namespaces for HASS and MQTT
         HASS_namespace:str = self.args.get('HASS_namespace', 'default')
         MQTT_namespace:str = self.args.get('MQTT_namespace', 'mqtt')
@@ -84,7 +84,7 @@ class Room(Hass):
         self.active_motion_sensors: Set[str] = set()
 
         # Presence detection
-        self.trackers = [Sensor.from_yaml(item) for item in self.args.get("trackers", [])]
+        self.trackers = [Sensor.from_yaml(item) for item in self.args.get('trackers', [])]
         ishome = False
         for tracker in self.trackers:
             self.listen_state(self.presence_change, tracker.sensor,
@@ -98,17 +98,17 @@ class Room(Hass):
             self.LIGHT_MODE = translations.away
 
         # Motion detection
-        motion_sensors = [Sensor.from_yaml(item) for item in self.args.get("motion_sensors", [])]
+        motion_sensors = [Sensor.from_yaml(item) for item in self.args.get('motion_sensors', [])]
         for sensor in motion_sensors:
             self.listen_state(self.motion_state, sensor.sensor,
                 namespace = HASS_namespace,
                 sensor = sensor
             )
 
-        MQTT_motion_sensors = [Sensor.from_yaml(item) for item in self.args.get("MQTT_motion_sensors", [])]
+        MQTT_motion_sensors = [Sensor.from_yaml(item) for item in self.args.get('MQTT_motion_sensors', [])]
         for sensor in MQTT_motion_sensors:
             self.mqtt.mqtt_subscribe(sensor.sensor)
-            self.mqtt.listen_event(self.MQTT_motion_event, "MQTT_MESSAGE",
+            self.mqtt.listen_event(self.MQTT_motion_event, 'MQTT_MESSAGE',
                 topic = sensor.sensor,
                 namespace = MQTT_namespace,
                 sensor = sensor
@@ -207,20 +207,21 @@ class Room(Hass):
 
         self.usePersistentStorage:bool = False
 
-        self.selector_input = self.args.get("selector_input", None)
+        self.selector_input = self.args.get('selector_input', None)
         if self.selector_input is not None:
             self.listen_state(self.mode_update_from_selector, self.selector_input,
                 namespace = HASS_namespace
             )
             self.LIGHT_MODE = self.get_state(self.selector_input, namespace = HASS_namespace)
 
-            input_select_state = self.get_state(self.selector_input, attribute="all")
-            current_options = input_select_state["attributes"].get("options", [])
+            input_select_state = self.get_state(self.selector_input, attribute='all')
+            current_options = input_select_state['attributes'].get('options', [])
             self.selector_input_options = list(current_options)
             
-            valid_modes = [m for m in self.all_modes if m not in ("fire", "false-alarm")]
+            valid_modes = [m for m in self.all_modes if m not in ('fire', 'false-alarm', 'presence')]
 
             if current_options != valid_modes:
+                self.selector_input_options = valid_modes
                 self.call_service("input_select/set_options",
                     entity_id = self.selector_input,
                     options = self.selector_input_options,
@@ -242,7 +243,7 @@ class Room(Hass):
                 with open(self.json_storage, 'r') as json_read:
                     lightwand_data = json.load(json_read)
             except FileNotFoundError:
-                lightwand_data = {"mode" : translations.normal,}
+                lightwand_data = {'mode' : translations.normal,}
                 with open(self.json_storage, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
 
@@ -286,8 +287,7 @@ class Room(Hass):
         """ This listens to events fired as MODE_CHANGE with data beeing mode = 'yourmode'
             self.fire_event('MODE_CHANGE', mode = 'normal')
             If you already have implemented someting similar in your Home Assistant setup you can easily change
-            MODE_CHANGE in translation.json to receive whatever data you are sending            
-        """
+            MODE_CHANGE in translation.json to receive whatever data you are sending """
         self.listen_event(self.mode_event, translations.MODE_CHANGE,
             namespace = HASS_namespace
         )
@@ -299,11 +299,11 @@ class Room(Hass):
 
         if self.usePersistentStorage:
             try:
-                lightwand_data: dict = {"mode" : self.LIGHT_MODE}
+                lightwand_data: dict = {'mode' : self.LIGHT_MODE}
                 with open(self.json_storage, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
             except FileNotFoundError:
-                lightwand_data = {"mode" : self.LIGHT_MODE}
+                lightwand_data = {'mode' : self.LIGHT_MODE}
                 with open(self.json_storage, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
 
@@ -426,24 +426,24 @@ class Room(Hass):
 
     def _process_sensor(self, sensor: Sensor, motion_data):
         match motion_data:
-            case {"occupancy": True}:
+            case {'occupancy': True}:
                 self._activate(sensor)
 
-            case {"occupancy": False}:
+            case {'occupancy': False}:
                 if sensor.last_state is not False:
                     self._deactivate(sensor)
 
-            case {"value": 8}:
+            case {'value': 8}:
                 self._activate(sensor)
 
-            case {"value": 0}:
+            case {'value': 0}:
                 if sensor.last_state is not False:
                     self._deactivate(sensor)
 
-            case {"contact": False}:
+            case {'contact': False}:
                 self._activate(sensor)
 
-            case {"contact": True}:
+            case {'contact': True}:
                 if sensor.last_state is not False:
                     self._deactivate(sensor)
 
@@ -451,9 +451,9 @@ class Room(Hass):
         constraints_ok = True
         if sensor.constraints is not None:
             try:
-                constraints_ok = safe_eval(sensor.constraints, {"self": self})
+                constraints_ok = safe_eval(sensor.constraints, {'self': self})
             except Exception as exc:
-                self.log(f"Constraint eval error for {sensor.sensor}: {exc}", level="INFO")
+                self.log(f"Constraint eval error for {sensor.sensor}: {exc}", level = 'INFO')
                 return
 
         if not constraints_ok:
@@ -515,9 +515,9 @@ class Room(Hass):
             constraints_ok = True
             if tracker.constraints is not None:
                 try:
-                    constraints_ok = safe_eval(tracker.constraints, {"self": self})
+                    constraints_ok = safe_eval(tracker.constraints, {'self': self})
                 except Exception as exc:
-                    self.log(f"Constraint eval error for {tracker.sensor}: {exc}", level="INFO")
+                    self.log(f"Constraint eval error for {tracker.sensor}: {exc}", level = 'INFO')
                     return
 
             if not constraints_ok:
