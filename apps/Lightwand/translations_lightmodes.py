@@ -67,7 +67,6 @@ class TranslationStore:
         try:
             return getattr(self._data[lang], key)
         except KeyError:
-            # Fallback: use English if the requested language is missing
             if lang != "en":
                 return getattr(self._data["en"], key)
             raise
@@ -75,9 +74,6 @@ class TranslationStore:
     def available_languages(self) -> list[str]:
         return list(self._data.keys())
 
-# --------------------------------------------------------------------
-# 3️⃣  Runtime wrapper – what apps actually import
-# --------------------------------------------------------------------
 class Translations:
     """
     *A thin façade that*:
@@ -90,7 +86,6 @@ class Translations:
 
     def __init__(self, file_path: str | Path | None = None):
         self._store = TranslationStore(file_path)
-        # Default language – can be overridden by Lightwand
         self._lang: str = "en"
 
     def set_language(self, lang: str) -> None:
@@ -109,33 +104,16 @@ class Translations:
         return self._store._data[self._lang]
 
     def __getattr__(self, name: str):
-        """
-        Forward unknown attributes to the current ModeTranslation.
-        Example: translations.normal -> translations.current.normal
-        """
+
         return getattr(self.current, name)
 
     def reload(self) -> None:
-        """Reload the JSON file and keep the current language."""
+
         self._store.reload()
 
     def set_file_path(self, path: str | Path) -> None:
-        """
-        Tell the singleton to read a *different* JSON file.
-        The change is visible to every app that imported `translations`.
-        """
-        self._store._file_path = Path(path)  # update the underlying store
-        self._store.reload()                # read the new file immediately
+        """ Tell the singleton to read a *different* JSON file. """
+        self._store._file_path = Path(path)
+        self._store.reload()
 
-# --------------------------------------------------------------------
-# 4️⃣  The single instance that apps import
-# --------------------------------------------------------------------
-# The file path is relative to the location of this module.  If you
-# want to point to a different file (e.g. an external folder) you
-# can pass a custom path when importing, e.g.:
-#
-#   from lightwand.translations_lightmodes import Translations
-#   translations = Translations("/etc/ha/translations_lightmodes.json")
-#
-# But the default is good for most cases.
 translations = Translations()

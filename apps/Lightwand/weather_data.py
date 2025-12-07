@@ -30,7 +30,6 @@ class LightwandWeather:
         self.room_lux:float = 0.0
         self.rain:float = 0.0
 
-            # Setup Outdoor Lux sensor
         if lux_sensor is not None:
             self.ADapi.listen_state(self._out_lux_updated, lux_sensor,
                 namespace = HASS_namespace
@@ -91,7 +90,6 @@ class LightwandWeather:
         self.ADapi.listen_event(self.weather_event, 'WEATHER_CHANGE',
             namespace = HASS_namespace
         )
-
 
     def weather_event(self, event_name, data, **kwargs) -> None:
         """ Listens for weather change from the weather app.

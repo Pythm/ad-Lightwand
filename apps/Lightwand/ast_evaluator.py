@@ -1,11 +1,7 @@
-# ast_evaluator.py
 import ast
 import operator
 from typing import Any, Dict
 
-# ------------------------------------------------------------
-# 1.  Allowed operators
-# ------------------------------------------------------------
 OPERATORS = {
     ast.And:   operator.and_,
     ast.Or:    operator.or_,
@@ -18,9 +14,6 @@ OPERATORS = {
     ast.GtE:   operator.ge,
 }
 
-# ------------------------------------------------------------
-# 2.  Visitor
-# ------------------------------------------------------------
 class SafeEval(ast.NodeVisitor):
     """
     Very small, safe AST evaluator.
@@ -36,7 +29,6 @@ class SafeEval(ast.NodeVisitor):
     def __init__(self, context: Dict[str, Any]):
         self.context = context
 
-    # ---------- node visitors ------------------------------------
     def visit(self, node):
         # The root of an eval‑mode AST is an `Expression`
         if isinstance(node, ast.Expression):
@@ -95,16 +87,11 @@ class SafeEval(ast.NodeVisitor):
         if isinstance(node, ast.Constant):
             return node.value
 
-        # Unsupported node
         raise ValueError(f"Unsupported expression element: {type(node).__name__}")
 
-# ------------------------------------------------------------
-# 3.  Helper that parses & evaluates
-# ------------------------------------------------------------
 def safe_eval(expr: str, context: Dict[str, Any]) -> Any:
-    """
-    Parse *expr* once (AST) and evaluate it with *context*.
-    Raises ValueError for any unsupported syntax.
-    """
+    """ Parse *expr* once (AST) and evaluate it with *context*.
+    Raises ValueError for any unsupported syntax. """
+
     tree = ast.parse(expr, mode="eval")
     return SafeEval(context).visit(tree)

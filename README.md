@@ -26,16 +26,15 @@ AppDaemon is a loosely coupled, multi-threaded, sandboxed Python execution envir
 
 ---
 
-## 🧰 Installation
+## 📦 Installation and Configuration
 
-### 1. Have Home Assistant and Appdaemon up and running
+1. Have Home Assistant and Appdaemon up and running
 
-### 2. **Install via HACS or Git**  
-- **HACS**: Add the app with HACS. Make sure `app_dir` in `appdaemon.yaml` points to where HACS downloads it to.
-- **Manual**: Clone the repo into your AppDaemon `apps` directory.  
+2. `git clone` into your [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) `apps` directory.
+2. Add configuration to a `.yaml` or `.toml` file to enable the `ElectricalManagement` module.
+3. Add the configuration to your `.yaml` file:
 
-### 3. **Basic Configuration**  
-Add the following to your `.yaml` file:  
+**Minimum Configuration** 
 ```yaml
 your_room_name:
   module: lightwand
@@ -61,7 +60,7 @@ Lights:
 ```
 
 #### ✅ `MQTTLights` (Direct MQTT Control)  
-Use MQTT for devices like Zigbee2MQTT or ZwaveJS.
+Use MQTT for devices like Zigbee2MQTT.
 ```yaml
 MQTTLights:
   - lights:
@@ -77,7 +76,13 @@ ToggleLights:
     toggle: 2  # Number of toggles to reach desired brightness
     num_dim_steps: 3  # Steps in bulb dimming
     toggle_speed: 0.8 # Set time in seconds between each toggle
+
+      light_modes:
+        - mode: night
+          toggle: 3
 ```
+Toggle lights does not support motion or time based automations, only a mode with a toggle. If you need motion use Light with only on/off.
+
 > [!TIP]
 > You can configure multiple lights under each `-lights:` but look into creating groups in your controller, for a better network health.
 
@@ -127,7 +132,7 @@ day:
 **Custom Mode Names**  
 - With the exception of `custom` and `reset`, you can use **any** mode name in `light_modes`.  
 - You can **overwrite** default behavior by defining your own configuration.  
-- n addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
+- In addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
 
 ---
 
@@ -140,6 +145,9 @@ day:
 ### 🏠 Change Mode in One Room  
 To change the mode for a single room, use the mode name + `_appName`.  
 - `appName` is the name you defined for your app in the configuration.  
+
+> [!NOTE]  
+> Avoid using underscore `_` in your names.
 
 As an alternative to firing an event, you can use a **Home Assistant selector** with `selector_input`.  
 - The app will update the selector options dynamically based on `MODE_CHANGE` events.

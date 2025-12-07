@@ -82,6 +82,7 @@ class Room(Hass):
         adaptive_sleep_mode:str = self.args.get('adaptive_sleep_mode', None)
 
         self.active_motion_sensors: Set[str] = set()
+
         # Presence detection
         self.trackers = [Sensor.from_yaml(item) for item in self.args.get("trackers", [])]
         ishome = False
@@ -429,19 +430,22 @@ class Room(Hass):
                 self._activate(sensor)
 
             case {"occupancy": False}:
-                self._deactivate(sensor)
+                if sensor.last_state is not False:
+                    self._deactivate(sensor)
 
             case {"value": 8}:
                 self._activate(sensor)
 
             case {"value": 0}:
-                self._deactivate(sensor)
+                if sensor.last_state is not False:
+                    self._deactivate(sensor)
 
             case {"contact": False}:
                 self._activate(sensor)
 
             case {"contact": True}:
-                self._deactivate(sensor)
+                if sensor.last_state is not False:
+                    self._deactivate(sensor)
 
     def _activate(self, sensor: Sensor) -> None:
         constraints_ok = True
@@ -458,13 +462,14 @@ class Room(Hass):
         self.active_motion_sensors.add(sensor.sensor)
         cancel_timer_handler(ADapi = self, handler = sensor.handler)
         sensor.handler = None
+        sensor.last_state = True
         self._newMotion()
 
     def _deactivate(self, sensor: Sensor) -> None:
         cancel_timer_handler(ADapi = self, handler = sensor.handler)
         sensor.handler = None
+        sensor.last_state = False
         sensor_delay:int = getattr(sensor, 'delay', 60)
-        self.log(f"Motion ends in: {sensor_delay}", level = 'DEBUG') ###
         sensor.handler = self.run_in(self.MotionEnd, sensor_delay, sensor = sensor)
 
     def _newMotion(self) -> None:
@@ -585,10 +590,9 @@ class Room(Hass):
             else:
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
-    def _decide_to_activate_motion(
-        self,
-        light,
-        is_night_mode: bool,
+    def _decide_to_activate_motion(self,
+                                   light,
+                                   is_night_mode: bool,
     ) -> bool:
         """ Decide which mode to use for a single light. """
 
