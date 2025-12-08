@@ -1187,7 +1187,7 @@ class ToggleLight(Light):
                     toggle_bulb = mode.light_properties.toggle * 2 - 1
                     self.calculateToggles(toggle_bulb = toggle_bulb)
 
-                elif 'turn_off' in mode.light_data.state:
+                elif 'turn_off' in mode.light_properties.state:
                     # Turns off light
                     self.turn_off_lights()
                 return
