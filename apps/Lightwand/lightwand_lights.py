@@ -389,8 +389,11 @@ class Light:
                 if 'lux_controlled' in light_properties.state and not self.current_LuxCondition:
                     self.turn_off_lights()
                     return
-
-                self.setLightAutomation(automations=mode.automations, light_properties=light_properties)
+                
+                if light_properties.offset != 0:
+                    self.setLightAutomation(automations=self.automations)
+                else:
+                    self.setLightAutomation(automations=mode.automations, light_properties=light_properties)
                 return
 
         if lightmode in (translations.away, translations.off):
@@ -910,8 +913,8 @@ class Light:
 
     def _validate_light_data(self, data: dict) -> dict:
         if not isinstance(data, dict):
-            raise TypeError(f"light_data must be a dict, got {type(data)!r}")
-
+            self.ADapi.log(f"light_data must be a dict, got {type(data)!r} for {self.lights[0]} with data {data}", level = 'WARNING')
+            raise TypeError
         return data
 
 

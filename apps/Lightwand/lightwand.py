@@ -57,6 +57,7 @@ class Room(Hass):
             translations.reset,
         }
         self.getOutOfBedMode:str = translations.normal
+        self.LIGHT_MODE = translations.normal
 
         night_motion:bool = False
         dim_while_motion:bool = False
@@ -205,14 +206,11 @@ class Room(Hass):
                             level = 'WARNING'
                         )
 
-        self.usePersistentStorage:bool = False
-
         self.selector_input = self.args.get('selector_input', None)
         if self.selector_input is not None:
             self.listen_state(self.mode_update_from_selector, self.selector_input,
                 namespace = HASS_namespace
             )
-            self.LIGHT_MODE = self.get_state(self.selector_input, namespace = HASS_namespace)
 
             input_select_state = self.get_state(self.selector_input, attribute='all')
             current_options = input_select_state['attributes'].get('options', [])
@@ -228,26 +226,24 @@ class Room(Hass):
                     namespace = HASS_namespace
                 )
 
+        # Persistent storage for storing mode and lux data
+        if 'json_path' in self.args:
+            self.json_storage = self.args['json_path']
         else:
-            # Persistent storage for storing mode and lux data
-            self.usePersistentStorage = True
-            if 'json_path' in self.args:
-                self.json_storage = self.args['json_path']
-            else:
-                self.json_storage:str = f"{self.AD.config_dir}/persistent/lightwand/"
-                if not os.path.exists(self.json_storage):
-                    os.makedirs(self.json_storage)
-            self.json_storage += f"{self.name}.json"
-            lightwand_data:dict = {}
-            try:
-                with open(self.json_storage, 'r') as json_read:
-                    lightwand_data = json.load(json_read)
-            except FileNotFoundError:
-                lightwand_data = {'mode' : translations.normal,}
-                with open(self.json_storage, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
+            self.json_storage:str = f"{self.AD.config_dir}/persistent/lightwand/"
+            if not os.path.exists(self.json_storage):
+                os.makedirs(self.json_storage)
+        self.json_storage += f"{self.name}.json"
+        lightwand_data:dict = {}
+        try:
+            with open(self.json_storage, 'r') as json_read:
+                lightwand_data = json.load(json_read)
+        except FileNotFoundError:
+            lightwand_data = {'mode' : self.LIGHT_MODE,}
+            with open(self.json_storage, 'w') as json_write:
+                json.dump(lightwand_data, json_write, indent = 4)
 
-            self.LIGHT_MODE = lightwand_data['mode']
+        self.LIGHT_MODE = lightwand_data['mode']
 
         # Listen sensors for when to update lights
         for sensor in self.listen_sensors:
@@ -297,15 +293,14 @@ class Room(Hass):
     def terminate(self) -> None:
         """ Writes out data to persistent storage before terminating. """
 
-        if self.usePersistentStorage:
-            try:
-                lightwand_data: dict = {'mode' : self.LIGHT_MODE}
-                with open(self.json_storage, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
-            except FileNotFoundError:
-                lightwand_data = {'mode' : self.LIGHT_MODE}
-                with open(self.json_storage, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
+        try:
+            lightwand_data: dict = {'mode' : self.LIGHT_MODE}
+            with open(self.json_storage, 'w') as json_write:
+                json.dump(lightwand_data, json_write, indent = 4)
+        except FileNotFoundError:
+            lightwand_data = {'mode' : self.LIGHT_MODE}
+            with open(self.json_storage, 'w') as json_write:
+                json.dump(lightwand_data, json_write, indent = 4)
 
     def mode_event(self, event_name, data, **kwargs) -> None:
         """ New mode events. Updates lights if conditions are met. """
