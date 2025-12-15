@@ -565,7 +565,7 @@ If you've configured all your lights to your liking, the normal automation shoul
 ---
 
 ### 🔄 Persistent Storage  
-Each lightwand app will store the current light mode and read it on initialization. If an input selector is defined it will update on every mode change for the room. If not it will fall back to use json files and write only on termination. Default location for json files is ```pyton {self.AD.config_dir}/persistent/lightwand/ ```. You can overrule this by defining `json_path`.
+Each lightwand app will write the current light mode on termination to a json file and read it on initialization. Default location for json files is ```pyton {self.AD.config_dir}/persistent/lightwand/ ```. You can overrule this by defining `json_path`.
 
 ### 🧱 Namespaces  
 Define MQTT/HASS namespaces if not using defaults:  
