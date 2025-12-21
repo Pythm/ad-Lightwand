@@ -75,6 +75,11 @@ def _convert_dict_to_light_spec(d: dict) -> LightSpec:
         base['light_modes'] = [_build_light_mode(m) for m in d['light_modes']]
     else:
         base['light_modes'] = None
+
     if 'options' in d:
-        base['options'] = d['options']
+        opt = d['options']
+        if isinstance(opt, list):
+            opt = {k: True for k in opt}
+        base['options'] = opt
+
     return LightSpec(**base)
