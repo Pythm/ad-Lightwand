@@ -1,5 +1,5 @@
 # Lightwand by Pythm  
-**An AppDaemon app for advanced lighting control via Home Assistant or MQTT**  
+**An [AppDaemon](https://github.com/AppDaemon/appdaemon) app for advanced lighting control via Home Assistant or MQTT**  
 Set light data based on time of day, use Mode Change events or environmental conditions like lux levels, rain, and sensors like motion, presence and media players.  
 
 ![AI-Generated Illustration](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)  
@@ -13,14 +13,28 @@ Set light data based on time of day, use Mode Change events or environmental con
 
 ---
 
-## 🧰 Installation  
+## 📱 Supported Platforms
 
-### 1. **Install via HACS or Git**  
-- **HACS**: Add the app to your HACS repository.  
-- **Manual**: Clone the repo into your AppDaemon `apps` directory.  
+This app is designed to work with:
 
-### 2. **Basic Configuration**  
-Add the following to your `.yaml` or `.toml` file:  
+- [AppDaemon](https://github.com/AppDaemon/appdaemon)
+- [Home Assistant](https://www.home-assistant.io/)
+
+Home Assistant is a popular open-source home automation platform that offers a wide range of features and integrations with various smart home devices. If you're not already using Home Assistant, I recommend checking it out.
+
+AppDaemon is a loosely coupled, multi-threaded, sandboxed Python execution environment for writing automation apps for various types of home automation software, including Home Assistant and MQTT.
+
+---
+
+## 📦 Installation and Configuration
+
+1. Have Home Assistant and Appdaemon up and running
+
+2. `git clone` into your [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) `apps` directory.
+2. Add configuration to a `.yaml` or `.toml` file to enable the `ElectricalManagement` module.
+3. Add the configuration to your `.yaml` file:
+
+**Minimum Configuration** 
 ```yaml
 your_room_name:
   module: lightwand
@@ -46,7 +60,7 @@ Lights:
 ```
 
 #### ✅ `MQTTLights` (Direct MQTT Control)  
-Use MQTT for devices like Zigbee2MQTT or ZwaveJS.
+Use MQTT for devices like Zigbee2MQTT.
 ```yaml
 MQTTLights:
   - lights:
@@ -62,7 +76,13 @@ ToggleLights:
     toggle: 2  # Number of toggles to reach desired brightness
     num_dim_steps: 3  # Steps in bulb dimming
     toggle_speed: 0.8 # Set time in seconds between each toggle
+
+      light_modes:
+        - mode: night
+          toggle: 3
 ```
+Toggle lights does not support motion or time based automations, only a mode with a toggle. If you need motion use Light with only on/off.
+
 > [!TIP]
 > You can configure multiple lights under each `-lights:` but look into creating groups in your controller, for a better network health.
 
@@ -112,7 +132,7 @@ day:
 **Custom Mode Names**  
 - With the exception of `custom` and `reset`, you can use **any** mode name in `light_modes`.  
 - You can **overwrite** default behavior by defining your own configuration.  
-- n addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
+- In addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
 
 ---
 
@@ -126,8 +146,13 @@ day:
 To change the mode for a single room, use the mode name + `_appName`.  
 - `appName` is the name you defined for your app in the configuration.  
 
+> [!NOTE]  
+> Avoid using underscore `_` in your names.
+
 As an alternative to firing an event, you can use a **Home Assistant selector** with `selector_input`.  
-- The app will update the selector options dynamically based on `MODE_CHANGE` events.  
+- The app will update the selector options dynamically based on `MODE_CHANGE` events.
+- Version 2.0.0 and later auto populates the selector_input with valid modes for the room.
+- Lightwand will read the state on the selector_input on restarts to keep the mode. 
 
 ```yaml
 your_room_name:
@@ -143,57 +168,28 @@ your_room_name:
 
 ### 🔄 Translating or Changing Modes  
 
-#### Steps to Customize Mode Names  
-1. **Edit the Translation File**  
+#### Steps to Customize Mode Names
+1. **Save the File Persistently**
+   Store the supplied examplefile `translation.json` in a location that persists across sessions and updates (e.g., `/config/lightwand/translation.json`).
+
+2. **Edit the Translation File**  
    Modify the `translation.json` file to update mode names and event settings.  
-   Example:  
-   ```json
-   {
-     "en": {
-       "MODE_CHANGE": "MODE_CHANGE",
-       "normal": "normal",
-       "morning": "morning",
-       "away": "away",
-       "off": "off",
-       "night": "night",
-       "custom": "custom",
-       "fire": "fire",
-       "false_alarm": "false-alarm",
-       "wash": "wash",
-       "reset": "reset"
-     },
-     "de": {
-       "MODE_CHANGE": "MODE_CHANGE",
-       "normal": "automatik",
-       "morning": "morgen",
-       "away": "abwesend",
-       "off": "aus",
-       "night": "nacht",
-       "custom": "manuell",
-       "fire": "brand",
-       "false_alarm": "fehlalarm",
-       "wash": "hell",
-       "reset": "zurücksetzen"
-     }
-   }
-   ```
 
-#### Customizing Event Listeners  
-- In `translation.json`, you can specify a **custom event name** (e.g., `"MY_CUSTOM_EVENT"`) instead of the default `"MODE_CHANGE"`.  
+   > [!TIP]  
+   > In `translation.json`, you can specify a **custom event name** (e.g., `"LIGHT_MODE"`) instead of the default `"MODE_CHANGE"` to match your existing automation9.  
 
-2. **Save the File Persistently**  
-   Store the modified `translation.json` in a location that persists across sessions (e.g., `/config/lightwand/translation.json`).  
 
 3. **Specify the Path and Language in Configuration**  
-   Use the `language_file` parameter and `lightwand_language` to set your preferred language in your app configuration:  
+   Use the `language_file` parameter and `lightwand_language` to set your preferred language in your one of your room app configuration:  
    ```yaml
    your_room_name:
      ...
      language_file: /config/lightwand/translation.json
      lightwand_language: "en"
    ```
-
+   The app creates a singelton that can be imported by other apps to listen to the same modes.
 ---
+
 
 ## 📈 Configuring Light Behavior  
 
@@ -211,7 +207,7 @@ your_room_name:
             y: 0.4102
 ```
 
-- To use **Adaptive Lighting** in automations, motionlights, or modes, define `state: adaptive`. [Check out the wiki for Adaptive Lighting setup](https://github.com/Pythm/ad-Lightwand/wiki/Combining-Lightwand-with-Adaptive-Lighting-Custom-Component).  
+- To use **Adaptive Lighting** in automations, motionlights, or modes, define `state: adaptive`. [Check out the wiki for Adaptive Lighting setup](https://github.com/Pythm/ad-Lightwand/wiki/Combining-Lightwand-with-Adaptive-Lighting-Custom-Component).
 
 ---
 
@@ -449,7 +445,7 @@ You can define **two outdoor lux sensors**. The second sensor can be defined wit
 
 ### 📡 Motion Sensors and Presence Trackers  
 
-You can define the **time delay** (in seconds) after motion detection before the light turns off. The **default is 60 seconds**. You can also define **motion constraints** for each sensor using an python `if` statement. These constraints must be `true` for motion to activate.  
+You can define the **time delay** (in seconds) after motion detection before the light turns off. The **default is 60 seconds**. You can also define **motion constraints** for each sensor using an python `if` statement checked againts the ast_evaluator.py. These constraints must be `true` for motion to activate. 
 
 **Example**:  
 ```yaml
@@ -478,14 +474,12 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 
 ---
 
-### 🛏️ Bed Sensors and `out_of_bed_delay`  
-- The `bed_sensor` feature keeps the light in `night` mode until the bed is exited.  
-- You can define `out_of_bed_delay` (in seconds) to give unstable bed sensors time to stabilize.  
+### 🛏️ Bed Sensors   
+- The `bed_sensor` feature keeps the light in `night` mode until the bed is exited.
 
 **Example**:  
 ```yaml
   bed_sensor: binary_sensor.bed_occupied
-  out_of_bed_delay: 30
 ```
 
 ---
@@ -554,7 +548,7 @@ If you've configured all your lights to your liking, the normal automation shoul
 > - The **motion delay** ends.  
 > - **Lux levels** rise above the `lux_constraint`.  
 > - A **new mode** is activated.  
-> - A **time-based automation** runs (e.g., if lux is above the constraint, the automation will not execute).  
+> - A **time-based automation** runs.  
 
 > [!WARNING]  
 > If you define **multiple lights** in a list, the app will **only listen to the first light** in the list. For example:  
@@ -571,10 +565,7 @@ If you've configured all your lights to your liking, the normal automation shoul
 ---
 
 ### 🔄 Persistent Storage  
-Use `json_path` to save light states and modes across restarts:  
-```yaml
-json_path: /path/to/storage/
-```
+Each lightwand app will write the current light mode on termination to a json file and read it on initialization. Default location for json files is ```pyton {self.AD.config_dir}/persistent/lightwand/ ```. You can overrule this by defining `json_path`.
 
 ### 🧱 Namespaces  
 Define MQTT/HASS namespaces if not using defaults:  
@@ -729,7 +720,6 @@ your_room_name:
           light_data:
             brightness: 10
         - mode: presence
-        - mode: motion
           automations:
           - time: '00:00:00'
             light_data:
@@ -820,7 +810,7 @@ key | optional | type | default | introduced in | description
 
 ## 📦 Contributing  
 - **Report issues** on [GitHub](https://github.com/Pythm/ad-Lightwand)  
-- **Suggest features** via pull requests  
+- **Suggest features** via pull requests on the dev branch
 
 ---
 
