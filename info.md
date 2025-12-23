@@ -187,7 +187,7 @@ your_room_name:
      language_file: /config/lightwand/translation.json
      lightwand_language: "en"
    ```
-   The app creates a singelton that can be imported by other apps to listen to the same modes.
+   The app creates a singleton that can be imported by other apps to listen to the same modes.
 ---
 
 
