@@ -244,12 +244,11 @@ class Room(Hass):
         try:
             with open(self.json_storage, 'r') as json_read:
                 lightwand_data = json.load(json_read)
+                self.LIGHT_MODE = lightwand_data['mode']
         except FileNotFoundError:
             lightwand_data = {'mode' : self.LIGHT_MODE,}
             with open(self.json_storage, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
-
-        self.LIGHT_MODE = lightwand_data['mode']
 
         # Listen sensors for when to update lights
         for sensor in self.listen_sensors:
@@ -305,8 +304,11 @@ class Room(Hass):
                 json.dump(lightwand_data, json_write, indent = 4)
         except FileNotFoundError:
             lightwand_data = {'mode' : self.LIGHT_MODE}
-            with open(self.json_storage, 'w') as json_write:
-                json.dump(lightwand_data, json_write, indent = 4)
+            try:
+                with open(self.json_storage, 'w') as json_write:
+                    json.dump(lightwand_data, json_write, indent = 4)
+            except Exception as e:
+                self.log(f"Not able to store to {self.json_storage} : {e}", level = 'WARNING')
 
     def mode_event(self, event_name, data, **kwargs) -> None:
         """ New mode events. Updates lights if conditions are met. """
@@ -493,6 +495,7 @@ class Room(Hass):
         if self._bed_occupied():
             return
         self.LIGHT_MODE = self.getOutOfBedMode
+        self._set_selector_input()
         self.reactToChange()
 
     def _bed_occupied(self) -> bool:
@@ -525,11 +528,13 @@ class Room(Hass):
             if not constraints_ok:
                 if self.LIGHT_MODE == translations.away:
                     self.LIGHT_MODE = translations.normal
+                    self._set_selector_input()
                     self.reactToChange()
                 return
 
             if self.LIGHT_MODE in (translations.normal, translations.away) and self.check_mediaplayers_off():
                 self.LIGHT_MODE = translations.normal
+                self._set_selector_input()
                 self.active_motion_sensors.add(tracker.sensor)
                 cancel_timer_handler(ADapi = self, handler = tracker.handler)
                 tracker.handler = None
@@ -548,6 +553,7 @@ class Room(Hass):
                     self.reactToChange()
                     return
             self.LIGHT_MODE = translations.away
+            self._set_selector_input()
 
         for light in self.roomlight:
             light.setLightMode(lightmode = self.LIGHT_MODE)
@@ -613,6 +619,7 @@ class Room(Hass):
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
         if self.LIGHT_MODE == translations.morning:
             self.LIGHT_MODE = translations.normal
+            self._set_selector_input()
         self.check_mediaplayers_off()
 
     def media_off(self, entity, attribute, old, new, kwargs) -> None:
