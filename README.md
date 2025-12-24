@@ -132,7 +132,7 @@ day:
 **Custom Mode Names**  
 - With the exception of `custom` and `reset`, you can use **any** mode name in `light_modes`.  
 - You can **overwrite** default behavior by defining your own configuration.  
-- In addition to `night` mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
+- In addition to `night` (or its translation, such as `nacht`) mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
 
 ---
 
@@ -180,7 +180,7 @@ your_room_name:
 
 
 3. **Specify the Path and Language in Configuration**  
-   Use the `language_file` parameter and `lightwand_language` to set your preferred language in your one of your room app configuration:  
+   Use the `language_file` parameter and `lightwand_language` to set your preferred language in your **one** of your room app configuration:  
    ```yaml
    your_room_name:
      ...
@@ -188,6 +188,9 @@ your_room_name:
      lightwand_language: "en"
    ```
    The app creates a singleton that can be imported by other apps to listen to the same modes.
+
+   > [!NOTE]  
+   > Translating night and off also results in app checking if mode name starts with the translated modename equivalent, to turn off and prevent motion.
 ---
 
 
