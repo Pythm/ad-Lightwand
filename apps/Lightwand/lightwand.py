@@ -336,10 +336,11 @@ class Room(Hass):
             ):
                 return
             if modename not in (translations.night, translations.off, translations.reset):
-                if self._bed_occupied():
+                if self._bed_occupied() and not modename.startswith(translations.night):
                     for bed_sensor in self.bed_sensors:
                         if self.get_state(bed_sensor) == 'on':
                             self._listen_out_of_bed(bed_sensor)
+                    self.getOutOfBedMode = modename
                     return
 
         self.LIGHT_MODE = modename
