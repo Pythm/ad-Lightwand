@@ -391,7 +391,7 @@ class Light:
                     return
                 
                 if light_properties.offset != 0:
-                    self.setLightAutomation(automations=self.automations)
+                    self.setLightAutomation(automations=self.automations, light_properties=light_properties)
                 else:
                     self.setLightAutomation(automations=mode.automations, light_properties=light_properties)
                 return
@@ -429,6 +429,7 @@ class Light:
         if lightmode == 'none':
             lightmode = self.lightmode
         elif lightmode == translations.reset:
+            self.current_light_data = {}
             lightmode = translations.normal
             self.wereMotion = False
 
@@ -436,7 +437,10 @@ class Light:
 
         self.motion = True
         self.current_OnCondition = self.checkConditions(conditions = self.conditions) if self.conditions is not None else True
-        self.current_LuxCondition = self.checkLuxConstraints()
+        new_LuxCondition = self.checkLuxConstraints()
+
+        if self.current_LuxCondition is not True and new_LuxCondition is True:
+            self.wereMotion = False
 
         if not self.current_OnCondition or not self.current_LuxCondition:
             if self.dim_while_motion:
@@ -478,7 +482,10 @@ class Light:
                     mode_brightness_compare = light_properties_for_mode.resolve_brightness_to_255()
                 
                 if mode_brightness_compare == 0 and light_properties_for_mode.offset > 0:
-                    mode_brightness_compare = motion_brightness_compare + light_properties_for_mode.offset
+                    automation_light_properties, automation_brightness_compare = self.getLightAutomationData(
+                        automations=self.automations
+                    )
+                    mode_brightness_compare = automation_brightness_compare + light_properties_for_mode.offset
 
                 if mode.noMotion:
                     self.motion = False
