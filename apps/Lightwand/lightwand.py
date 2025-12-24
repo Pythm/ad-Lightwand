@@ -38,10 +38,16 @@ class Room(Hass):
 
         if 'language_file' in self.args:
             language_file = self.args['language_file']
-            translations.set_file_path(language_file)
+            try:
+                translations.set_file_path(language_file)
+            except Exception as e:
+                self.log(f"Not able to set language file {language_file}: {e}", level = 'WARNING')
         if 'lightwand_language' in self.args:
             user_lang = self.args['lightwand_language']
-            translations.set_language(user_lang)
+            try:
+                translations.set_language(user_lang)
+            except Exception as e:
+                self.log(f"Not able to set language {user_lang}: {e}", level = 'WARNING')
 
         self.LIGHT_MODE:str = 'none'
         # All known modes that the room can enter
