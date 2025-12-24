@@ -436,7 +436,10 @@ class Light:
 
         self.motion = True
         self.current_OnCondition = self.checkConditions(conditions = self.conditions) if self.conditions is not None else True
-        self.current_LuxCondition = self.checkLuxConstraints()
+        new_LuxCondition = self.checkLuxConstraints()
+
+        if self.current_LuxCondition is not True and new_LuxCondition is True:
+            self.wereMotion = False
 
         if not self.current_OnCondition or not self.current_LuxCondition:
             if self.dim_while_motion:
