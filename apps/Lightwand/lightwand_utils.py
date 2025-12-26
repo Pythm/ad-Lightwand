@@ -14,3 +14,13 @@ def cancel_timer_handler(ADapi, handler) -> None:
                 ADapi.cancel_timer(handler)
             except Exception as e:
                 return
+
+def cancel_listen_handler(ADapi, handler) -> None:
+    if handler is not None:
+        try:
+            ADapi.cancel_listen_state(handler)
+        except Exception as e:
+            ADapi.log(
+                f"Not able to stop listen handler {handler}. Exception: {e}",
+                level = 'DEBUG'
+            )

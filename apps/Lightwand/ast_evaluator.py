@@ -92,6 +92,7 @@ class SafeEval(ast.NodeVisitor):
 def safe_eval(expr: str, context: Dict[str, Any]) -> Any:
     """ Parse *expr* once (AST) and evaluate it with *context*.
     Raises ValueError for any unsupported syntax. """
-
+    if expr is None:
+        return True
     tree = ast.parse(expr, mode="eval")
     return SafeEval(context).visit(tree)
