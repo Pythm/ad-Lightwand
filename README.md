@@ -119,9 +119,9 @@ day:
 | Mode Name | Behavior |  
 |----------|----------|  
 | `normal` | Default automation mode for day-to-day usage with lux constraints and conditions. |  
-| `morning` | Acts like `normal` mode but with specific light settings for mornings. |  
+| `morning` | Acts like `normal` mode but can be used with specific light settings for mornings. |  
 | `reset` | Resets all lights to their `normal` mode settings. |  
-| `away` | Defaults to **off** with motion detection disabled. |  
+| `away` | Defaults to **off** with motion detection enabled. |
 | `night` / `off` | Defaults to **off** with motion detection disabled. |  
 | `fire` / `wash` | Turns lights on to **maximum brightness**. |  
 | `custom` | Manual control—**disables all automation**. |  
