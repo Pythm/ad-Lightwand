@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -13,7 +13,7 @@ from typing import List, Iterable, Set
 from translations_lightmodes import translations
 from weather_data import LightwandWeather
 
-from lightwand_utils import _parse_mode_and_room, cancel_timer_handler
+from lightwand_utils import _parse_mode_and_room, cancel_timer_handler, cancel_listen_handler
 from lightwand_builder import _convert_dict_to_light_spec
 from lightwand_factory import build_light
 from lightwand_config import LightSpec, Sensor
@@ -121,6 +121,8 @@ class Room(Hass):
                 sensor = sensor
             )
 
+        self.bed_sensors: list[Sensor] = self._parse_bed_sensors()
+
         # Weather sensors
         self.weather = LightwandWeather(
             api = self,
@@ -134,7 +136,6 @@ class Room(Hass):
             room_lux_sensor_mqtt = self.args.get('RoomLuxMQTT'),
         )
 
-        self.bed_sensors:list = self.args.get('bed_sensors', [])
         self.listen_sensors = self.args.get('listen_sensors', [])
         self.mediaplayers:dict = self.args.get('mediaplayers', [])
 
@@ -293,6 +294,22 @@ class Room(Hass):
             namespace = HASS_namespace
         )
 
+    def _parse_bed_sensors(self):
+        raw = self.args.get('bed_sensors', [])
+        parsed = []
+
+        for entry in raw:
+            if isinstance(entry, str):
+                parsed.append(Sensor(sensor=entry))
+            elif isinstance(entry, dict):
+                parsed.append(Sensor(**entry))
+            else:
+                self.log(
+                    f"bed_sensors entry must be a string or dict, got {type(entry)}: {entry}"
+                )
+
+        return parsed
+
         """ End initial setup for Room """
 
     def terminate(self) -> None:
@@ -340,10 +357,15 @@ class Room(Hass):
             if modename not in (translations.night, translations.off, translations.reset):
                 if self._bed_occupied() and not modename.startswith(translations.night):
                     for bed_sensor in self.bed_sensors:
-                        if self.get_state(bed_sensor) == 'on':
+                        if self.get_state(bed_sensor.sensor) == 'on':
                             self._listen_out_of_bed(bed_sensor)
                     self.getOutOfBedMode = modename
                     return
+        
+        if modename.startswith(translations.night):
+            for bed_sensor in self.bed_sensors:
+                cancel_listen_handler(ADapi = self, handler = bed_sensor.handler)
+                bed_sensor.handler = None
 
         self.LIGHT_MODE = modename
 
@@ -489,7 +511,7 @@ class Room(Hass):
             if use_motion:
                 light.setMotion(lightmode=self.LIGHT_MODE)
 
-    def out_of_bed(self, entity, attribute, old, new, kwargs) -> None:
+    def out_of_bed(self, entity, attribute, old, new, **kwargs) -> None:
         """ Check if all bed sensors are empty and if so change to current mode. """
 
         if self._bed_occupied():
@@ -501,14 +523,20 @@ class Room(Hass):
     def _bed_occupied(self) -> bool:
         """Return True if any bed sensor reports 'on'."""
 
-        return any(self.get_state(sensor) == 'on' for sensor in self.bed_sensors)
+        return any(
+            self.get_state(sensor.sensor) == 'on'
+            and safe_eval(sensor.constraints, {'self': self})
+            for sensor in self.bed_sensors
+        )
 
     def _listen_out_of_bed(self, sensor: str) -> None:
-        self.listen_state(
+        sensor.handler = self.listen_state(
             self.out_of_bed,
-            sensor,
+            sensor.sensor,
             new='off',
+            duration = sensor.delay,
             oneshot=True,
+            sensor = sensor,
         )
 
     def presence_change(self, entity, attribute, old, new, **kwargs) -> None:
