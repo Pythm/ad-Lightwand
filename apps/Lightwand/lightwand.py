@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -348,6 +348,12 @@ class Room(Hass):
                 return
 
         # Check if old light mode is night and bed is occupied.
+
+        if modename.startswith(translations.night):
+            for bed_sensor in self.bed_sensors:
+                cancel_listen_handler(ADapi = self, handler = bed_sensor.handler)
+                bed_sensor.handler = None
+
         if self.LIGHT_MODE.startswith(translations.night):
             if (
                 modename in (translations.morning, translations.normal)
@@ -361,11 +367,6 @@ class Room(Hass):
                             self._listen_out_of_bed(bed_sensor)
                     self.getOutOfBedMode = modename
                     return
-        
-        if modename.startswith(translations.night):
-            for bed_sensor in self.bed_sensors:
-                cancel_listen_handler(ADapi = self, handler = bed_sensor.handler)
-                bed_sensor.handler = None
 
         self.LIGHT_MODE = modename
 
@@ -533,9 +534,9 @@ class Room(Hass):
         sensor.handler = self.listen_state(
             self.out_of_bed,
             sensor.sensor,
-            new='off',
+            new = 'off',
             duration = sensor.delay,
-            oneshot=True,
+            oneshot = True,
             sensor = sensor,
         )
 
