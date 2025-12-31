@@ -477,12 +477,12 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 ---
 
 ### 🛏️ Bed Sensors   
-- The `bed_sensor` feature keeps the light in **night** mode until the bed is exited.  
+- The `bed_sensors` feature keeps the light in **night** mode until the bed is exited.  
   You can now define a constraint for the bed sensor that, when it is not true, will prevent the bed from being considered *occupied*.
 
 **Example**:  
 ```yaml
-  bed_sensor: 
+  bed_sensors: 
     - sensor: binary_sensor.bed_occupied
       delay: 5
 ```
