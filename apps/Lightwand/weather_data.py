@@ -1,4 +1,5 @@
 from datetime import timedelta
+import json
 
 LUX_STALE_MINUTES = 15
 MIN_REACT_MINUTES = 2
@@ -152,23 +153,28 @@ class LightwandWeather:
         self._handle_mqtt_lux(data, attr='room_lux')
 
     def _handle_mqtt_lux(self, data, attr):
-        payload = data.get('payload')
+
+        payload = data.get("payload")
         if isinstance(payload, bytes):
             try:
-                payload_json = payload.decode()
-            except Exception:
+                payload = payload.decode("utf-8")
+            except Exception as e:
+                self.ADapi.log(f"Failed to decode payload bytes from {attr}: {e}")
                 return
 
-        try:
-            payload_json = json.loads(payload)
-        except Exception:
+        if isinstance(payload, str):
+            try:
+                payload_json = json.loads(payload)
+            except json.JSONDecodeError:
+                payload_json = payload
+        else:
             payload_json = payload
 
         try:
             if isinstance(payload_json, dict):
                 old_attr = getattr(self, attr)
                 match payload_json:
-                    case {'illuminance': illuminance} if old_attr != float(illuminance):
+                    case {'illuminance': illuminance} if illuminance is not None and old_attr != float(illuminance):
                         value = float(illuminance) # Zigbee sensor
                     case {'value': value} if old_attr != float(value):
                         value = float(value) # Zwave sensor
@@ -178,6 +184,7 @@ class LightwandWeather:
                 value = float(payload_json)
         except Exception as e:
             return
+
         if value != getattr(self, attr):
             setattr(self, attr, value)
             now = self.ADapi.datetime(aware=True)
