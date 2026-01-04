@@ -396,8 +396,13 @@ Use `offset` to dynamically increase or decrease brightness for dimmable lights 
 #### **Light-Level Options**  
 - `night_motion`: Enables motion detection during `night` mode.  
 
-#### **Holiday Lights Control**  
-Use `enable_light_control` to toggle holiday lights via an `input_boolean` or similar entity.  
+#### **Holiday Lights Control**
+Set an `input_boolean` (or similar) as `enable_light_control` for switches/lights you only use for special occations like christmas or during winter time.  
+The app will control the light/switch only if this switch is ON.  
+If the switch is OFF, the app will leave the light untouched, allowing other tasks to use it.
+
+> **NOTE**  
+> The setting is read only at startup, so you must restart AppDaemon (or the app) to enable/disable control.
 
 **Example**:  
 ```yaml
@@ -409,7 +414,7 @@ Use `enable_light_control` to toggle holiday lights via an `input_boolean` or si
     - prevent_night_to_morning
   MQTTLights:
     - lights:
-      - zigbee2mqtt/ENTRE_Spot
+      - zigbee2mqtt/ENTRE_Switch
       # Configure in light
       options:
         - night_motion

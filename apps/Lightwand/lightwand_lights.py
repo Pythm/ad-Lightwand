@@ -62,6 +62,7 @@ class Light:
         self.dimHandler = None
         self.motion:bool = False
         self.is_on:bool = None
+        self.is_turned_on:bool = None
         self.brightness:int = 0
         self.current_light_data:dict = {}
 
@@ -249,6 +250,7 @@ class Light:
             del automations[idx]
 
     def _run_daily_lights(self, **kwargs) -> None:
+        self.current_light_data = {}
         if self.motion:
             if (
                 self.dim_while_motion and self.is_on and
@@ -328,6 +330,7 @@ class Light:
 
         if lightmode == translations.reset:
             self.current_light_data = {}
+            self.is_turned_on = None
         elif (
             (lightmode == self.lightmode or lightmode == 'none')
             and self.current_OnCondition == new_OnCondition
@@ -352,6 +355,7 @@ class Light:
 
         if lightmode != self.lightmode:
             self.current_light_data = {}
+            self.is_turned_on = None
             cancel_timer_handler(ADapi = self.ADapi, handler = self.dimHandler)
             self.dimHandler = None
 
@@ -442,8 +446,9 @@ class Light:
         if self.current_LuxCondition is not True and new_LuxCondition is True:
             self.wereMotion = False
 
-        if not self.current_OnCondition or not self.current_LuxCondition:
+        if self.current_OnCondition is not True or new_LuxCondition is not True:
             if self.dim_while_motion:
+                self.ADapi.log(f"") ###
                 self.turn_off_lights()
             return
 
@@ -855,6 +860,7 @@ class Light:
         *light_data*. """
         if self._check_update_light_with_new_data(light_data=light_data):
             self.current_light_data = copy.deepcopy(light_data)
+            self.is_turned_on = True
 
             if self.random_turn_on_delay == 0:
                 for light in self.lights:
@@ -878,6 +884,7 @@ class Light:
     def turn_on_lights_at_max(self) -> None:
         """ Turns on lights with brightness 254. """
 
+        self.is_turned_on = True
         if self.has_adaptive_state:
             self.setAdaptiveLightingOff()
 
@@ -894,7 +901,10 @@ class Light:
 
     def turn_off_lights(self) -> None:
         """ Turns off lights. """
-        if self.is_on is not False:
+
+        self.current_light_data = {}
+        if self.is_on is not False and self.is_turned_on is not False:
+            self.is_turned_on = False
             if self.has_adaptive_state:
                 self.setAdaptiveLightingOff()
             self.current_light_data = {}
@@ -1025,6 +1035,7 @@ class MQTTLight(Light):
 
         if self._check_update_light_with_new_data(light_data=light_data):
             self.current_light_data = copy.deepcopy(light_data)
+            self.is_turned_on = True
 
             for light in self.lights:
                 if 'zigbee2mqtt' in light:
@@ -1057,6 +1068,7 @@ class MQTTLight(Light):
     def turn_on_lights_at_max(self) -> None:
         """ Turns on lights with brightness 254. """
 
+        self.is_turned_on = True
         if self.has_adaptive_state:
             self.setAdaptiveLightingOff()
 
@@ -1089,8 +1101,8 @@ class MQTTLight(Light):
         if self.has_adaptive_state:
             self.setAdaptiveLightingOff()
         self.current_light_data = {}
-        if self.is_on is not False:
-
+        if self.is_on is not False and self.is_turned_on is not False:
+            self.is_turned_on = False
             if self.random_turn_on_delay == 0:
                 for light in self.lights:
                     self.mqtt.mqtt_publish(topic = str(light) + '/set', payload = 'OFF', namespace = self.MQTT_namespace)
@@ -1234,9 +1246,11 @@ class ToggleLight(Light):
             self.ADapi.toggle(light)
 
     def turn_off_lights(self):
-        for light in self.lights:
-            self.ADapi.turn_off(light)
-        self.current_toggle = 0
+        if self.is_on is not False and self.is_turned_on is not False:
+            self.is_turned_on = False
+            for light in self.lights:
+                self.ADapi.turn_off(light)
+            self.current_toggle = 0
 
     def calculateToggles(self, toggle_bulb:int = 1) -> None:
         """ Calculates how many toggles to perform to get correct dim. """

@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -246,8 +246,10 @@ class Room(Hass):
             with open(self.json_storage, 'r') as json_read:
                 lightwand_data = json.load(json_read)
                 self.LIGHT_MODE = lightwand_data['mode']
+                if 'lux' in lightwand_data:
+                    self.weather.out_lux = lightwand_data['lux']
         except FileNotFoundError:
-            lightwand_data = {'mode' : self.LIGHT_MODE,}
+            lightwand_data = {'mode' : self.LIGHT_MODE, 'lux' : self.weather.out_lux}
             with open(self.json_storage, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
 
@@ -315,12 +317,11 @@ class Room(Hass):
     def terminate(self) -> None:
         """ Writes out data to persistent storage before terminating. """
 
+        lightwand_data = {'mode' : self.LIGHT_MODE, 'lux' : self.weather.out_lux}
         try:
-            lightwand_data: dict = {'mode' : self.LIGHT_MODE}
             with open(self.json_storage, 'w') as json_write:
                 json.dump(lightwand_data, json_write, indent = 4)
         except FileNotFoundError:
-            lightwand_data = {'mode' : self.LIGHT_MODE}
             try:
                 with open(self.json_storage, 'w') as json_write:
                     json.dump(lightwand_data, json_write, indent = 4)
