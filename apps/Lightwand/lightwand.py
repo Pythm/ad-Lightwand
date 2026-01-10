@@ -429,6 +429,8 @@ class Room(Hass):
         if self.LIGHT_MODE in (translations.normal, translations.reset):
             self.LIGHT_MODE = translations.normal
 
+        self._set_selector_input()
+
         # Motion and presence
     def motion_state(self, entity, attribute, old, new, **kwargs) -> None:
         """ Listens to motion state. """
@@ -584,6 +586,9 @@ class Room(Hass):
                     return
             self.LIGHT_MODE = translations.away
             self._set_selector_input()
+            self.log(f"Setting away from {entity}") ###
+        else: ###
+            self.log(f"{entity} old or new was not home: {new} / {old}") ###
 
         for light in self.roomlight:
             light.setLightMode(lightmode = self.LIGHT_MODE)

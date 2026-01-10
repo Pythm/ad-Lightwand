@@ -244,12 +244,14 @@ class Light:
             # ---- Prepare data for later scheduling ----------------------------------
             if self.ADapi.parse_time(automation.time) > now_time_notAware:
                 self.ADapi.run_once(self._run_daily_lights, automation.time, light_properties = automation.light_properties)
+                self.ADapi.log(f"{self.lights[0]} run daily at : {automation.time}", level = "DEBUG") ###
 
         # ----- Remove automations that are no longer valid
         for idx in reversed(automations_to_delete):
             del automations[idx]
 
     def _run_daily_lights(self, **kwargs) -> None:
+        self.ADapi.log(f"{self.lights[0]} run daily excecuted with properties: {kwargs['light_properties']}", level = "DEBUG") ###
         self.current_light_data = {}
         if self.motion:
             if (
@@ -448,7 +450,11 @@ class Light:
 
         if self.current_OnCondition is not True or new_LuxCondition is not True:
             if self.dim_while_motion:
-                self.ADapi.log(f"") ###
+                if self.lightmode != lightmode:
+                    self.ADapi.log(f"New light mode {lightmode} when conditions not met during motion & dim while motion") ###
+                    self.current_light_data = {}
+                    self.is_turned_on = None
+                    self.lightmode = lightmode
                 self.turn_off_lights()
             return
 
