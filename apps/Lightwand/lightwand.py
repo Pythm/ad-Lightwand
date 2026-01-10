@@ -92,7 +92,7 @@ class Room(Hass):
 
         # Presence detection
         self.trackers = [Sensor.from_yaml(item) for item in self.args.get('trackers', [])]
-        ishome = False
+        ishome = not self.trackers
         for tracker in self.trackers:
             self.listen_state(self.presence_change, tracker.sensor,
                 namespace = HASS_namespace,
