@@ -218,23 +218,7 @@ class Room(Hass):
 
         self.selector_input = self.args.get('selector_input', None)
         if self.selector_input is not None:
-            self.listen_state(self.mode_update_from_selector, self.selector_input,
-                namespace = HASS_namespace
-            )
-
-            input_select_state = self.get_state(self.selector_input, attribute='all')
-            current_options = input_select_state['attributes'].get('options', [])
-            self.selector_input_options = list(current_options)
-            
-            valid_modes = [m for m in self.all_modes if m not in ('fire', 'false-alarm', 'presence')]
-
-            if current_options != valid_modes:
-                self.selector_input_options = valid_modes
-                self.call_service("input_select/set_options",
-                    entity_id = self.selector_input,
-                    options = self.selector_input_options,
-                    namespace = HASS_namespace
-                )
+            self.run_in(self.setup_selector_input, 30, namespace = HASS_namespace)
 
         # Persistent storage for storing mode and lux data
         if 'json_path' in self.args:
@@ -314,6 +298,28 @@ class Room(Hass):
                 )
 
         return parsed
+
+    def setup_selector_input(self, **kwargs):
+        HASS_namespace = kwargs.get('namespace')
+        self.listen_state(self.mode_update_from_selector, self.selector_input,
+            namespace = HASS_namespace
+        )
+
+        input_select_state = self.get_state(self.selector_input, attribute='all')
+        current_options = input_select_state['attributes'].get('options', [])
+        self.selector_input_options = list(current_options)
+        
+        valid_modes = [m for m in self.all_modes if m not in ('fire', 'false-alarm', 'presence')]
+
+        if current_options != valid_modes:
+            self.selector_input_options = valid_modes
+            self.call_service("input_select/set_options",
+                entity_id = self.selector_input,
+                options = self.selector_input_options,
+                namespace = HASS_namespace
+            )
+        self._set_selector_input()
+
 
         """ End initial setup for Room """
 
