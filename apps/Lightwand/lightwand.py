@@ -141,7 +141,8 @@ class Room(Hass):
 
         for raw in self.args.get('MQTTLights', []):
             if 'enable_light_control' in raw:
-                if self.get_state(raw['enable_light_control']) == 'off':
+                light_control_state = raw.get(str('light_control_state'), 'on')
+                if self.get_state(raw['enable_light_control']) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
@@ -160,7 +161,8 @@ class Room(Hass):
 
         for raw in self.args.get('Lights', []):
             if 'enable_light_control' in raw:
-                if self.get_state(raw['enable_light_control']) == 'off':
+                light_control_state = raw.get(str('light_control_state'), 'on')
+                if self.get_state(raw['enable_light_control']) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
@@ -179,7 +181,8 @@ class Room(Hass):
 
         for raw in self.args.get('ToggleLights', []):
             if 'enable_light_control' in raw:
-                if self.get_state(raw['enable_light_control']) == 'off':
+                light_control_state = raw.get(str('light_control_state'), 'on')
+                if self.get_state(raw['enable_light_control']) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
