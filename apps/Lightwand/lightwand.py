@@ -300,18 +300,15 @@ class Room(Hass):
         return parsed
 
     def setup_selector_input(self, **kwargs):
-        #input_select_state = self.get_state(self.selector_input, attribute='all')
-        #current_options = input_select_state['attributes'].get('options', [])
-        #self.selector_input_options = list(current_options)
-        
-        self.selector_input_options = [m for m in self.all_modes if m not in ('fire', 'false-alarm', 'presence')]
+        """ Setup the selector input for the room mode """
+
+        self.selector_input_options = [m for m in self.all_modes if m not in ('fire', 'false-alarm', 'presence', 'reset')]
 
         self.call_service("input_select/set_options",
             entity_id = self.selector_input,
             options = self.selector_input_options,
             namespace = self.HASS_namespace
         )
-        #self._set_selector_input()
         self.listen_state(self.mode_update_from_selector, self.selector_input,
             namespace = self.HASS_namespace
         )
