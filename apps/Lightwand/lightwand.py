@@ -218,7 +218,8 @@ class Room(Hass):
 
         self.selector_input = self.args.get('selector_input', None)
         if self.selector_input is not None:
-            self.run_in(self.setup_selector_input, 30)
+            selector_input_exclude_modes = self.args.get('selector_input_exclude_modes', [])
+            self.run_in(self.setup_selector_input, 30, selector_input_exclude_modes = selector_input_exclude_modes)
 
         # Persistent storage for storing mode and lux data
         if 'json_path' in self.args:
@@ -302,7 +303,9 @@ class Room(Hass):
     def setup_selector_input(self, **kwargs):
         """ Setup the selector input for the room mode """
 
-        self.selector_input_options = [m for m in self.all_modes if m not in ('fire', 'false-alarm', 'presence', 'reset')]
+        selector_input_exclude_modes = kwargs.get('selector_input_exclude_modes', [])
+        exclude = {'fire', 'false-alarm', 'presence', 'reset'} | set(selector_input_exclude_modes)
+        self.selector_input_options = [m for m in self.all_modes if m not in exclude]
 
         self.call_service("input_select/set_options",
             entity_id = self.selector_input,

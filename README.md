@@ -151,11 +151,15 @@ To change the mode for a single room, use the mode name + `_appName`.
 As an alternative to firing an event, you can use a **Home Assistant selector** with `selector_input`.  
 - The app will update the selector options dynamically based on `MODE_CHANGE` events.
 - Version 2.0.0 and later auto populates the selector_input with valid modes for the room.
+- Use `selector_input_exclude_modes` to exclude mode names from the selector. Note that if the active mode is not in the selector it will show the old name.
 
 ```yaml
 your_room_name:
   ...
   selector_input: input_select.livingroom_mode_light
+  selector_input_exclude_modes:
+    - away
+    - wash
 ```
 
 > [!NOTE]  
