@@ -95,7 +95,7 @@ Use `MODE_CHANGE` events to activate predefined or custom modes.
 
 #### ✅ From AppDaemon:  
 ```python
-self.fire_event("MODE_CHANGE", mode='your_mode_name')
+self.fire_event("MODE_CHANGE", mode='your-mode-name')
 ```
 
 #### ✅ From Home Assistant:  
@@ -105,7 +105,7 @@ day:
   sequence:
     - event: MODE_CHANGE
       event_data:
-        mode: 'your_mode_name'
+        mode: 'your-mode-name'
 ```
 
 > [!TIP]  

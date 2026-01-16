@@ -438,7 +438,7 @@ class Room(Hass):
 
         self.reactToChange()
 
-        if self.LIGHT_MODE in (translations.normal, translations.reset):
+        if self.LIGHT_MODE == translations.reset:
             self.LIGHT_MODE = translations.normal
 
         self._set_selector_input()
@@ -668,20 +668,21 @@ class Room(Hass):
         """ Returns true if media player sensors is off or self.LIGHT_DATA != 'normal'/'night'.
             If not it updates lightmode to the first detected media player. """
 
-        if (
-            self.LIGHT_MODE in (translations.normal, translations.reset)
-            or self.LIGHT_MODE.startswith(translations.night)
-        ):
+        if self.LIGHT_MODE in (translations.normal, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
                     for light in self.roomlight:
                         if ((light.checkConditions(light.conditions) and light.checkLuxConstraints()) or
                             light.current_keep_on_Condition
                         ):
+                            if self.LIGHT_MODE == translations.reset:
+                                light.current_LuxCondition = not light.checkLuxConstraints()
+                                light.current_light_data = {}
+                                light.is_turned_on = None
                             light.setLightMode(lightmode = mediaplayer['mode'])
                         else:
                             light.turn_off_lights()
-                            
+
                     return False
         return True
 
