@@ -48,6 +48,7 @@ def _convert_dict_to_light_spec(d: dict) -> LightSpec:
             'motion_sensors',
             'options',
             'enable_light_control',
+            'light_control_state',
             'toggle',
             'num_dim_steps',
             'toggle_speed',

@@ -95,7 +95,7 @@ Use `MODE_CHANGE` events to activate predefined or custom modes.
 
 #### ✅ From AppDaemon:  
 ```python
-self.fire_event("MODE_CHANGE", mode='your_mode_name')
+self.fire_event("MODE_CHANGE", mode='your-mode-name')
 ```
 
 #### ✅ From Home Assistant:  
@@ -105,7 +105,7 @@ day:
   sequence:
     - event: MODE_CHANGE
       event_data:
-        mode: 'your_mode_name'
+        mode: 'your-mode-name'
 ```
 
 > [!TIP]  
@@ -151,11 +151,15 @@ To change the mode for a single room, use the mode name + `_appName`.
 As an alternative to firing an event, you can use a **Home Assistant selector** with `selector_input`.  
 - The app will update the selector options dynamically based on `MODE_CHANGE` events.
 - Version 2.0.0 and later auto populates the selector_input with valid modes for the room.
+- Use `selector_input_exclude_modes` to exclude mode names from the selector. Note that if the active mode is not in the selector it will show the old name.
 
 ```yaml
 your_room_name:
   ...
   selector_input: input_select.livingroom_mode_light
+  selector_input_exclude_modes:
+    - away
+    - wash
 ```
 
 > [!NOTE]  
@@ -164,31 +168,61 @@ your_room_name:
 
 ---
 
-### 🔄 Translating or Changing Modes  
+
+### 🔄 Translating or Changing Modes
 
 #### Steps to Customize Mode Names
-1. **Save the File Persistently**
-   Store the supplied examplefile `translation.json` in a location that persists across sessions and updates (e.g., `/config/lightwand/translation.json`).
+1. **Save the File Persistently**  
+   Store the supplied example `translation.json` in a location that persists across sessions and updates (e.g., `/config/lightwand/translation.json`).  
 
-2. **Edit the Translation File**
-   Modify the `translation.json` file to update mode names and event settings.
+2. **Edit the Translation File**  
+   Modify `translation.json` to update the mode names and event settings.  
+   > **Tip**  
+   > In `translation.json`, you can specify a custom event name (e.g., `"LIGHT_MODE"`) instead of the default `"MODE_CHANGE"` to match your existing automations.  
 
-   > [!TIP]
-   > In `translation.json`, you can specify a **custom event name** (e.g., `"LIGHT_MODE"`) instead of the default `"MODE_CHANGE"` to match your existing automations.
+   **Only translate the words that already exist in the default file.** The json file only contains mode names with a predefined action.
 
+3. **Specify the Path and Language in Configuration**  
+   Use the `language_file` parameter and `lightwand_language` to set your preferred language in **one** of your room‑app configurations:  
 
-3. **Specify the Path and Language in Configuration**
-   Use the `language_file` parameter and `lightwand_language` to set your preferred language in **one** of your room app configuration:
    ```yaml
    your_room_name:
      ...
      language_file: /config/lightwand/translation.json
      lightwand_language: "en"
-   ```
-   Lightwand creates a singleton that can be imported by other apps to listen to the same modes.
+   ```  
 
-   > [!NOTE]
-   > Translating night and off also results in app checking if mode name starts with the translated modename equivalent, to turn off and prevent motion.
+   Lightwand creates a singleton that can be imported by other apps to listen to the same modes.  
+
+4. **Consistency Across the System**  
+   If you translate a word (for instance, `"off"` → `"aus"` and `"night"` → `"nacht"`), **every** app that uses the translation will recognize the new word.
+   These mode names are pre defined and have some logic behind it and you can then do modes like "nachtKinderzimmer" (nightChildRoom) to treat the room as in night mode. To turn off only in the livingroom you would use "aus_Wohnzimmer". If you have translated `"off"` → `"aus"` a call like `off_LivingRoom` would be interpreted as a *custom* mode named `"off"` rather than the built‑in off‑logic, leading to unexpected behaviour.
+
+   The translated names will need to be changed throughout your entire setup in everything from scripts to other automations.
+
+> **Note**  
+> **Custom Modes Are Your Choice** Any mode that you create *outside* the predefined set is a light mode where you must specify either state or light_data.
+> * These do **not** need to be added to `translation.json`.  
+
+
+---
+
+#### Quick Reference Table
+
+| Default Mode | Example German Translation | Example Usage |
+|--------------|---------------------------|---------------|
+| `normal`     | `automatik`               | `automatik_LivingRoom` |
+| `off`        | `aus`                     | `aus_Kitchen` |
+| `night`      | `nacht`                   | `nacht_Bedroom` |
+| `reset`      | `zurücksetzen`            | `reset_Garage` |
+| `custom`     | `manuell`                 | `manuell_Security` |
+
+---
+
+> **Note**  
+> Translating night and off also results in the app checking if a mode name starts with the translated mode name equivalent, to turn off and prevent motion.
+
+With this approach you can keep your translations clean, maintain logical consistency across your automations, and extend Lightwand with your own custom modes when needed.
 ---
 
 
@@ -467,7 +501,7 @@ You can define the **time delay** (in seconds) after motion detection before the
 > [!TIP]  
 > Tracker will set mode as `away` when not home, but there are **no restrictions** on calling new modes or switching to `normal` when in `away` mode.  
 
-For **presence tracking**, define the trackers in the `presence` section. When a tracker is `home`, the app will switch to `normal` mode (if `presence` is not defined in `light_modes`). If all defined trackers are **not home**, the room will switch to `away` mode.  
+For **presence tracking**, define the trackers in the `presence` section. When a tracker is `home`, the app will switch to `presence` mode.  If `presence` is not defined in `light_modes` or constraints are not met then the room will switch to `normal` mode. If all defined trackers are **not home**, the room will switch to `away` mode.  
 
 **Example**:  
 ```yaml
@@ -477,7 +511,7 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 ```
 
 > [!NOTE]  
-> Trackers will **not change modes** unless the current mode is `normal` or `away`.  
+> Trackers will **not change modes** when returning home unless the current mode is `normal` or `away`.  
 
 ---
 

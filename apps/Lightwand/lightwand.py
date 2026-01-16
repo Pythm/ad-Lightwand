@@ -31,7 +31,7 @@ class Room(Hass):
     def initialize(self):
         self.mqtt = self.get_plugin_api('MQTT')
         # Namespaces for HASS and MQTT
-        HASS_namespace:str = self.args.get('HASS_namespace', 'default')
+        self.HASS_namespace:str = self.args.get('HASS_namespace', 'default')
         MQTT_namespace:str = self.args.get('MQTT_namespace', 'mqtt')
 
         self.roomlight:list = []
@@ -91,11 +91,11 @@ class Room(Hass):
         self.active_motion_sensors: Set[str] = set()
 
         # Presence detection
-        self.trackers = [Sensor.from_yaml(item) for item in self.args.get('trackers', [])]
-        ishome = False
+        self.trackers = [Sensor.from_yaml(item) for item in self.args.get('presence', [])]
+        ishome = not self.trackers
         for tracker in self.trackers:
             self.listen_state(self.presence_change, tracker.sensor,
-                namespace = HASS_namespace,
+                namespace = self.HASS_namespace,
                 tracker = tracker
             )
             if self.get_state(tracker.sensor) == 'home':
@@ -108,7 +108,7 @@ class Room(Hass):
         motion_sensors = [Sensor.from_yaml(item) for item in self.args.get('motion_sensors', [])]
         for sensor in motion_sensors:
             self.listen_state(self.motion_state, sensor.sensor,
-                namespace = HASS_namespace,
+                namespace = self.HASS_namespace,
                 sensor = sensor
             )
 
@@ -126,7 +126,7 @@ class Room(Hass):
         # Weather sensors
         self.weather = LightwandWeather(
             api = self,
-            HASS_namespace = HASS_namespace,
+            HASS_namespace = self.HASS_namespace,
             MQTT_namespace = MQTT_namespace,
             lux_sensor = self.args.get('OutLux_sensor'),
             lux_sensor_mqtt = self.args.get('OutLuxMQTT'),
@@ -141,14 +141,15 @@ class Room(Hass):
 
         for raw in self.args.get('MQTTLights', []):
             if 'enable_light_control' in raw:
-                if self.get_state(raw['enable_light_control']) == 'off':
+                light_control_state = raw.get(str('light_control_state'), 'on')
+                if self.get_state(raw['enable_light_control']) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
             light = build_light(api = self,
                                 spec = spec,
                                 mqtt_namespace = MQTT_namespace,
-                                hass_namespace = HASS_namespace,
+                                hass_namespace = self.HASS_namespace,
                                 mqtt_plugin = self.mqtt,
                                 adaptive_switch = adaptive_switch,
                                 adaptive_sleep_mode = adaptive_sleep_mode,
@@ -160,14 +161,15 @@ class Room(Hass):
 
         for raw in self.args.get('Lights', []):
             if 'enable_light_control' in raw:
-                if self.get_state(raw['enable_light_control']) == 'off':
+                light_control_state = raw.get(str('light_control_state'), 'on')
+                if self.get_state(raw['enable_light_control']) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
             light = build_light(api = self,
                                 spec = spec,
                                 mqtt_namespace = MQTT_namespace,
-                                hass_namespace = HASS_namespace,
+                                hass_namespace = self.HASS_namespace,
                                 mqtt_plugin = None,
                                 adaptive_switch = adaptive_switch,
                                 adaptive_sleep_mode = adaptive_sleep_mode,
@@ -179,7 +181,8 @@ class Room(Hass):
 
         for raw in self.args.get('ToggleLights', []):
             if 'enable_light_control' in raw:
-                if self.get_state(raw['enable_light_control']) == 'off':
+                light_control_state = raw.get(str('light_control_state'), 'on')
+                if self.get_state(raw['enable_light_control']) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
@@ -190,7 +193,7 @@ class Room(Hass):
             light = build_light(api = self,
                                 spec = spec,
                                 mqtt_namespace = MQTT_namespace,
-                                hass_namespace = HASS_namespace,
+                                hass_namespace = self.HASS_namespace,
                                 mqtt_plugin = None,
                                 adaptive_switch = adaptive_switch,
                                 adaptive_sleep_mode = adaptive_sleep_mode,
@@ -215,23 +218,8 @@ class Room(Hass):
 
         self.selector_input = self.args.get('selector_input', None)
         if self.selector_input is not None:
-            self.listen_state(self.mode_update_from_selector, self.selector_input,
-                namespace = HASS_namespace
-            )
-
-            input_select_state = self.get_state(self.selector_input, attribute='all')
-            current_options = input_select_state['attributes'].get('options', [])
-            self.selector_input_options = list(current_options)
-            
-            valid_modes = [m for m in self.all_modes if m not in ('fire', 'false-alarm', 'presence')]
-
-            if current_options != valid_modes:
-                self.selector_input_options = valid_modes
-                self.call_service("input_select/set_options",
-                    entity_id = self.selector_input,
-                    options = self.selector_input_options,
-                    namespace = HASS_namespace
-                )
+            selector_input_exclude_modes = self.args.get('selector_input_exclude_modes', [])
+            self.run_in(self.setup_selector_input, 30, selector_input_exclude_modes = selector_input_exclude_modes)
 
         # Persistent storage for storing mode and lux data
         if 'json_path' in self.args:
@@ -256,7 +244,7 @@ class Room(Hass):
         # Listen sensors for when to update lights
         for sensor in self.listen_sensors:
             self.listen_state(self.state_changed, sensor,
-                namespace = HASS_namespace
+                namespace = self.HASS_namespace
             )
 
         # Media players for setting mediaplayer mode
@@ -265,14 +253,14 @@ class Room(Hass):
             self.listen_state(self.media_on, mediaplayer['mediaplayer'],
                 new = 'on',
                 old = 'off',
-                namespace = HASS_namespace,
+                namespace = self.HASS_namespace,
                 mode = mediaplayer['mode']
             )
             self.listen_state(self.media_off, mediaplayer['mediaplayer'],
                 new = 'off',
                 old = 'on',
                 duration = delay,
-                namespace = HASS_namespace,
+                namespace = self.HASS_namespace,
                 mode = mediaplayer['mode']
             )
 
@@ -293,7 +281,7 @@ class Room(Hass):
             If you already have implemented someting similar in your Home Assistant setup you can easily change
             MODE_CHANGE in translation.json to receive whatever data you are sending """
         self.listen_event(self.mode_event, translations.MODE_CHANGE,
-            namespace = HASS_namespace
+            namespace = self.HASS_namespace
         )
 
     def _parse_bed_sensors(self):
@@ -312,10 +300,34 @@ class Room(Hass):
 
         return parsed
 
+    def setup_selector_input(self, **kwargs):
+        """ Setup the selector input for the room mode """
+
+        selector_input_exclude_modes = kwargs.get('selector_input_exclude_modes', [])
+        exclude = {'fire', 'false-alarm', 'presence', 'reset'} | set(selector_input_exclude_modes)
+        self.selector_input_options = [m for m in self.all_modes if m not in exclude]
+
+        self.call_service("input_select/set_options",
+            entity_id = self.selector_input,
+            options = self.selector_input_options,
+            namespace = self.HASS_namespace
+        )
+        self.listen_state(self.mode_update_from_selector, self.selector_input,
+            namespace = self.HASS_namespace
+        )
+
+
         """ End initial setup for Room """
 
     def terminate(self) -> None:
         """ Writes out data to persistent storage before terminating. """
+
+        if self.selector_input is not None:
+            self.call_service("input_select/set_options",
+                entity_id = self.selector_input,
+                options = self.LIGHT_MODE,
+                namespace = self.HASS_namespace
+            )
 
         lightwand_data = {'mode' : self.LIGHT_MODE, 'lux' : self.weather.out_lux}
         try:
@@ -426,8 +438,10 @@ class Room(Hass):
 
         self.reactToChange()
 
-        if self.LIGHT_MODE in (translations.normal, translations.reset):
+        if self.LIGHT_MODE == translations.reset:
             self.LIGHT_MODE = translations.normal
+
+        self._set_selector_input()
 
         # Motion and presence
     def motion_state(self, entity, attribute, old, new, **kwargs) -> None:
@@ -555,24 +569,20 @@ class Room(Hass):
                     self.log(f"Constraint eval error for {tracker.sensor}: {exc}", level = 'INFO')
                     return
 
-            if not constraints_ok:
-                if self.LIGHT_MODE == translations.away:
-                    self.LIGHT_MODE = translations.normal
-                    self._set_selector_input()
-                    self.reactToChange()
-                return
-
             if self.LIGHT_MODE in (translations.normal, translations.away) and self.check_mediaplayers_off():
                 self.LIGHT_MODE = translations.normal
                 self._set_selector_input()
+
+            if not constraints_ok or 'presence' not in self.all_modes:
+                self.reactToChange()
+                return
+
+            else:
                 self.active_motion_sensors.add(tracker.sensor)
                 cancel_timer_handler(ADapi = self, handler = tracker.handler)
                 tracker.handler = None
-                if 'presence' in self.all_modes:
-                    for light in self.roomlight:
-                        light.setLightMode(lightmode = 'presence')
-                else:
-                    self._newMotion()
+                for light in self.roomlight:
+                    light.setLightMode(lightmode = 'presence')
                 tracker_delay:int = getattr(tracker, 'delay', 300)
                 tracker.handler = self.run_in(self.MotionEnd, tracker_delay, sensor = tracker)
                 return
@@ -582,11 +592,10 @@ class Room(Hass):
                 if self.get_state(tracker.sensor) == 'home':
                     self.reactToChange()
                     return
-            self.LIGHT_MODE = translations.away
-            self._set_selector_input()
+            if self.LIGHT_MODE not in (translations.off, translations.custom):
+                self.LIGHT_MODE = translations.away
 
-        for light in self.roomlight:
-            light.setLightMode(lightmode = self.LIGHT_MODE)
+        self.reactToChange()
 
     def MotionEnd(self, **kwargs) -> None:
         """ Motion / Presence countdown ended. Turns lights back to current mode. """
@@ -659,20 +668,21 @@ class Room(Hass):
         """ Returns true if media player sensors is off or self.LIGHT_DATA != 'normal'/'night'.
             If not it updates lightmode to the first detected media player. """
 
-        if (
-            self.LIGHT_MODE in (translations.normal, translations.reset)
-            or self.LIGHT_MODE.startswith(translations.night)
-        ):
+        if self.LIGHT_MODE in (translations.normal, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
                     for light in self.roomlight:
                         if ((light.checkConditions(light.conditions) and light.checkLuxConstraints()) or
                             light.current_keep_on_Condition
                         ):
+                            if self.LIGHT_MODE == translations.reset:
+                                light.current_LuxCondition = not light.checkLuxConstraints()
+                                light.current_light_data = {}
+                                light.is_turned_on = None
                             light.setLightMode(lightmode = mediaplayer['mode'])
                         else:
                             light.turn_off_lights()
-                            
+
                     return False
         return True
 

@@ -448,7 +448,10 @@ class Light:
 
         if self.current_OnCondition is not True or new_LuxCondition is not True:
             if self.dim_while_motion:
-                self.ADapi.log(f"") ###
+                if self.lightmode != lightmode:
+                    self.current_light_data = {}
+                    self.is_turned_on = None
+                    self.lightmode = lightmode
                 self.turn_off_lights()
             return
 
