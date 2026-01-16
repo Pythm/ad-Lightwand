@@ -91,7 +91,7 @@ class Room(Hass):
         self.active_motion_sensors: Set[str] = set()
 
         # Presence detection
-        self.trackers = [Sensor.from_yaml(item) for item in self.args.get('trackers', [])]
+        self.trackers = [Sensor.from_yaml(item) for item in self.args.get('presence', [])]
         ishome = not self.trackers
         for tracker in self.trackers:
             self.listen_state(self.presence_change, tracker.sensor,
@@ -569,24 +569,20 @@ class Room(Hass):
                     self.log(f"Constraint eval error for {tracker.sensor}: {exc}", level = 'INFO')
                     return
 
-            if not constraints_ok:
-                if self.LIGHT_MODE == translations.away:
-                    self.LIGHT_MODE = translations.normal
-                    self._set_selector_input()
-                    self.reactToChange()
-                return
-
             if self.LIGHT_MODE in (translations.normal, translations.away) and self.check_mediaplayers_off():
                 self.LIGHT_MODE = translations.normal
                 self._set_selector_input()
+
+            if not constraints_ok or 'presence' not in self.all_modes:
+                self.reactToChange()
+                return
+
+            else:
                 self.active_motion_sensors.add(tracker.sensor)
                 cancel_timer_handler(ADapi = self, handler = tracker.handler)
                 tracker.handler = None
-                if 'presence' in self.all_modes:
-                    for light in self.roomlight:
-                        light.setLightMode(lightmode = 'presence')
-                else:
-                    self._newMotion()
+                for light in self.roomlight:
+                    light.setLightMode(lightmode = 'presence')
                 tracker_delay:int = getattr(tracker, 'delay', 300)
                 tracker.handler = self.run_in(self.MotionEnd, tracker_delay, sensor = tracker)
                 return
@@ -596,14 +592,10 @@ class Room(Hass):
                 if self.get_state(tracker.sensor) == 'home':
                     self.reactToChange()
                     return
-            self.LIGHT_MODE = translations.away
-            self._set_selector_input()
-            self.log(f"Setting away from {entity}") ###
-        else: ###
-            self.log(f"{entity} old or new was not home: {new} / {old}") ###
+            if self.LIGHT_MODE not in (translations.off, translations.custom):
+                self.LIGHT_MODE = translations.away
 
-        for light in self.roomlight:
-            light.setLightMode(lightmode = self.LIGHT_MODE)
+        self.reactToChange()
 
     def MotionEnd(self, **kwargs) -> None:
         """ Motion / Presence countdown ended. Turns lights back to current mode. """

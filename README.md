@@ -501,7 +501,7 @@ You can define the **time delay** (in seconds) after motion detection before the
 > [!TIP]  
 > Tracker will set mode as `away` when not home, but there are **no restrictions** on calling new modes or switching to `normal` when in `away` mode.  
 
-For **presence tracking**, define the trackers in the `presence` section. When a tracker is `home`, the app will switch to `normal` mode (if `presence` is not defined in `light_modes`). If all defined trackers are **not home**, the room will switch to `away` mode.  
+For **presence tracking**, define the trackers in the `presence` section. When a tracker is `home`, the app will switch to `presence` mode.  If `presence` is not defined in `light_modes` or constraints are not met then the room will switch to `normal` mode. If all defined trackers are **not home**, the room will switch to `away` mode.  
 
 **Example**:  
 ```yaml
@@ -511,7 +511,7 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 ```
 
 > [!NOTE]  
-> Trackers will **not change modes** unless the current mode is `normal` or `away`.  
+> Trackers will **not change modes** when returning home unless the current mode is `normal` or `away`.  
 
 ---
 
