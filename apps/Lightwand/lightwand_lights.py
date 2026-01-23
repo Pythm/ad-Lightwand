@@ -763,8 +763,8 @@ class Light:
         targetBrightness = kwargs['targetBrightness']
         if 'brightness' in self.current_light_data:
             if self.current_light_data['brightness'] > targetBrightness:
-                self.current_light_data['brightness'] -= 1
-                self.turn_on_lights(light_data = self.current_light_data)
+                light_data = self.current_light_data['brightness'] - 1
+                self.turn_on_lights(light_data = light_data)
                 return
         self._stop_dim_by_one()
 
@@ -773,8 +773,8 @@ class Light:
         targetBrightness = kwargs['targetBrightness']
         if 'brightness' in self.current_light_data:
             if self.current_light_data['brightness'] < targetBrightness:
-                self.current_light_data['brightness'] += 1
-                self.turn_on_lights(light_data = self.current_light_data)
+                light_data = self.current_light_data['brightness'] + 1
+                self.turn_on_lights(light_data = light_data)
                 return
         self._stop_dim_by_one()
 
