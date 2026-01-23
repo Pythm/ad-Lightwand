@@ -675,11 +675,8 @@ class Room(Hass):
                         if ((light.checkConditions(light.conditions) and light.checkLuxConstraints()) or
                             light.current_keep_on_Condition
                         ):
-                            if self.LIGHT_MODE == translations.reset:
-                                light.current_LuxCondition = not light.checkLuxConstraints()
-                                light.current_light_data = {}
-                                light.is_turned_on = None
-                            light.setLightMode(lightmode = mediaplayer['mode'])
+                            force_change = self.LIGHT_MODE == translations.reset
+                            light.setLightMode(lightmode = mediaplayer['mode'], force_change = force_change)
                         else:
                             light.turn_off_lights()
 

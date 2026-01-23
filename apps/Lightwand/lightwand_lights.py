@@ -65,6 +65,7 @@ class Light:
         self.is_turned_on:bool = None
         self.brightness:int = 0
         self.current_light_data:dict = {}
+        self.run_daily_adjustments_to_run: list[str] = []
 
         string:str = self.lights[0]
         if string.startswith('light.'):
@@ -150,6 +151,8 @@ class Light:
 
     def rundaily_Automation_Adjustments(self, kwargs) -> None:
         """ Adjusts solar based times in automations daily. """
+
+        self.run_daily_adjustments_to_run: list[str] = []
         if self.automations:
             self.automations = copy.deepcopy(self.automations_original)
             self.checkTimesinAutomations(self.automations)
@@ -242,8 +245,10 @@ class Light:
                     automations_to_delete.append(num)
 
             # ---- Prepare data for later scheduling ----------------------------------
-            if self.ADapi.parse_time(automation.time) > now_time_notAware:
+            if self.ADapi.parse_time(automation.time) > now_time_notAware and not automation.time in self.run_daily_adjustments_to_run:
                 self.ADapi.run_once(self._run_daily_lights, automation.time, light_properties = automation.light_properties)
+                self.ADapi.log(f"run_daily at {automation.time} - {self.lights[0]} with properties: {automation.light_properties}", level = 'DEBUG') ###
+                self.run_daily_adjustments_to_run.append(automation.time)
 
         # ----- Remove automations that are no longer valid
         for idx in reversed(automations_to_delete):
@@ -252,11 +257,16 @@ class Light:
     def _run_daily_lights(self, **kwargs) -> None:
         self.current_light_data = {}
         if self.motion:
+            self.ADapi.log(f"run_daily with motion for {self.lights[0]}", level = 'DEBUG') ###
             if (
                 self.dim_while_motion and self.is_on and
                 (not self.lightmode.startswith(translations.night) or self.night_motion) and
                 self.lightmode not in (translations.off, translations.custom)
             ):
+                self.current_OnCondition = None
+                self.current_keep_on_Condition = None
+                self.current_LuxCondition = None
+                self.ADapi.log(f"run_daily with motion -> set motion executed for {self.lights[0]}", level = 'DEBUG') ###
                 self.setMotion(lightmode=self.lightmode)
             return
 
@@ -267,7 +277,8 @@ class Light:
         self.current_OnCondition = None
         self.current_keep_on_Condition = None
         self.current_LuxCondition = None
-        self.setLightMode()
+        self.ADapi.log(f"run_daily set light mode for {self.lights[0]}", level = 'DEBUG') ###
+        self.setLightMode(force_change = True)
 
     def find_time(self, automations: List[Automation]) -> int:
         """ Return the index of the *last* automation whose ``time`` is 
@@ -320,7 +331,7 @@ class Light:
 
         return True
 
-    def setLightMode(self, lightmode: str = 'none') -> None:
+    def setLightMode(self, lightmode: str = 'none', force_change: bool = False) -> None:
         """ Main routine that decides what to do with the light(s) depending on the
         currently selected *mode* and on the conditions that are enabled """
 
@@ -336,6 +347,7 @@ class Light:
             and self.current_OnCondition == new_OnCondition
             and self.current_keep_on_Condition == new_keep_on_Condition
             and self.current_LuxCondition == new_LuxCondition
+            and not force_change
         ):
             if self.motionlight:
                 if not self.wereMotion:
@@ -1123,6 +1135,7 @@ class MQTTLight(Light):
         self.mqtt.mqtt_publish(topic = str(kwargs['light']) + '/set', payload = 'OFF', namespace = self.MQTT_namespace)
 
     def _publish_update_to_light(self, light: str, light_data: dict) -> None:
+
         payload = json.dumps(light_data)
         self.mqtt.mqtt_publish(
             topic = str(light) + '/set',
@@ -1184,7 +1197,7 @@ class ToggleLight(Light):
         if self.is_on:
             self.current_toggle = self.toggle_lightbulb 
 
-    def setLightMode(self, lightmode:str = 'none') -> None:
+    def setLightMode(self, lightmode:str = 'none', force_change: bool = False) -> None:
         """ The main function/logic to handle turning on / off lights based on mode selected. """
 
         self.current_OnCondition = self.checkConditions(conditions = self.conditions) if self.conditions is not None else True
