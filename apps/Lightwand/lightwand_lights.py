@@ -171,6 +171,7 @@ class Light:
         """ Find and adjust times in automations based on clock and sunrise/sunset times.
             Set up some default behaviour. """
 
+        self.ADapi.log(f"checkTimesinAutomations for {self.lights[0]} with {automations}", level = 'DEBUG') ###
         automations_to_delete: list[int] = []
         time_to_add: timedelta = timedelta(minutes=0)
         calculate_from_sunrise: bool = False
@@ -274,9 +275,6 @@ class Light:
         if light_properties.state == 'turn_off':
             self.turn_off_lights()
             return
-        self.current_OnCondition = None
-        self.current_keep_on_Condition = None
-        self.current_LuxCondition = None
         self.ADapi.log(f"run_daily set light mode for {self.lights[0]}", level = 'DEBUG') ###
         self.setLightMode(force_change = True)
 
@@ -363,6 +361,7 @@ class Light:
         self.current_LuxCondition = new_LuxCondition
 
         if lightmode == 'none':
+            self.ADapi.log(f"setLightMode for {self.lights[0]} has 'none' lightmode", level = 'DEBUG') ###
             lightmode = self.lightmode
 
         if lightmode != self.lightmode:
@@ -393,6 +392,7 @@ class Light:
 
         if lightmode not in (translations.normal, translations.reset):
             mode = self.light_modes_by_name.get(lightmode)
+            self.ADapi.log(f"setLightMode for {self.lights[0]} has lightmode {mode}", level = 'DEBUG') ###
             if mode is not None:
                 self.lightmode = lightmode
                 if mode.automations:
@@ -552,44 +552,29 @@ class Light:
     def setLightAutomation(self, automations: List[Automation] = None, light_properties: LightProperties = None) -> None:
         """ Finds the appropriate light_properties and adjusts lights """
 
-        current_state = 'none'
+        current_state = None
         target_num = None
         target_light_data = None
 
-        found_light_data = False
-        if automations is not None:
+        if light_properties is not None:
+            if light_properties.state is not None:
+                current_state = light_properties.state
+            if light_properties.light_data is not None:
+                target_light_data = light_properties.light_data
+        if current_state is None or target_light_data is None:
+            if automations is None:
+                automations = self.automations
             try:
                 target_num = self.find_time(automations = automations)
             except TypeError:
                 pass
             else:
-                if light_properties is None and hasattr(automations[target_num], 'light_properties'):
-                    light_properties = automations[target_num].light_properties
-                    current_state = automations[target_num].state
-                if light_properties.light_data is not None:
-                    target_light_data = light_properties.light_data
-                    found_light_data = True
-
-        if not found_light_data:
-            try:
-                target_num = self.find_time(automations = self.automations)
-            except TypeError:
-                pass
-            else:
-                if hasattr(self.automations[target_num].light_properties, 'light_data'):
-                    automations = self.automations
+                if current_state is None and hasattr(automations[target_num], 'light_properties'):
                     if light_properties is None:
                         light_properties = automations[target_num].light_properties
-                    if light_properties.light_data is None:
-                        if automations[target_num].light_properties.light_data is not None:
-                            target_light_data = automations[target_num].light_properties.light_data
-
-        if light_properties is not None:
-            if current_state == 'none' and light_properties.state is not None:
-                if light_properties.state != 'none':
-                    current_state = light_properties.state
-            if target_light_data is None and light_properties.light_data is not None:
-                target_light_data = light_properties.light_data
+                    current_state = automations[target_num].state
+                if target_light_data is None and light_properties.light_data is not None:
+                    target_light_data = light_properties.light_data
 
         if (current_state == 'pass' and self.is_on) or current_state == 'manual':
             if self.has_adaptive_state:
@@ -633,14 +618,15 @@ class Light:
                 if target_brightness is None:
                     target_brightness = target_light_data.get('brightness', 'value')
 
-                if automations[target_num].dimrate is not None:
-                    stoptime = automations[target_num + 1].time if target_num + 1 < len(automations) else '23:59:59'
-                    if self.ADapi.now_is_between(
-                        automations[target_num].time, stoptime
-                    ):
-                        target_brightness = (
-                            self.findBrightnessWhenDimRate(automation=automations, target_num=target_num) + light_properties.offset
-                        )
+                if automations is not None:
+                    if automations[target_num].dimrate is not None:
+                        stoptime = automations[target_num + 1].time if target_num + 1 < len(automations) else '23:59:59'
+                        if self.ADapi.now_is_between(
+                            automations[target_num].time, stoptime
+                        ):
+                            target_brightness = (
+                                self.findBrightnessWhenDimRate(automation=automations, target_num=target_num) + light_properties.offset
+                            )
 
                 light_properties_copy = copy.deepcopy(light_properties)
 
