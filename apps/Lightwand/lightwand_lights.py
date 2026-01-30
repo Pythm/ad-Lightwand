@@ -171,7 +171,6 @@ class Light:
         """ Find and adjust times in automations based on clock and sunrise/sunset times.
             Set up some default behaviour. """
 
-        self.ADapi.log(f"checkTimesinAutomations for {self.lights[0]} with {automations}", level = 'DEBUG') ###
         automations_to_delete: list[int] = []
         time_to_add: timedelta = timedelta(minutes=0)
         calculate_from_sunrise: bool = False
@@ -248,7 +247,6 @@ class Light:
             # ---- Prepare data for later scheduling ----------------------------------
             if self.ADapi.parse_time(automation.time) > now_time_notAware and not automation.time in self.run_daily_adjustments_to_run:
                 self.ADapi.run_once(self._run_daily_lights, automation.time, light_properties = automation.light_properties)
-                self.ADapi.log(f"run_daily at {automation.time} - {self.lights[0]} with properties: {automation.light_properties}", level = 'DEBUG') ###
                 self.run_daily_adjustments_to_run.append(automation.time)
 
         # ----- Remove automations that are no longer valid
@@ -258,7 +256,7 @@ class Light:
     def _run_daily_lights(self, **kwargs) -> None:
         self.current_light_data = {}
         if self.motion:
-            self.ADapi.log(f"run_daily with motion for {self.lights[0]}", level = 'DEBUG') ###
+            self.ADapi.log(f"run_daily with motion for {self.lights[0]}", level = 'INFO') ###
             if (
                 self.dim_while_motion and self.is_on and
                 (not self.lightmode.startswith(translations.night) or self.night_motion) and
@@ -267,7 +265,7 @@ class Light:
                 self.current_OnCondition = None
                 self.current_keep_on_Condition = None
                 self.current_LuxCondition = None
-                self.ADapi.log(f"run_daily with motion -> set motion executed for {self.lights[0]}", level = 'DEBUG') ###
+                self.ADapi.log(f"run_daily with motion -> set motion executed for {self.lights[0]}", level = 'INFO') ###
                 self.setMotion(lightmode=self.lightmode)
             return
 
@@ -275,7 +273,6 @@ class Light:
         if light_properties.state == 'turn_off':
             self.turn_off_lights()
             return
-        self.ADapi.log(f"run_daily set light mode for {self.lights[0]}", level = 'DEBUG') ###
         self.setLightMode(force_change = True)
 
     def find_time(self, automations: List[Automation]) -> int:
@@ -361,7 +358,6 @@ class Light:
         self.current_LuxCondition = new_LuxCondition
 
         if lightmode == 'none':
-            self.ADapi.log(f"setLightMode for {self.lights[0]} has 'none' lightmode", level = 'DEBUG') ###
             lightmode = self.lightmode
 
         if lightmode != self.lightmode:
@@ -392,7 +388,6 @@ class Light:
 
         if lightmode not in (translations.normal, translations.reset):
             mode = self.light_modes_by_name.get(lightmode)
-            self.ADapi.log(f"setLightMode for {self.lights[0]} has lightmode {mode}", level = 'DEBUG') ###
             if mode is not None:
                 self.lightmode = lightmode
                 if mode.automations:
@@ -555,26 +550,28 @@ class Light:
         current_state = None
         target_num = None
         target_light_data = None
+        perform_dim_rate = True
 
         if light_properties is not None:
             if light_properties.state is not None:
                 current_state = light_properties.state
             if light_properties.light_data is not None:
                 target_light_data = light_properties.light_data
-        if current_state is None or target_light_data is None:
-            if automations is None:
-                automations = self.automations
-            try:
-                target_num = self.find_time(automations = automations)
-            except TypeError:
-                pass
-            else:
-                if current_state is None and hasattr(automations[target_num], 'light_properties'):
-                    if light_properties is None:
-                        light_properties = automations[target_num].light_properties
-                    current_state = automations[target_num].state
-                if target_light_data is None and light_properties.light_data is not None:
-                    target_light_data = light_properties.light_data
+
+        if automations is None:
+            perform_dim_rate = False
+            automations = self.automations
+        try:
+            target_num = self.find_time(automations = automations)
+        except TypeError:
+            pass
+        else:
+            if current_state is None and hasattr(automations[target_num], 'light_properties'):
+                if light_properties is None:
+                    light_properties = automations[target_num].light_properties
+                current_state = automations[target_num].state
+            if target_light_data is None and light_properties.light_data is not None:
+                target_light_data = light_properties.light_data
 
         if (current_state == 'pass' and self.is_on) or current_state == 'manual':
             if self.has_adaptive_state:
@@ -618,7 +615,7 @@ class Light:
                 if target_brightness is None:
                     target_brightness = target_light_data.get('brightness', 'value')
 
-                if automations is not None:
+                if perform_dim_rate:
                     if automations[target_num].dimrate is not None:
                         stoptime = automations[target_num + 1].time if target_num + 1 < len(automations) else '23:59:59'
                         if self.ADapi.now_is_between(
