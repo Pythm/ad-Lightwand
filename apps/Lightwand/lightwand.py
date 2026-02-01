@@ -71,20 +71,42 @@ class Room(Hass):
         self.prevent_night_to_morning:bool = False
 
         # Options defined in configurations
-        if 'options' in self.args:
-            if 'exclude_from_custom' in self.args['options']:
-                self.all_modes.discard(translations.custom)
-                self.all_modes.discard(translations.wash)
-            night_motion = 'night_motion' in self.args['options']
-            dim_while_motion = 'dim_while_motion' in self.args['options']
-            self.prevent_off_to_normal = 'prevent_off_to_normal' in self.args['options']
-            self.prevent_night_to_morning = 'prevent_night_to_morning' in self.args['options']
+        roomtype = self.args.get('roomtype', 'normal')
 
+        """ Available roomtypes
+            - outdoor : 
+                - Motion on away and night TODO
+                - Lux control on away mode TODO
+                - exclude_from_custom including wash mode
+            - bedroom :
+                - exclude_from_custom including wash mode
+                - Logic to prevent reset when nightmode unless used with room name during evening/night. TODO
+            - hallway :
+                - Motion on away
+            - livingroom :
+                - take_manual_control
+            - kitchen :
+                - take_manual_control
+        """
+        options = self.args.get('options', [])
+        opts = set(options)
+        if 'exclude_from_custom' in opts or roomtype in ('outdoor', 'bedroom'):
+            self.all_modes.discard(translations.custom)
+            self.all_modes.discard(translations.wash)
+
+        night_motion      = 'night_motion'      in opts or roomtype in ('outdoor')
+        dim_while_motion  = 'dim_while_motion'  in opts
+        take_manual_control = 'take_manual_control' in opts or roomtype in ('livingroom', 'kitchen')
+        self.prevent_off_to_normal   = 'prevent_off_to_normal'   in opts
+        self.prevent_night_to_morning = 'prevent_night_to_morning' in opts
+
+        # Reaction delay to mode
         self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
         self.mode_turn_on_delay:int = self.args.get('mode_turn_on_delay',0)
         self.mode_delay_handler = None
         random_turn_on_delay:int = self.args.get('random_turn_on_delay',0)
 
+        # Adaptive Lighting
         adaptive_switch:str = self.args.get('adaptive_switch', None)
         adaptive_sleep_mode:str = self.args.get('adaptive_sleep_mode', None)
 
@@ -155,6 +177,7 @@ class Room(Hass):
                                 adaptive_sleep_mode = adaptive_sleep_mode,
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
+                                take_manual_control = take_manual_control,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -175,6 +198,7 @@ class Room(Hass):
                                 adaptive_sleep_mode = adaptive_sleep_mode,
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
+                                take_manual_control = take_manual_control,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -199,6 +223,7 @@ class Room(Hass):
                                 adaptive_sleep_mode = adaptive_sleep_mode,
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
+                                take_manual_control = False,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -646,7 +671,7 @@ class Room(Hass):
         if is_night_mode and not light.night_motion:
             return False
 
-        if self.LIGHT_MODE in (translations.off, translations.custom):
+        if self.LIGHT_MODE in (translations.off, translations.custom): # TODO Add roomtype then not outdoor & away
             return False
 
         if self.active_motion_sensors:

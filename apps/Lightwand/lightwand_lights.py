@@ -29,7 +29,8 @@ class Light:
                  keep_on_conditions: List[str],
                  HASS_namespace: str,
                  night_motion: str,
-                 dim_while_motion: str,
+                 dim_while_motion: bool,
+                 take_manual_control: bool,
                  random_turn_on_delay: int,
                  adaptive_switch: Optional[str],
                  adaptive_sleep_mode: Optional[str],
@@ -52,6 +53,7 @@ class Light:
         self.keep_on_conditions = keep_on_conditions
         self.night_motion = night_motion
         self.dim_while_motion = dim_while_motion
+        self.take_manual_control = take_manual_control
         self.random_turn_on_delay = random_turn_on_delay
         self.adaptive_switch = adaptive_switch
         self.adaptive_sleep_mode = adaptive_sleep_mode
@@ -62,7 +64,9 @@ class Light:
         self.dimHandler = None
         self.motion:bool = False
         self.is_on:bool = None
-        self.is_turned_on:bool = None
+        self.is_turned_on_by_automation:bool = None
+        self.manual_override = False
+        self.check_brightness_value_handler = None
         self.brightness:int = 0
         self.current_light_data:dict = {}
         self.run_daily_adjustments_to_run: list[str] = []
@@ -82,14 +86,17 @@ class Light:
                 self.brightness = 0
 
             self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
+                duration = 15,
                 namespace = HASS_namespace
             )
             self.is_on = self.ADapi.get_state(self.lights[0]) == 'on'
         elif string.startswith('switch.'):
             self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
+                duration = 15,
                 namespace = HASS_namespace
             )
             self.is_on = self.ADapi.get_state(self.lights[0]) == 'on'
+        self.is_turned_on_by_automation = self.is_on
 
         # ----- Helpers to check if conditions to turn on/off light has changed
         self.wereMotion:bool = False
@@ -254,11 +261,13 @@ class Light:
             del automations[idx]
 
     def _run_daily_lights(self, **kwargs) -> None:
-        self.current_light_data = {}
+        if self.manual_override:
+            return
+
         if self.motion:
             self.ADapi.log(f"run_daily with motion for {self.lights[0]}", level = 'INFO') ###
             if (
-                self.dim_while_motion and self.is_on and
+                self.dim_while_motion and self.is_turned_on_by_automation and
                 (not self.lightmode.startswith(translations.night) or self.night_motion) and
                 self.lightmode not in (translations.off, translations.custom)
             ):
@@ -266,7 +275,7 @@ class Light:
                 self.current_keep_on_Condition = None
                 self.current_LuxCondition = None
                 self.ADapi.log(f"run_daily with motion -> set motion executed for {self.lights[0]}", level = 'INFO') ###
-                self.setMotion(lightmode=self.lightmode)
+                self.setMotion(force_change = True)
             return
 
         light_properties: LightProperties = kwargs['light_properties']
@@ -330,16 +339,35 @@ class Light:
         """ Main routine that decides what to do with the light(s) depending on the
         currently selected *mode* and on the conditions that are enabled """
 
+        if lightmode == 'none': # Same lightmode
+            lightmode = self.lightmode
+        elif lightmode == translations.reset: # Reset to automagical
+            lightmode = translations.normal
+            force_change = True
+            self.manual_override = False
+        elif lightmode != self.lightmode: # New lightmode
+            force_change = True
+            self.manual_override = False
+            cancel_timer_handler(ADapi = self.ADapi, handler = self.dimHandler)
+            self.dimHandler = None
+
+            if self.adaptive_sleep_mode is not None and not lightmode.startswith(translations.night):
+                self.ADapi.turn_off(self.adaptive_sleep_mode)
+
+        if lightmode == self.lightmode and self.manual_override or lightmode == translations.custom: 
+            # Light manually adjusted or Custom mode -> 
+            # Turns off all automation and keeps the light as it currently is.
+            if self.has_adaptive_state:
+                self.setAdaptiveLightingOff()
+            self.lightmode = lightmode
+            return
+
         new_OnCondition = self.checkConditions(conditions = self.conditions) if self.conditions is not None else True
         new_keep_on_Condition = self.checkConditions(conditions = self.keep_on_conditions) if self.keep_on_conditions is not None else False
         new_LuxCondition = self.checkLuxConstraints()
 
-        if lightmode == translations.reset:
-            self.current_light_data = {}
-            self.is_turned_on = None
-        elif (
-            (lightmode == self.lightmode or lightmode == 'none')
-            and self.current_OnCondition == new_OnCondition
+        if (
+            self.current_OnCondition == new_OnCondition
             and self.current_keep_on_Condition == new_keep_on_Condition
             and self.current_LuxCondition == new_LuxCondition
             and not force_change
@@ -349,28 +377,16 @@ class Light:
                     return
                 elif not self.motion:
                     self.wereMotion = False
+                    force_change = True
             else:
                 return
         elif self.motionlight and not self.motion:
             self.wereMotion = False
+            force_change = True
+
         self.current_OnCondition = new_OnCondition
         self.current_keep_on_Condition = new_keep_on_Condition
         self.current_LuxCondition = new_LuxCondition
-
-        if lightmode == 'none':
-            lightmode = self.lightmode
-
-        if lightmode != self.lightmode:
-            self.current_light_data = {}
-            self.is_turned_on = None
-            cancel_timer_handler(ADapi = self.ADapi, handler = self.dimHandler)
-            self.dimHandler = None
-
-            if (
-                self.adaptive_sleep_mode is not None and
-                not lightmode.startswith(translations.night)
-            ):
-                self.ADapi.turn_off(self.adaptive_sleep_mode)
 
         if lightmode == translations.morning:
             # Morning mode is only valid when both the on condition and the
@@ -378,15 +394,7 @@ class Light:
             if not self.current_OnCondition or not self.current_LuxCondition:
                 lightmode = translations.normal
 
-        elif lightmode == translations.custom:
-            # Custom mode turns off all automation and keeps the light as it
-            # currently is.
-            if self.has_adaptive_state:
-                self.setAdaptiveLightingOff()
-            self.lightmode = lightmode
-            return
-
-        if lightmode not in (translations.normal, translations.reset):
+        if lightmode != translations.normal:
             mode = self.light_modes_by_name.get(lightmode)
             if mode is not None:
                 self.lightmode = lightmode
@@ -402,9 +410,9 @@ class Light:
                     return
                 
                 if light_properties.offset != 0:
-                    self.setLightAutomation(automations=self.automations, light_properties=light_properties)
+                    self.setLightAutomation(automations=self.automations, light_properties=light_properties, force_change = force_change)
                 else:
-                    self.setLightAutomation(automations=mode.automations, light_properties=light_properties)
+                    self.setLightAutomation(automations=mode.automations, light_properties=light_properties, force_change = force_change)
                 return
 
         if lightmode in (translations.away, translations.off):
@@ -430,42 +438,45 @@ class Light:
             (self.current_OnCondition and self.current_LuxCondition)
             or self.current_keep_on_Condition
         ):
-            self.setLightAutomation(automations=self.automations)
+            self.setLightAutomation(automations=self.automations, force_change = force_change)
         else:
             self.turn_off_lights()
 
-    def setMotion(self, lightmode: str = 'none') -> None:
+    def setMotion(self, lightmode: str = 'none', force_change: bool = False) -> None:
         """ Sets motion lights when motion is detected. """
 
-        if lightmode == 'none':
+        if lightmode == 'none': # Same lightmode
             lightmode = self.lightmode
-        elif lightmode == translations.reset:
-            self.current_light_data = {}
+        elif lightmode == translations.reset: # Reset to automagical
             lightmode = translations.normal
-            self.wereMotion = False
+            force_change = True
+            self.manual_override = False
+        elif lightmode != self.lightmode: # New lightmode
+            force_change = True
+            self.manual_override = False
 
-        light_properties: Optional[LightProperties] = None
+        if lightmode == self.lightmode and self.manual_override: # Light manually adjusted
+            return
 
         self.motion = True
         self.current_OnCondition = self.checkConditions(conditions = self.conditions) if self.conditions is not None else True
         new_LuxCondition = self.checkLuxConstraints()
 
         if self.current_LuxCondition is not True and new_LuxCondition is True:
-            self.wereMotion = False
+            force_change = True
 
         if self.current_OnCondition is not True or new_LuxCondition is not True:
-            if self.dim_while_motion:
-                if self.lightmode != lightmode:
-                    self.current_light_data = {}
-                    self.is_turned_on = None
-                    self.lightmode = lightmode
+            if self.dim_while_motion or force_change:
+                self.lightmode = lightmode
                 self.turn_off_lights()
             return
+
+        light_properties: Optional[LightProperties] = None
 
         if (
             not self.wereMotion
             or self.dim_while_motion
-            or self.lightmode != lightmode
+            or force_change
         ):
             motion_brightness_compare:int = 0
             if isinstance(self.motionlight, List):
@@ -481,11 +492,12 @@ class Light:
                 motion_brightness_compare = self.current_light_data.get('brightness', self.brightness) 
                 if not self.wereMotion:
                     motion_brightness_compare += light_properties.offset
+                    force_change = True
 
         else: # No change since last motion
             return
 
-        if lightmode not in (translations.normal, translations.reset):
+        if lightmode != translations.normal:
             mode = self.light_modes_by_name.get(lightmode)
             if mode is not None:
                 if mode.automations:
@@ -537,14 +549,14 @@ class Light:
 
         if light_properties.state in ('turn_on', 'adjust', 'none', 'adaptive'):
             if isinstance(self.motionlight, List):
-                self.setLightAutomation(automations=self.motionlight, light_properties=light_properties)
+                self.setLightAutomation(automations=self.motionlight, light_properties=light_properties, force_change = force_change)
             elif isinstance(self.motionlight, LightProperties):
-                self.setLightAutomation(light_properties=light_properties)
+                self.setLightAutomation(light_properties=light_properties, force_change = force_change)
 
         elif light_properties.state == 'turn_off':
             self.turn_off_lights()
 
-    def setLightAutomation(self, automations: List[Automation] = None, light_properties: LightProperties = None) -> None:
+    def setLightAutomation(self, automations: List[Automation] = None, light_properties: LightProperties = None, force_change = False) -> None:
         """ Finds the appropriate light_properties and adjusts lights """
 
         current_state = None
@@ -556,7 +568,7 @@ class Light:
             if light_properties.state is not None:
                 current_state = light_properties.state
             if light_properties.light_data is not None:
-                target_light_data = light_properties.light_data
+                target_light_data = copy.deepcopy(light_properties.light_data)
 
         if automations is None:
             perform_dim_rate = False
@@ -566,12 +578,15 @@ class Light:
         except TypeError:
             pass
         else:
-            if current_state is None and hasattr(automations[target_num], 'light_properties'):
+            if current_state is None:
+                current_state = automations[target_num].state
+            if hasattr(automations[target_num], 'light_properties'):
                 if light_properties is None:
                     light_properties = automations[target_num].light_properties
-                current_state = automations[target_num].state
-            if target_light_data is None and light_properties.light_data is not None:
-                target_light_data = light_properties.light_data
+                if target_light_data is None and light_properties.light_data is not None:
+                    target_light_data = copy.deepcopy(light_properties.light_data)
+                elif target_light_data is None and light_properties.light_data is None:
+                    target_light_data = copy.deepcopy(automations[target_num].light_properties.light_data)
 
         if (current_state == 'pass' and self.is_on) or current_state == 'manual':
             if self.has_adaptive_state:
@@ -584,7 +599,7 @@ class Light:
             return
 
         if (
-            (current_state == 'adjust' and self.is_on)
+            (current_state == 'adjust' and self.is_turned_on_by_automation)
             or current_state != 'adjust'
         ):
 
@@ -611,28 +626,30 @@ class Light:
                 self.setAdaptiveLightingOff()
 
             if target_light_data is not None:
-                target_brightness = light_properties.brightness
-                if target_brightness is None:
-                    target_brightness = target_light_data.get('brightness', 'value')
+                target_brightness = target_light_data.get('brightness', 'value')
 
                 if perform_dim_rate:
-                    if automations[target_num].dimrate is not None:
-                        stoptime = automations[target_num + 1].time if target_num + 1 < len(automations) else '23:59:59'
-                        if self.ADapi.now_is_between(
-                            automations[target_num].time, stoptime
-                        ):
-                            target_brightness = (
-                                self.findBrightnessWhenDimRate(automation=automations, target_num=target_num) + light_properties.offset
-                            )
-
-                light_properties_copy = copy.deepcopy(light_properties)
+                    dim_brightness = self.findBrightnessWhenDimRate(automations=automations,
+                                                                    target_num=target_num,
+                                                                    force_change = force_change,
+                                                                    start_dimming = True)
+                    if dim_brightness != 0:
+                        if not force_change:
+                            self.ADapi.log(f"No change to {self.lights[0]} with brightness {self.brightness}? {target_light_data}") ### self.brightness == dim_brightness?
+                            return
+                        target_brightness = dim_brightness
 
                 if target_brightness is not None:
-                    light_properties_copy.brightness = max(
+                    target_brightness = max(
                         1,
                         min(254, math.ceil(target_brightness + light_properties.offset))
                     )
-                    self.turn_on_lights(light_data=light_properties_copy.light_data)
+                    if 'brightness' in target_light_data:
+                        target_light_data['brightness'] = target_brightness
+                    elif 'value' in target_light_data:
+                        target_light_data['value'] = target_brightness
+
+                    self.turn_on_lights(light_data = target_light_data)
                     return
 
             else:
@@ -660,12 +677,10 @@ class Light:
         if target.light_data is None:
             return target, 0
 
-        dim_brightness: int = 0
-
-        if automations[target_num].dimrate is not None:
-            stoptime = automations[target_num + 1].time if target_num + 1 < len(automations) else '23:59:59'
-            if self.ADapi.now_is_between(automations[target_num].time, stoptime):
-                dim_brightness = self.findBrightnessWhenDimRate(automation=automations, target_num=target_num)
+        dim_brightness = self.findBrightnessWhenDimRate(automations=automations,
+                                                        target_num=target_num,
+                                                        force_change = True,
+                                                        start_dimming = False)
 
         if target.brightness is not None:
             if dim_brightness > 0:
@@ -675,71 +690,84 @@ class Light:
 
             return target, int(target.brightness)
 
-        return target_copy, 0
+        return target, 0
 
-    def findBrightnessWhenDimRate(self, automation: List[Automation], target_num: int) -> int:
+    def findBrightnessWhenDimRate(self,
+                                  automations: List[Automation],
+                                  target_num: int,
+                                  force_change = False,
+                                  start_dimming = True) -> int:
         """ Interpolate a single-step dimming value. """
 
-        now_notAware = self.ADapi.datetime()
-        time_date = self.ADapi.parse_datetime(
-            automation[target_num].time, today=True
-        )
-        minutes_elapsed = math.floor(
-            ((now_notAware - time_date).total_seconds()) / 60
-        )
-
-        # Brightness/value of the previous step and of the current step.
-        prev = automation[target_num - 1] if target_num > 0 else None
-        current = automation[target_num]
-
-        if prev is None or prev.light_properties.light_data is None or current.light_properties.light_data is None:
+        # TODO: Add check if force_change and also if motion/turn up lights. else only start dimrate
+        if automations[target_num].dimrate is None:
             return 0
 
-        if 'brightness' in prev.light_properties.light_data:
-            original = int(prev.light_properties.light_data['brightness'])
-            target = int(current.light_properties.light_data['brightness'])
-        elif 'value' in prev.light_properties.light_data:
-            original = int(prev.light_properties.light_data['value'])
-            target = int(current.light_properties.light_data['value'])
+        if self.dimHandler is not None:
+            cancel_timer_handler(ADapi = self.ADapi, handler = self.dimHandler)
 
-        new_brightness: int = 0
+        stoptime = automations[target_num + 1].time if target_num + 1 < len(automations) else '23:59:59'
+        if self.ADapi.now_is_between(
+            automations[target_num].time, stoptime
+        ):
+            current = automations[target_num]
+            target = current.light_properties.brightness
+            set_brightness = self.brightness
+            decrease_brightness = set_brightness > target
+            now_notAware = self.ADapi.datetime()
 
-        if original > target:
-            step = math.floor(minutes_elapsed / current.dimrate)
-            new_brightness = math.ceil(original - step)
-
-            if new_brightness < target or new_brightness > original:
-                return target
-
-            if self.dimHandler is None:
-                runtime = now_notAware + timedelta(minutes=int(current.dimrate))
-                self.dimHandler = self.ADapi.run_every(
-                    self._decrease_brightness_by_one,
-                    runtime,
-                    current.dimrate * 60,
-                    targetBrightness=target,
+            if force_change or set_brightness == 0:
+                time_date = self.ADapi.parse_datetime(
+                    automations[target_num].time, today=True
+                )
+                minutes_elapsed = math.floor(
+                    ((now_notAware - time_date).total_seconds()) / 60
                 )
 
-        elif original < target:
-            step = math.floor(minutes_elapsed / current.dimrate)
-            new_brightness = math.ceil(original + step)
+                # Brightness of the previous light data.
+                prev = automations[target_num - 1] if target_num > 0 else None
+                if prev is None or prev.light_properties.light_data is None or current.light_properties.light_data is None:
+                    return 0
 
-            if new_brightness > target or new_brightness < original:
-                return target
+                original = prev.light_properties.brightness
 
-            if self.dimHandler is None:
-                runtime = now_notAware + timedelta(minutes=int(current.dimrate))
-                self.dimHandler = self.ADapi.run_every(
-                    self._increase_brightness_by_one,
-                    runtime,
-                    current.dimrate * 60,
-                    targetBrightness=target,
-                )
+                decrease_brightness = original > target
+                target
+                step = math.floor(minutes_elapsed / current.dimrate)
+                if decrease_brightness:
+                    set_brightness = math.ceil(original - step)
+                else:
+                    set_brightness = math.ceil(original + step)
 
-        if new_brightness == 0:
-            new_brightness = target
+            if decrease_brightness:
+                if set_brightness < target:
+                    return target
 
-        return new_brightness
+                if start_dimming:
+                    runtime = now_notAware + timedelta(minutes=int(current.dimrate))
+                    self.dimHandler = self.ADapi.run_every(
+                        self._decrease_brightness_by_one,
+                        runtime,
+                        current.dimrate * 60,
+                        targetBrightness=target,
+                    )
+                return set_brightness
+
+            else:
+                if set_brightness > target:
+                    return target
+
+                if start_dimming:
+                    runtime = now_notAware + timedelta(minutes=int(current.dimrate))
+                    self.dimHandler = self.ADapi.run_every(
+                        self._increase_brightness_by_one,
+                        runtime,
+                        current.dimrate * 60,
+                        targetBrightness=target,
+                    )
+                return set_brightness
+
+        return 0
 
     def _decrease_brightness_by_one(self, **kwargs) -> None:
 
@@ -776,18 +804,26 @@ class Light:
         except TypeError:
             self.brightness = 0
             return
-        self._check_brightness_value()
+        cancel_timer_handler(ADapi = self.ADapi, handler = self.check_brightness_value_handler)
+        self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, 15)
 
-    def _check_brightness_value(self):
-        """Correct brightness if the desired value is ±1. """
+    def _check_brightness_value(self, **kwargs):
+        """Correct brightness if the desired value is ±1."""
 
-        current_brigtness = self.current_light_data.get('brightness')
-        if current_brigtness is not None:
-            if abs(self.brightness - current_brigtness) == 1:
+        current_brightness = self.current_light_data.get('brightness')
+        if current_brightness is not None and self.brightness > 0:
+            diff = abs(self.brightness - current_brightness)
+
+            # Handle the ±1 case
+            if diff == 1:
                 self._correct_brightness_value(
-                    oldBrightness=current_brigtness,
+                    oldBrightness=current_brightness,
                     newBrightness=self.brightness,
                 )
+            # Flag manual override when the change exceeds ±10
+            if diff > 10 and self.take_manual_control:
+                self.ADapi.log(f"Manual Override detected for {self.lights[0]} with dim {current_brightness} vs {self.brightness}") ###
+                self.manual_override = True
 
     def _correct_brightness_value(self, oldBrightness: int, newBrightness: int) -> None:
         """ Correct brightness in the internal automation structures."""
@@ -850,17 +886,46 @@ class Light:
 
     def update_isOn_lights(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates isON state for light for checks and persistent storage when restarting Home Assistant. """
-        if new == 'on':
+
+        new_on_status = new == 'on'
+        old_on_status = old == 'on'
+        self._check_if_turned_on_manually(new_on_status = new_on_status, old_on_status = old_on_status)
+
+    def _check_if_turned_on_manually(self, new_on_status, old_on_status):
+
+        if self.is_turned_on_by_automation is None:
+            return
+        # New is on
+        if new_on_status:
             self.is_on = True
-        elif new == 'off':
+            # Was off and not auto turned on
+            if not old_on_status and self.is_turned_on_by_automation is False:
+                if self.take_manual_control:
+                    self.ADapi.log(f"Manual Override detected for {self.lights[0]} with turn on") ###
+                    self.manual_override = True
+            # Was off and turned on automatically
+            elif not old_on_status and self.is_turned_on_by_automation and self.manual_override:
+                self.ADapi.log(f"Manual Override disabled for {self.lights[0]} with turn on") ###
+                self.manual_override = False
+        # New is off
+        elif not new_on_status:
             self.is_on = False
+            # Was on and automations wants it on:
+            if old_on_status and self.is_turned_on_by_automation:
+                if self.take_manual_control:
+                    self.ADapi.log(f"Manual Override detected for {self.lights[0]} with turn off") ###
+                    self.manual_override = True
+            # Was on and turned off automatically
+            elif old_on_status and self.is_turned_on_by_automation is False and self.manual_override:
+                self.ADapi.log(f"Manual Override disabled for {self.lights[0]} with turn off") ###
+                self.manual_override = False
 
     def turn_on_lights(self, light_data: dict = {}) -> None:
         """ Turns all lights in ``self.lights`` on with the supplied
         *light_data*. """
         if self._check_update_light_with_new_data(light_data=light_data):
             self.current_light_data = copy.deepcopy(light_data)
-            self.is_turned_on = True
+            self.is_turned_on_by_automation = True
 
             if self.random_turn_on_delay == 0:
                 for light in self.lights:
@@ -884,7 +949,7 @@ class Light:
     def turn_on_lights_at_max(self) -> None:
         """ Turns on lights with brightness 254. """
 
-        self.is_turned_on = True
+        self.is_turned_on_by_automation = True
         if self.has_adaptive_state:
             self.setAdaptiveLightingOff()
 
@@ -902,9 +967,8 @@ class Light:
     def turn_off_lights(self) -> None:
         """ Turns off lights. """
 
-        self.current_light_data = {}
-        if self.is_on is not False and self.is_turned_on is not False:
-            self.is_turned_on = False
+        if self.is_on is not False and self.is_turned_on_by_automation is not False:
+            self.is_turned_on_by_automation = False
             if self.has_adaptive_state:
                 self.setAdaptiveLightingOff()
             self.current_light_data = {}
@@ -950,7 +1014,8 @@ class MQTTLight(Light):
                  keep_on_conditions: List[str],
                  HASS_namespace: str,
                  night_motion: str,
-                 dim_while_motion: str,
+                 dim_while_motion: bool,
+                 take_manual_control: bool,
                  random_turn_on_delay: int,
                  adaptive_switch: Optional[str],
                  adaptive_sleep_mode: Optional[str],
@@ -981,6 +1046,7 @@ class MQTTLight(Light):
                          HASS_namespace,
                          night_motion,
                          dim_while_motion,
+                         take_manual_control,
                          random_turn_on_delay,
                          adaptive_switch,
                          adaptive_sleep_mode,
@@ -999,10 +1065,13 @@ class MQTTLight(Light):
         #if 'color' in lux_data:
         #    self.ADapi.log(f"{data['topic']} Color in lux: {lux_data['color']}")
 
+        old_on_status = self.is_on
         if 'brightness' in lux_data:
             self.is_on = lux_data['state'] == 'ON'
+            self._check_if_turned_on_manually(new_on_status = self.is_on, old_on_status = old_on_status)
             self.brightness = lux_data['brightness']
-            self._check_brightness_value()
+            cancel_timer_handler(ADapi = self.ADapi, handler = self.check_brightness_value_handler)
+            self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, 15)
 
         elif 'value' in lux_data:
             if type(lux_data['value']) == bool:
@@ -1014,13 +1083,16 @@ class MQTTLight(Light):
                     lux_data['value'] > 0
                     and lux_data['value'] <= 100
                 ):
-                    self._check_brightness_value()
+                    cancel_timer_handler(ADapi = self.ADapi, handler = self.check_brightness_value_handler)
+                    self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, 15)
                     self.is_on = True
                 elif lux_data['value'] == 0:
                     self.is_on = False
+            self._check_if_turned_on_manually(new_on_status = self.is_on, old_on_status = old_on_status)
 
         elif 'state' in lux_data:
             self.is_on = lux_data['state'] == 'ON'
+            self._check_if_turned_on_manually(new_on_status = self.is_on, old_on_status = old_on_status)
 
         else:
             """ No valid state based on program. Let user know """
@@ -1035,7 +1107,7 @@ class MQTTLight(Light):
 
         if self._check_update_light_with_new_data(light_data=light_data):
             self.current_light_data = copy.deepcopy(light_data)
-            self.is_turned_on = True
+            self.is_turned_on_by_automation = True
 
             for light in self.lights:
                 if 'zigbee2mqtt' in light:
@@ -1068,7 +1140,7 @@ class MQTTLight(Light):
     def turn_on_lights_at_max(self) -> None:
         """ Turns on lights with brightness 254. """
 
-        self.is_turned_on = True
+        self.is_turned_on_by_automation = True
         if self.has_adaptive_state:
             self.setAdaptiveLightingOff()
 
@@ -1101,8 +1173,8 @@ class MQTTLight(Light):
         if self.has_adaptive_state:
             self.setAdaptiveLightingOff()
         self.current_light_data = {}
-        if self.is_on is not False and self.is_turned_on is not False:
-            self.is_turned_on = False
+        if self.is_on is not False and self.is_turned_on_by_automation is not False:
+            self.is_turned_on_by_automation = False
             if self.random_turn_on_delay == 0:
                 for light in self.lights:
                     self.mqtt.mqtt_publish(topic = str(light) + '/set', payload = 'OFF', namespace = self.MQTT_namespace)
@@ -1143,7 +1215,8 @@ class ToggleLight(Light):
                  keep_on_conditions: List[str],
                  HASS_namespace: str,
                  night_motion: str,
-                 dim_while_motion: str,
+                 dim_while_motion: bool,
+                 take_manual_control: bool,
                  random_turn_on_delay: int,
                  adaptive_switch: Optional[str],
                  adaptive_sleep_mode: Optional[str],
@@ -1174,6 +1247,7 @@ class ToggleLight(Light):
                          HASS_namespace,
                          night_motion,
                          dim_while_motion,
+                         take_manual_control,
                          random_turn_on_delay,
                          adaptive_switch,
                          adaptive_sleep_mode,
@@ -1247,8 +1321,8 @@ class ToggleLight(Light):
             self.ADapi.toggle(light)
 
     def turn_off_lights(self):
-        if self.is_on is not False and self.is_turned_on is not False:
-            self.is_turned_on = False
+        if self.is_on is not False and self.is_turned_on_by_automation is not False:
+            self.is_turned_on_by_automation = False
             for light in self.lights:
                 self.ADapi.turn_off(light)
             self.current_toggle = 0
