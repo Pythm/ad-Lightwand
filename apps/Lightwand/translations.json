@@ -1,7 +1,7 @@
 {
     "en": {
         "MODE_CHANGE": "MODE_CHANGE",
-        "normal": "normal",
+        "automagical": "normal",
         "morning": "morning",
         "away": "away",
         "off": "off",
@@ -14,7 +14,7 @@
     },
     "de": {
         "MODE_CHANGE": "MODE_CHANGE",
-        "normal": "automatik",
+        "automagical": "automatik",
         "morning": "morgen",
         "away": "abwesend",
         "off": "aus",
@@ -24,7 +24,18 @@
         "false_alarm": "fehlalarm",
         "wash": "hell",
         "reset": "zurücksetzen"
+    },
+    "no": {
+        "MODE_CHANGE": "MODE_CHANGE",
+        "automagical": "automagisk",
+        "morning": "morgen",
+        "away": "borte",
+        "off": "av",
+        "night": "natt",
+        "custom": "manuelt",
+        "fire": "brann",
+        "false_alarm": "falsk alarm",
+        "wash": "fullt lys",
+        "reset": "reset"
     }
 }
-
-  

@@ -5,14 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Dict
-from pydantic import BaseModel, ValidationError, Field
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ValidationError, Field, root_validator
 
 class ModeTranslation(BaseModel):
     MODE_CHANGE: str = Field(..., description="Event listen string")
 
-    normal: str = Field(..., description="Normal mode")
+    automagical: str = Field(..., description="Automagical mode")
     morning: str = Field(..., description="Morning mode")
     night: str = Field(..., description="Night mode")
     away: str = Field(..., description="Away mode")
@@ -29,9 +27,25 @@ class ModeTranslation(BaseModel):
     custom: str = Field(..., description="Custom mode")
     off: str = Field(..., description="Off mode")
 
+    @property
+    def normal(self) -> str: # read‑only, backward compatibility
+        return self.automagical
+
     class Config:
         allow_population_by_field_name = True
         extra = "ignore"
+
+    # ----------  Accept an old "normal" key ----------
+    @root_validator(pre=True)
+    def _map_old_normal(cls, values):
+        """
+        If the JSON contains "normal" (the old key), move it to the new
+        field name `automagical`.  
+        New JSON that already uses "automagical" is unaffected.
+        """
+        if "normal" in values and "automagical" not in values:
+            values["automagical"] = values.pop("normal")
+        return values
 
 class TranslationStore:
     _instance: TranslationStore | None = None
@@ -80,7 +94,7 @@ class Translations:
 
     * keeps a pointer to the TranslationStore,
     * remembers the currently selected language,
-    * forwards attribute access (e.g. translations.normal) to the
+    * forwards attribute access (e.g. translations.automagical) to the
       ModeTranslation instance for that language.
     """
 

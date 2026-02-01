@@ -60,7 +60,7 @@ class Light:
         self.weather = weather
 
         self.has_adaptive_state:bool = False
-        self.lightmode:str = translations.normal
+        self.lightmode:str = 'none'
         self.dimHandler = None
         self.motion:bool = False
         self.is_on:bool = None
@@ -342,7 +342,7 @@ class Light:
         if lightmode == 'none': # Same lightmode
             lightmode = self.lightmode
         elif lightmode == translations.reset: # Reset to automagical
-            lightmode = translations.normal
+            lightmode = translations.automagical
             force_change = True
             self.manual_override = False
         elif lightmode != self.lightmode: # New lightmode
@@ -392,9 +392,9 @@ class Light:
             # Morning mode is only valid when both the on condition and the
             # lux condition are true.
             if not self.current_OnCondition or not self.current_LuxCondition:
-                lightmode = translations.normal
+                lightmode = translations.automagical
 
-        if lightmode != translations.normal:
+        if lightmode != translations.automagical:
             mode = self.light_modes_by_name.get(lightmode)
             if mode is not None:
                 self.lightmode = lightmode
@@ -433,7 +433,7 @@ class Light:
             self.turn_on_lights_at_max()
             return
 
-        self.lightmode = translations.normal
+        self.lightmode = translations.automagical
         if (
             (self.current_OnCondition and self.current_LuxCondition)
             or self.current_keep_on_Condition
@@ -448,7 +448,7 @@ class Light:
         if lightmode == 'none': # Same lightmode
             lightmode = self.lightmode
         elif lightmode == translations.reset: # Reset to automagical
-            lightmode = translations.normal
+            lightmode = translations.automagical
             force_change = True
             self.manual_override = False
         elif lightmode != self.lightmode: # New lightmode
@@ -497,7 +497,7 @@ class Light:
         else: # No change since last motion
             return
 
-        if lightmode != translations.normal:
+        if lightmode != translations.automagical:
             mode = self.light_modes_by_name.get(lightmode)
             if mode is not None:
                 if mode.automations:
@@ -1268,13 +1268,13 @@ class ToggleLight(Light):
 
         if lightmode == translations.morning:
             if not self.current_OnCondition or not self.current_LuxCondition:
-                lightmode = translations.normal
+                lightmode = translations.automagical
 
         if lightmode == translations.custom:
             self.lightmode = lightmode
             return
 
-        if lightmode not in (translations.normal, translations.reset):
+        if lightmode not in (translations.automagical, translations.reset):
             mode = self.light_modes_by_name.get(lightmode)
             if mode is not None:
                 self.lightmode = lightmode
@@ -1302,7 +1302,7 @@ class ToggleLight(Light):
             self.calculateToggles(toggle_bulb = 1)
             return
 
-        self.lightmode = translations.normal
+        self.lightmode = translations.automagical
         if (
             (self.current_OnCondition and self.current_LuxCondition)
             or self.current_keep_on_Condition

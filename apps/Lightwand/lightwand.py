@@ -52,7 +52,7 @@ class Room(Hass):
         self.LIGHT_MODE:str = 'none'
         # All known modes that the room can enter
         self.all_modes: Set[str] = {
-            translations.normal,
+            translations.automagical,
             translations.away,
             translations.off,
             translations.night,
@@ -62,8 +62,8 @@ class Room(Hass):
             translations.wash,
             translations.reset,
         }
-        self.getOutOfBedMode:str = translations.normal
-        self.LIGHT_MODE = translations.normal
+        self.getOutOfBedMode:str = translations.automagical
+        self.LIGHT_MODE = translations.automagical
 
         night_motion:bool = False
         dim_while_motion:bool = False
@@ -75,7 +75,7 @@ class Room(Hass):
 
         """ Available roomtypes
             - outdoor : 
-                - Motion on away and night TODO
+                - Motion on away and night
                 - Lux control on away mode TODO
                 - exclude_from_custom including wash mode
             - bedroom :
@@ -374,14 +374,14 @@ class Room(Hass):
 
         if (
             self.LIGHT_MODE == translations.off
-            and modename == translations.normal
+            and modename == translations.automagical
             and self.prevent_off_to_normal
         ):
             return
 
         if modename not in self.all_modes:
             if modename == translations.morning:
-                modename = translations.normal
+                modename = translations.automagical
             else:
                 return
 
@@ -394,7 +394,7 @@ class Room(Hass):
 
         if self.LIGHT_MODE.startswith(translations.night):
             if (
-                modename in (translations.morning, translations.normal)
+                modename in (translations.morning, translations.automagical)
                 and self.prevent_night_to_morning
             ):
                 return
@@ -413,7 +413,7 @@ class Room(Hass):
                 translations.away: self.mode_turn_off_delay,
                 translations.off: self.mode_turn_off_delay,
                 translations.night: self.mode_turn_off_delay,
-                translations.normal: self.mode_turn_on_delay,
+                translations.automagical: self.mode_turn_on_delay,
                 translations.morning: self.mode_turn_on_delay,
             }
 
@@ -425,7 +425,7 @@ class Room(Hass):
         self.reactToChange()
 
         if modename == translations.reset:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
 
         self._set_selector_input()
 
@@ -453,7 +453,7 @@ class Room(Hass):
             self.reactToChange()
 
         if modename == translations.reset:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
 
     def set_Mode_with_delay(self, kwargs):
         """ Sets mode with defined delay. """
@@ -464,7 +464,7 @@ class Room(Hass):
         self.reactToChange()
 
         if self.LIGHT_MODE == translations.reset:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
 
         self._set_selector_input()
 
@@ -594,8 +594,8 @@ class Room(Hass):
                     self.log(f"Constraint eval error for {tracker.sensor}: {exc}", level = 'INFO')
                     return
 
-            if self.LIGHT_MODE in (translations.normal, translations.away) and self.check_mediaplayers_off():
-                self.LIGHT_MODE = translations.normal
+            if self.LIGHT_MODE in (translations.automagical, translations.away) and self.check_mediaplayers_off():
+                self.LIGHT_MODE = translations.automagical
                 self._set_selector_input()
 
             if not constraints_ok or 'presence' not in self.all_modes:
@@ -685,7 +685,7 @@ class Room(Hass):
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
         if self.LIGHT_MODE == translations.morning:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
             self._set_selector_input()
         self.check_mediaplayers_off()
 
@@ -696,7 +696,7 @@ class Room(Hass):
         """ Returns true if media player sensors is off or self.LIGHT_DATA != 'normal'/'night'.
             If not it updates lightmode to the first detected media player. """
 
-        if self.LIGHT_MODE in (translations.normal, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
+        if self.LIGHT_MODE in (translations.automagical, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
             for mediaplayer in self.mediaplayers:
                 if self.get_state(mediaplayer['mediaplayer']) == 'on':
                     for light in self.roomlight:
