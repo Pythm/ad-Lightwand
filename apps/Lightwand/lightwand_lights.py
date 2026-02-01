@@ -634,7 +634,7 @@ class Light:
                                                                     force_change = force_change,
                                                                     start_dimming = True)
                     if dim_brightness != 0:
-                        if not force_change:
+                        if not force_change and self.brightness != 0:
                             self.ADapi.log(f"No change to {self.lights[0]} with brightness {self.brightness}? {target_light_data}") ### self.brightness == dim_brightness?
                             return
                         target_brightness = dim_brightness

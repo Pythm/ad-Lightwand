@@ -71,7 +71,7 @@ class Room(Hass):
         self.prevent_night_to_morning:bool = False
 
         # Options defined in configurations
-        roomtype = self.args.get('roomtype', 'normal')
+        self.roomtype = self.args.get('roomtype', 'normal')
 
         """ Available roomtypes
             - outdoor : 
@@ -90,13 +90,13 @@ class Room(Hass):
         """
         options = self.args.get('options', [])
         opts = set(options)
-        if 'exclude_from_custom' in opts or roomtype in ('outdoor', 'bedroom'):
+        if 'exclude_from_custom' in opts or self.roomtype in ('outdoor', 'bedroom'):
             self.all_modes.discard(translations.custom)
             self.all_modes.discard(translations.wash)
 
-        night_motion      = 'night_motion'      in opts or roomtype in ('outdoor')
+        night_motion      = 'night_motion'      in opts or self.roomtype in ('outdoor')
         dim_while_motion  = 'dim_while_motion'  in opts
-        take_manual_control = 'take_manual_control' in opts or roomtype in ('livingroom', 'kitchen')
+        take_manual_control = 'take_manual_control' in opts or self.roomtype in ('livingroom', 'kitchen')
         self.prevent_off_to_normal   = 'prevent_off_to_normal'   in opts
         self.prevent_night_to_morning = 'prevent_night_to_morning' in opts
 
@@ -671,7 +671,10 @@ class Room(Hass):
         if is_night_mode and not light.night_motion:
             return False
 
-        if self.LIGHT_MODE in (translations.off, translations.custom): # TODO Add roomtype then not outdoor & away
+        if self.LIGHT_MODE in (translations.off, translations.custom):
+            return False
+
+        if self.LIGHT_MODE == translations.away and self.roomtype not in ('outdoor', 'hallway'):
             return False
 
         if self.active_motion_sensors:
