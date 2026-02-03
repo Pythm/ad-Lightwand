@@ -68,6 +68,7 @@ class Light:
         self.manual_override = False
         self.check_brightness_value_handler = None
         self.brightness:int = 0
+        self.transition_time:int = 0
         self.current_light_data:dict = {}
         self.run_daily_adjustments_to_run: list[str] = []
 
@@ -265,7 +266,6 @@ class Light:
             return
 
         if self.motion:
-            self.ADapi.log(f"run_daily with motion for {self.lights[0]}", level = 'INFO') ###
             if (
                 self.dim_while_motion and self.is_turned_on_by_automation and
                 (not self.lightmode.startswith(translations.night) or self.night_motion) and
@@ -492,7 +492,7 @@ class Light:
                 motion_brightness_compare = self.current_light_data.get('brightness', self.brightness) 
                 if not self.wereMotion:
                     motion_brightness_compare += light_properties.offset
-                    force_change = True
+            force_change = True
 
         else: # No change since last motion
             return
@@ -634,9 +634,6 @@ class Light:
                                                                     force_change = force_change,
                                                                     start_dimming = True)
                     if dim_brightness != 0:
-                        if not force_change and self.brightness != 0:
-                            self.ADapi.log(f"No change to {self.lights[0]} with brightness {self.brightness}? {target_light_data}") ### self.brightness == dim_brightness?
-                            return
                         target_brightness = dim_brightness
 
                 if target_brightness is not None:
@@ -805,7 +802,7 @@ class Light:
             self.brightness = 0
             return
         cancel_timer_handler(ADapi = self.ADapi, handler = self.check_brightness_value_handler)
-        self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, 15)
+        self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, self.transition_time + 2)
 
     def _check_brightness_value(self, **kwargs):
         """Correct brightness if the desired value is ±1."""
@@ -822,7 +819,7 @@ class Light:
                 )
             # Flag manual override when the change exceeds ±10
             if diff > 10 and self.take_manual_control:
-                self.ADapi.log(f"Manual Override detected for {self.lights[0]} with dim {current_brightness} vs {self.brightness}") ###
+                self.ADapi.log(f"Manual Override detected for {self.lights[0]} with new brightness {self.brightness}", level = 'INFO')
                 self.manual_override = True
 
     def _correct_brightness_value(self, oldBrightness: int, newBrightness: int) -> None:
@@ -926,6 +923,7 @@ class Light:
         if self._check_update_light_with_new_data(light_data=light_data):
             self.current_light_data = copy.deepcopy(light_data)
             self.is_turned_on_by_automation = True
+            self.transition_time = light_data.get('transition', 0)
 
             if self.random_turn_on_delay == 0:
                 for light in self.lights:
@@ -1071,7 +1069,7 @@ class MQTTLight(Light):
             self._check_if_turned_on_manually(new_on_status = self.is_on, old_on_status = old_on_status)
             self.brightness = lux_data['brightness']
             cancel_timer_handler(ADapi = self.ADapi, handler = self.check_brightness_value_handler)
-            self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, 15)
+            self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, self.transition_time + 2)
 
         elif 'value' in lux_data:
             if type(lux_data['value']) == bool:
@@ -1084,7 +1082,7 @@ class MQTTLight(Light):
                     and lux_data['value'] <= 100
                 ):
                     cancel_timer_handler(ADapi = self.ADapi, handler = self.check_brightness_value_handler)
-                    self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, 15)
+                    self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, self.transition_time + 2)
                     self.is_on = True
                 elif lux_data['value'] == 0:
                     self.is_on = False
@@ -1108,6 +1106,7 @@ class MQTTLight(Light):
         if self._check_update_light_with_new_data(light_data=light_data):
             self.current_light_data = copy.deepcopy(light_data)
             self.is_turned_on_by_automation = True
+            self.transition_time = light_data.get('transition', 0)
 
             for light in self.lights:
                 if 'zigbee2mqtt' in light:

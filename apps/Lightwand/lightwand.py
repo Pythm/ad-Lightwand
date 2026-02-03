@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.0.5"
+__version__ = "2.1.0"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -73,20 +73,11 @@ class Room(Hass):
         # Options defined in configurations
         self.roomtype = self.args.get('roomtype', 'normal')
 
-        """ Available roomtypes
+        """ roomtypes TODO
             - outdoor : 
-                - Motion on away and night
-                - Lux control on away mode TODO
-                - exclude_from_custom including wash mode
+                - Lux control on away mode
             - bedroom :
-                - exclude_from_custom including wash mode
-                - Logic to prevent reset when nightmode unless used with room name during evening/night. TODO
-            - hallway :
-                - Motion on away
-            - livingroom :
-                - take_manual_control
-            - kitchen :
-                - take_manual_control
+                - Logic to prevent reset when nightmode unless used with room name during evening/night.
         """
         options = self.args.get('options', [])
         opts = set(options)
@@ -329,7 +320,7 @@ class Room(Hass):
         """ Setup the selector input for the room mode """
 
         selector_input_exclude_modes = kwargs.get('selector_input_exclude_modes', [])
-        exclude = {'fire', 'false-alarm', 'presence', 'reset'} | set(selector_input_exclude_modes)
+        exclude = {translations.fire, translations.false_alarm, translations.reset ,'presence'} | set(selector_input_exclude_modes)
         self.selector_input_options = [m for m in self.all_modes if m not in exclude]
 
         self.call_service("input_select/set_options",
@@ -398,7 +389,7 @@ class Room(Hass):
                 and self.prevent_night_to_morning
             ):
                 return
-            if modename not in (translations.night, translations.off, translations.reset):
+            if modename not in (translations.night, translations.off, translations.away, translations.reset, translations.fire):
                 if self._bed_occupied() and not modename.startswith(translations.night):
                     for bed_sensor in self.bed_sensors:
                         if self.get_state(bed_sensor.sensor) == 'on':
@@ -675,6 +666,7 @@ class Room(Hass):
             return False
 
         if self.LIGHT_MODE == translations.away and self.roomtype not in ('outdoor', 'hallway'):
+            self.log(f"Mode is {translations.away} and roomtype is {self.roomtype}. Do not do motion") ###
             return False
 
         if self.active_motion_sensors:

@@ -114,6 +114,9 @@ day:
 > [!TIP]  
 > Already using events in your automations? Check out the [translation section](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#translating-or-changing-modes) on how to listen for a different event than `"MODE_CHANGE"` and using translated mode names.
 
+> [!IMPORTANT]
+> As of version 2.1.0 the default automation mode is now called '`automagical`' changed from '`normal`' to better reflect what the mode actually does to avoid confuson. To still keep using the `normal` mode name, keep or change the translations.json to "automagical": "normal". 
+
 ---
 
 ### 📌 Predefined Mode Names  
@@ -121,24 +124,28 @@ day:
 | Mode Name | Behavior |  
 |----------|----------|  
 | `automagical` | Default automation mode for day-to-day usage with lux constraints and conditions. |  
-| `morning` | Acts like `automagical` mode but can be used with specific light settings for mornings. |  
-| `reset` | Resets all lights to their `automagical` mode settings. |  
-| `away` | Defaults to **off** with motion detection enabled. |
+| `morning` | Acts like `automagical` mode with lux/conditions but can be used with specific light settings. |  
+| `reset` | Resets modes or adustments on lights back to their `automagical` mode settings. |  
+| `away` | Defaults to **off** with motion detection disabled. |
 | `night` / `off` | Defaults to **off** with motion detection disabled. |  
 | `fire` / `wash` | Turns lights on with **maximum brightness**. |  
 | `custom` | Manual control — **disables all automation**. |  
 
+> [!NOTE]  
+> These are the names that can be translated to your preference in the translations.json file
+
 **Custom Mode Names**  
-- With the exception of `custom` and `reset`, you can use **any** mode name in `light_modes`.  
+- With the exception of `automagical`, `custom` and `reset`, you can define **any** mode name in `light_modes`.  
 - You can **overwrite** default behavior by configuring the mode.  
 - In addition to `night` (or its translation, such as `nacht`) mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
 
 ---
 
 ### 🔄 Setting `automagical` vs `reset` Mode from Automations  
-- **Normal**: Safe for automations; does **not override** manual changes.  
+- **Automagical**: Safe for automations; does **not override** manual changes.  
 - **Reset**: Forces lights back to their **original `automagical` settings**.  
 
+The design is to use `automagical` in your automations / mode management apps and use `reset` from any user input.
 ---
 
 ### 🏠 Change Mode in One Room  
@@ -224,7 +231,6 @@ your_room_name:
 
 With this approach you can keep your translations clean, maintain logical consistency across your automations, and extend Lightwand with your own custom modes when needed.
 ---
-
 
 ## 📈 Configuring Light Behavior
 
@@ -403,10 +409,10 @@ Light modes are defined under `light_modes` as an array. They can include:
 There are several options to fine-tune how lights behave:  
 
 #### **Dimming with `dimrate`**  
-Use `dimrate` in automations to control how quickly brightness changes (e.g., `dimrate: 2` = 1 brightness unit per 2 minutes). The light will **dim from the last timed brightness** until the target brightness is met.  
+Use `dimrate` in automations to control how quickly brightness changes (e.g., `dimrate: 2` = 1 brightness unit per 2 minutes). The light will **dim from the last timed brightness** until the target brightness is met.
 
 #### **Adjust Brightness with `offset`**  
-Use `offset` to dynamically increase or decrease brightness for dimmable lights when `motionlights` or `light_modes` are active. The offset is applied to the brightness defined in `light_data`.  
+Use `offset` to dynamically increase or decrease brightness for dimmable lights when `motionlights` or `light_modes` are active. The offset is applied to the brightness defined in automations `light_data`.  
 
 **Example**:  
 ```yaml
@@ -415,20 +421,27 @@ Use `offset` to dynamically increase or decrease brightness for dimmable lights 
 ```
 
 > [!NOTE]  
-> If the current mode is **not configured with automations**, `motionlights` with `offset` will **not activate**.  
+> If the currently selected light mode is **not configured with automations**, `motionlights` with `offset` will **not activate**.  
 
 
 #### **Room-Level Options**  
 - `exclude_from_custom`: Excludes the room from `custom` and `wash` modes (useful for outdoor or kid’s rooms).  
 - `prevent_off_to_automagical`: Keeps lights `off` if a new mode is `automagical`.  
 - `prevent_night_to_morning`: Keeps lights in `night` mode if a new mode is `morning` or `automagical`.  
-- `dim_while_motion`: Enables dimming of lights when motion is detected.
 
 > [!TIP]  
-> If preventing automagical mode use `reset` mode or set lightmode for spesific room to get back to automagical.
+> If preventing automagical mode, use `reset` mode or set a light mode for the spesific room to turn on lights.
 
-#### **Light-Level Options**  
+
+#### **Light and Room-Level Options**  
 - `night_motion`: Enables motion detection during `night` mode.  
+- `dim_while_motion`: Enables dimming of lights when motion is detected.
+- `take_manual_control`: Breaks any automations until a new mode or reset is called if a light is manually adjusted.
+
+These options can be configured either for room or for each individual -lights.
+
+> [!INFO]  
+> When Lightwand detects a manual control it will log **"Manual Override detected for {self.lights[0]} with new brightness {self.brightness}"**. When testing some of my lights bounced a lot and ended up on the wrong brightness when transition was set to high. Check the logs if you experience lights not automating when `take_manual_control` is enabled.
 
 #### **Holiday Lights Control**
 Set an `input_boolean` (or similar) as `enable_light_control` for switches/lights you only use for special occations like christmas or during winter time.  
@@ -436,11 +449,12 @@ The app will control the light/switch only if this switch is ON.
 If the switch is OFF, the app will leave the light untouched, allowing other tasks to use it.
 
 > **NOTE**  
-> The setting is read only at startup, so you must restart AppDaemon (or the app) to enable/disable control.
+> The Holiday lights control setting is read only at startup, so you must restart AppDaemon (or the app) to enable/disable control.
 
 **Example**:  
 ```yaml
   # Configure in room
+  roomtype: kitchen
   options:
     - exclude_from_custom
     - dim_while_motion
@@ -452,11 +466,30 @@ If the switch is OFF, the app will leave the light untouched, allowing other tas
       # Configure in light
       options:
         - night_motion
+        - take_manual_control
       enable_light_control: input_boolean.xmas_light_control
 ```
 
 > [!TIP]  
 > Use one `input_boolean` switch to disable holiday lights and hide related modes in the Home Assistant frontend.  
+
+---
+
+### 🏠 Room Types
+
+With the release of **Lightwand v2.1.0** you can now assign a *room type* to your apps by configuring one of the predefined types with `roomtype`.  
+The room type automatically configures a set of default options and some additional behavior that is tailored to the particular space.  
+Below is a quick overview of the pre‑configured room types – more advanced options will become available for each type in future releases.
+
+| Room type | Default behaviour |
+|-----------|--------------------|
+| **outdoor** | • Motion sensors trigger lighting during *away* and *night* modes.<br>• Lux‑controlled lighting will be enabled in future updates.<br>• Excludes the room from the *custom* mode and the *wash* mode. |
+| **bedroom** | • Excludes the room from the *custom* mode and the *wash* mode.<br>• Logic to prevent a *reset* when *night* mode is active unless the mode name includes the room name (this feature will be added in a future update). |
+| **hallway** | • Motion triggers lighting during *away* mode. |
+| **living‑room** | • Full manual control of the lighting by default when light is manually adjusted. |
+| **kitchen** | • Full manual control of the lighting by default when light is manually adjusted. |
+
+> **Future updates**: The lux‑controlled lighting for the outdoor room type and the logic for resetting bedroom lights will be added in an upcoming release.
 
 ---
 
