@@ -274,7 +274,6 @@ class Light:
                 self.current_OnCondition = None
                 self.current_keep_on_Condition = None
                 self.current_LuxCondition = None
-                self.ADapi.log(f"run_daily with motion -> set motion executed for {self.lights[0]}", level = 'INFO') ###
                 self.setMotion(force_change = True)
             return
 
@@ -884,11 +883,16 @@ class Light:
     def update_isOn_lights(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates isON state for light for checks and persistent storage when restarting Home Assistant. """
 
+        if old in ('unavailable', 'unknown') or new in ('unavailable', 'unknown'):
+            return
+
         new_on_status = new == 'on'
         old_on_status = old == 'on'
-        self._check_if_turned_on_manually(new_on_status = new_on_status, old_on_status = old_on_status)
+        self.ADapi.run_in(self._check_if_turned_on_manually, 1, new_on_status = new_on_status, old_on_status = old_on_status)
 
-    def _check_if_turned_on_manually(self, new_on_status, old_on_status):
+    def _check_if_turned_on_manually(self, **kwargs):
+        new_on_status = kwargs['new_on_status']
+        old_on_status = kwargs['old_on_status']
 
         if self.is_turned_on_by_automation is None:
             return
@@ -1066,7 +1070,7 @@ class MQTTLight(Light):
         old_on_status = self.is_on
         if 'brightness' in lux_data:
             self.is_on = lux_data['state'] == 'ON'
-            self._check_if_turned_on_manually(new_on_status = self.is_on, old_on_status = old_on_status)
+            self.ADapi.run_in(self._check_if_turned_on_manually, 1, new_on_status = self.is_on, old_on_status = old_on_status)
             self.brightness = lux_data['brightness']
             cancel_timer_handler(ADapi = self.ADapi, handler = self.check_brightness_value_handler)
             self.check_brightness_value_handler = self.ADapi.run_in(self._check_brightness_value, self.transition_time + 2)
@@ -1086,11 +1090,11 @@ class MQTTLight(Light):
                     self.is_on = True
                 elif lux_data['value'] == 0:
                     self.is_on = False
-            self._check_if_turned_on_manually(new_on_status = self.is_on, old_on_status = old_on_status)
+            self.ADapi.run_in(self._check_if_turned_on_manually, 1, new_on_status = self.is_on, old_on_status = old_on_status)
 
         elif 'state' in lux_data:
             self.is_on = lux_data['state'] == 'ON'
-            self._check_if_turned_on_manually(new_on_status = self.is_on, old_on_status = old_on_status)
+            self.ADapi.run_in(self._check_if_turned_on_manually, 1, new_on_status = self.is_on, old_on_status = old_on_status)
 
         else:
             """ No valid state based on program. Let user know """

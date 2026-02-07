@@ -95,6 +95,13 @@ class Room(Hass):
         self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
         self.mode_turn_on_delay:int = self.args.get('mode_turn_on_delay',0)
         self.mode_delay_handler = None
+        self._delay_map = {
+            translations.away: self.mode_turn_off_delay,
+            translations.off: self.mode_turn_off_delay,
+            translations.night: self.mode_turn_off_delay,
+            translations.automagical: self.mode_turn_on_delay,
+            translations.morning: self.mode_turn_on_delay,
+        }
         random_turn_on_delay:int = self.args.get('random_turn_on_delay',0)
 
         # Adaptive Lighting
@@ -399,19 +406,10 @@ class Room(Hass):
 
         self.LIGHT_MODE = modename
 
-        if self.mode_turn_off_delay > 0:
-            delay_map = {
-                translations.away: self.mode_turn_off_delay,
-                translations.off: self.mode_turn_off_delay,
-                translations.night: self.mode_turn_off_delay,
-                translations.automagical: self.mode_turn_on_delay,
-                translations.morning: self.mode_turn_on_delay,
-            }
-
-            delay = delay_map.get(modename, 0)
-            if delay:
-                self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_off_delay)
-                return
+        delay = self._delay_map.get(modename, 0)
+        if delay > 0:
+            self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, delay)
+            return
 
         self.reactToChange()
 
@@ -666,7 +664,6 @@ class Room(Hass):
             return False
 
         if self.LIGHT_MODE == translations.away and self.roomtype not in ('outdoor', 'hallway'):
-            self.log(f"Mode is {translations.away} and roomtype is {self.roomtype}. Do not do motion") ###
             return False
 
         if self.active_motion_sensors:
