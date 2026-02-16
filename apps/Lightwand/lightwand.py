@@ -73,12 +73,6 @@ class Room(Hass):
         # Options defined in configurations
         self.roomtype = self.args.get('roomtype', 'normal')
 
-        """ roomtypes TODO
-            - outdoor : 
-                - Lux control on away mode
-            - bedroom :
-                - Logic to prevent reset when nightmode unless used with room name during evening/night.
-        """
         options = self.args.get('options', [])
         opts = set(options)
         if 'exclude_from_custom' in opts or self.roomtype in ('outdoor', 'bedroom'):
@@ -383,19 +377,28 @@ class Room(Hass):
             else:
                 return
 
-        # Check if old light mode is night and bed is occupied.
-
         if modename.startswith(translations.night):
+            # Check if old light mode is night and bed is occupied.
             for bed_sensor in self.bed_sensors:
                 cancel_listen_handler(ADapi = self, handler = bed_sensor.handler)
                 bed_sensor.handler = None
 
         if self.LIGHT_MODE.startswith(translations.night):
+            # A full block on automations to take room out of night
             if (
                 modename in (translations.morning, translations.automagical)
                 and self.prevent_night_to_morning
             ):
                 return
+            # A block to prevent user or automation to take room out of night unless _roomname is provided
+            if (
+                modename in (translations.automagical, translations.reset) and
+                roomname is None and
+                self.roomtype == 'bedroom' and
+                self.now_is_between('10:00:00','05:00:00')
+            ):
+                return
+            # Waiting for bedsensors to be empty before ending night
             if modename not in (translations.night, translations.off, translations.away, translations.reset, translations.fire):
                 if self._bed_occupied() and not modename.startswith(translations.night):
                     for bed_sensor in self.bed_sensors:
@@ -435,11 +438,13 @@ class Room(Hass):
         modename, roomname = _parse_mode_and_room(new)
         if roomname is not None and roomname != str(self.name):
             return
+        if modename == translations.automagical:
+            modename = translations.reset
         if modename == self.LIGHT_MODE:
             return
-        if modename in self.all_modes:
-            self.LIGHT_MODE = modename
-            self.reactToChange()
+
+        self.LIGHT_MODE = modename
+        self.reactToChange()
 
         if modename == translations.reset:
             self.LIGHT_MODE = translations.automagical

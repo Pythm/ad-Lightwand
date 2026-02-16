@@ -443,6 +443,8 @@ These options can be configured either for room or for each individual -lights.
 > [!INFO]  
 > When Lightwand detects a manual control it will log **"Manual Override detected for {self.lights[0]} with new brightness {self.brightness}"**. When testing some of my lights bounced a lot and ended up on the wrong brightness when transition was set to high. Check the logs if you experience lights not automating when `take_manual_control` is enabled.
 
+If `take_manual_control` is defined as a option for the room or light (or roomtype is set to living‑room or kitchen) the light will stay in the configuration it was manually adjusted to until a new mode or reset is called. Note that turning on or off a media player is considered a new mode.
+
 #### **Holiday Lights Control**
 Set an `input_boolean` (or similar) as `enable_light_control` for switches/lights you only use for special occations like christmas or during winter time.  
 The app will control the light/switch only if this switch is ON.  
@@ -483,13 +485,11 @@ Below is a quick overview of the pre‑configured room types – more advanced o
 
 | Room type | Default behaviour |
 |-----------|--------------------|
-| **outdoor** | • Motion sensors trigger lighting during *away* and *night* modes.<br>• Lux‑controlled lighting will be enabled in future updates.<br>• Excludes the room from the *custom* mode and the *wash* mode. |
-| **bedroom** | • Excludes the room from the *custom* mode and the *wash* mode.<br>• Logic to prevent a *reset* when *night* mode is active unless the mode name includes the room name (this feature will be added in a future update). |
+| **outdoor** | • Motion sensors trigger lighting during *away* and *night* modes.<br>• Excludes the room from the *custom* mode and the *wash* mode. |
+| **bedroom** | • Excludes the room from the *custom* mode and the *wash* mode.<br>• Logic to prevent *automagical* mode or a *reset* when *night* mode is active, unless the mode name includes the room name between 10:00:00 after morning and until 05:00:00 before morning routine starts. |
 | **hallway** | • Motion triggers lighting during *away* mode. |
 | **living‑room** | • Full manual control of the lighting by default when light is manually adjusted. |
 | **kitchen** | • Full manual control of the lighting by default when light is manually adjusted. |
-
-> **Future updates**: The lux‑controlled lighting for the outdoor room type and the logic for resetting bedroom lights will be added in an upcoming release.
 
 ---
 
