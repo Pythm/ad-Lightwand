@@ -692,7 +692,7 @@ class Room(Hass):
 
         if self.LIGHT_MODE in (translations.automagical, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
             for mediaplayer in self.mediaplayers:
-                if self.get_state(mediaplayer['mediaplayer']) == 'on':
+                if self.get_state(mediaplayer['mediaplayer']) not in ('off', 'idle', 'paused', 'unavailable', 'unknown'):
                     for light in self.roomlight:
                         if ((light.checkConditions(light.conditions) and light.checkLuxConstraints()) or
                             light.current_keep_on_Condition
