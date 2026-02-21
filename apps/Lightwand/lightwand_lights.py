@@ -472,30 +472,18 @@ class Light:
             return
 
         light_properties: Optional[LightProperties] = None
+        motion_brightness_compare:int = 0
 
-        if (
-            not self.wereMotion
-            or self.dim_while_motion
-            or force_change
-        ):
-            motion_brightness_compare:int = 0
-            if isinstance(self.motionlight, List):
-                light_properties, motion_brightness_compare = self.getLightAutomationData(
-                    automations=self.motionlight
-                )
-
-            elif isinstance(self.motionlight, LightProperties):
-                light_properties = self.motionlight
-                motion_brightness_compare = light_properties.resolve_brightness_to_255()
-
-            if motion_brightness_compare == 0:
-                motion_brightness_compare = self.current_light_data.get('brightness', self.brightness) 
-                if not self.wereMotion:
-                    motion_brightness_compare += light_properties.offset
+        if not self.wereMotion or self.dim_while_motion or force_change:
+            light_properties, motion_brightness_compare = self._compute_motion_brightness()
             force_change = True
 
         elif self.automation_set: # No change since last motion
             return
+
+        else:                     # Last execution never reached the lights
+            light_properties, motion_brightness_compare = self._compute_motion_brightness()
+            force_change = True
 
         if lightmode != translations.automagical:
             mode = self.light_modes_by_name.get(lightmode)
@@ -555,6 +543,26 @@ class Light:
 
         elif light_properties.state == 'turn_off':
             self.turn_off_lights()
+
+    def _compute_motion_brightness(self) -> Tuple[LightProperties, int]:
+        """Return (light_properties, motion_brightness_compare)"""
+        if isinstance(self.motionlight, List):
+            light_properties, motion_brightness_compare = self.getLightAutomationData(
+                automations=self.motionlight)
+        elif isinstance(self.motionlight, LightProperties):
+            light_properties = self.motionlight
+            motion_brightness_compare = light_properties.resolve_brightness_to_255()
+        else:
+            light_properties = None
+            motion_brightness_compare = 0
+
+        if motion_brightness_compare == 0:
+            motion_brightness_compare = self.current_light_data.get(
+                'brightness', self.brightness)
+            if not self.wereMotion:
+                motion_brightness_compare += light_properties.offset
+
+        return light_properties, motion_brightness_compare
 
     def setLightAutomation(self, automations: List[Automation] = None, light_properties: LightProperties = None, force_change = False) -> None:
         """ Finds the appropriate light_properties and adjusts lights """
@@ -819,7 +827,6 @@ class Light:
         """Correct brightness if the desired value is ±1."""
 
         current_brightness = self.current_light_data.get('brightness')
-        self.ADapi.log(f"Check brightness {self.lights[0]} with new brightness {self.brightness} vs {current_brightness}", level = 'DEBUG') ###
         if current_brightness is not None and self.brightness >= 0:
             diff = abs(self.brightness - current_brightness)
 
@@ -926,22 +933,18 @@ class Light:
             # Was off and not auto turned on
             if not old_on_status and self.is_turned_on_by_automation is False:
                 if self.take_manual_control:
-                    self.ADapi.log(f"Manual Override detected for {self.lights[0]} with turn on") ###
                     self.manual_override = True
             # Was off and turned on automatically
             elif not old_on_status and self.is_turned_on_by_automation and self.manual_override:
-                self.ADapi.log(f"Manual Override disabled for {self.lights[0]} with turn on") ###
                 self.manual_override = False
         # New is off
         elif not self.is_on:
             # Was on and automations wants it on:
             if old_on_status and self.is_turned_on_by_automation:
                 if self.take_manual_control:
-                    self.ADapi.log(f"Manual Override detected for {self.lights[0]} with turn off") ###
                     self.manual_override = True
             # Was on and turned off automatically
             elif old_on_status and self.is_turned_on_by_automation is False and self.manual_override:
-                self.ADapi.log(f"Manual Override disabled for {self.lights[0]} with turn off") ###
                 self.manual_override = False
 
     def turn_on_lights(self, light_data: dict = {}) -> None:
