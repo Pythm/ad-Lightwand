@@ -1,6 +1,6 @@
 # Lightwand by Pythm  
 **An [AppDaemon](https://github.com/AppDaemon/appdaemon) app for advanced lighting control via Home Assistant or MQTT**  
-Set light data based on time of day, use Mode Change events or environmental conditions like lux levels, rain, and sensors like motion, presence and media players.  
+Automate your lights based on time of day, use Mode Change events or environmental conditions like lux levels, rain, and sensors like motion, presence and media players.  
 
 ![AI-Generated Illustration](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)  
 
@@ -114,31 +114,38 @@ day:
 > [!TIP]  
 > Already using events in your automations? Check out the [translation section](https://github.com/Pythm/ad-Lightwand?tab=readme-ov-file#translating-or-changing-modes) on how to listen for a different event than `"MODE_CHANGE"` and using translated mode names.
 
+> [!IMPORTANT]
+> As of version 2.1.0 the default automation mode is now called '`automagical`' changed from '`normal`' to better reflect what the mode actually does to avoid confuson. To still keep using the `normal` mode name, keep or change the translations.json to "automagical": "normal". 
+
 ---
 
 ### 📌 Predefined Mode Names  
 
 | Mode Name | Behavior |  
 |----------|----------|  
-| `normal` | Default automation mode for day-to-day usage with lux constraints and conditions. |  
-| `morning` | Acts like `normal` mode but can be used with specific light settings for mornings. |  
-| `reset` | Resets all lights to their `normal` mode settings. |  
-| `away` | Defaults to **off** with motion detection enabled. |
+| `automagical` | Default automation mode for day-to-day usage with lux constraints and conditions. |  
+| `morning` | Acts like `automagical` mode with lux/conditions but can be used with specific light settings. |  
+| `reset` | Resets modes or adustments on lights back to their `automagical` mode settings. |  
+| `away` | Defaults to **off** with motion detection disabled. |
 | `night` / `off` | Defaults to **off** with motion detection disabled. |  
 | `fire` / `wash` | Turns lights on with **maximum brightness**. |  
 | `custom` | Manual control — **disables all automation**. |  
 
+> [!NOTE]  
+> These are the names that can be translated to your preference in the translations.json file
+
 **Custom Mode Names**  
-- With the exception of `custom` and `reset`, you can use **any** mode name in `light_modes`.  
+- With the exception of `automagical`, `custom` and `reset`, you can define **any** mode name in `light_modes`.  
 - You can **overwrite** default behavior by configuring the mode.  
 - In addition to `night` (or its translation, such as `nacht`) mode you can configure modes beginning with night, for instance `night-kid-bedroom`. All modes starting with night or off will by default disable motion detection.
 
 ---
 
-### 🔄 Setting `normal` vs `reset` Mode from Automations  
-- **Normal**: Safe for automations; does **not override** manual changes.  
-- **Reset**: Forces lights back to their **original `normal` settings**.  
+### 🔄 Setting `automagical` vs `reset` Mode from Automations  
+- **Automagical**: Safe for automations; does **not override** manual changes.  
+- **Reset**: Forces lights back to their **original `automagical` settings**.  
 
+The design is to use `automagical` in your automations / mode management apps and use `reset` from any user input.
 ---
 
 ### 🏠 Change Mode in One Room  
@@ -211,7 +218,7 @@ your_room_name:
 
 | Default Mode | Example German Translation | Example Usage |
 |--------------|---------------------------|---------------|
-| `normal`     | `automatik`               | `automatik_LivingRoom` |
+| `automagical`| `automatik`               | `automatik_LivingRoom` |
 | `off`        | `aus`                     | `aus_Kitchen` |
 | `night`      | `nacht`                   | `nacht_Bedroom` |
 | `reset`      | `zurücksetzen`            | `reset_Garage` |
@@ -224,7 +231,6 @@ your_room_name:
 
 With this approach you can keep your translations clean, maintain logical consistency across your automations, and extend Lightwand with your own custom modes when needed.
 ---
-
 
 ## 📈 Configuring Light Behavior
 
@@ -250,7 +256,7 @@ Lightwand can be used together with the [Adaptive Lighting custom component for 
 ### 🔁 Setting `state`
 - **`state`**: Controls on/off behavior for lights.
   - **Default behavior** depends on the **mode** being used:
-    - In **`normal` and user defined modes**, the default is **`turn_on`**.
+    - In **`automagical` and user defined modes**, the default is **`turn_on`**.
     - In **`away`**, **`night`**, or **`off`** modes, the default is **`turn_off`** (as described in the "Mode Change Events" section).
   - If no `state` is explicitly defined, the mode's default behavior applies.
 
@@ -277,7 +283,7 @@ Lightwand can be used together with the [Adaptive Lighting custom component for 
 Automations are configured by defining an array of time-based rules. These can be **clock-based**, **solar-based** (using sunrise/sunset times), or a combination of both.  
 
 **Key Rules for Automations**:
-- When `lightmode` is set to `normal`, Lightwand checks for defined `light_data` and `state` in `automations`.
+- When `lightmode` is set to `automagical`, Lightwand checks for defined `light_data` and `state` in `automations`.
 - Automations can also be configured under `motionlights` and `light_modes`.  
 - **For a light to turn on** when the selected lightmode is an automation, **both `lux_constraint` and `conditions` must pass**.  
 
@@ -323,7 +329,7 @@ Configure `motionlights` to define how lights react to motion detection.
 ```
 
 **Key Rules for Motion Behavior**:  
-- For the light to turn on, **both `lux_constraint` and `conditions` must pass** if the lightmode is `normal`.  
+- For the light to turn on, **both `lux_constraint` and `conditions` must pass** if the lightmode is `automagical`.  
 - If another mode is active, behavior depends on how that mode is configured.  
 
 **Example with `motionlights` and `light_data`**:  
@@ -374,7 +380,7 @@ Light modes are defined under `light_modes` as an array. They can include:
             transition: 3
             color_temp: 427
         - mode: decor
-          offset: -20 # Optional offset from brightness defined in normal mode
+          offset: -20 # Optional offset from brightness defined in automagical mode
         - mode: tv
           state: turn_off
         - mode: away
@@ -403,10 +409,10 @@ Light modes are defined under `light_modes` as an array. They can include:
 There are several options to fine-tune how lights behave:  
 
 #### **Dimming with `dimrate`**  
-Use `dimrate` in automations to control how quickly brightness changes (e.g., `dimrate: 2` = 1 brightness unit per 2 minutes). The light will **dim from the last timed brightness** until the target brightness is met.  
+Use `dimrate` in automations to control how quickly brightness changes (e.g., `dimrate: 2` = 1 brightness unit per 2 minutes). The light will **dim from the last timed brightness** until the target brightness is met.
 
 #### **Adjust Brightness with `offset`**  
-Use `offset` to dynamically increase or decrease brightness for dimmable lights when `motionlights` or `light_modes` are active. The offset is applied to the brightness defined in `light_data`.  
+Use `offset` to dynamically increase or decrease brightness for dimmable lights when `motionlights` or `light_modes` are active. The offset is applied to the brightness defined in automations `light_data`.  
 
 **Example**:  
 ```yaml
@@ -415,20 +421,29 @@ Use `offset` to dynamically increase or decrease brightness for dimmable lights 
 ```
 
 > [!NOTE]  
-> If the current mode is **not configured with automations**, `motionlights` with `offset` will **not activate**.  
+> If the currently selected light mode is **not configured with automations**, `motionlights` with `offset` will **not activate**.  
 
 
 #### **Room-Level Options**  
 - `exclude_from_custom`: Excludes the room from `custom` and `wash` modes (useful for outdoor or kid’s rooms).  
-- `prevent_off_to_normal`: Keeps lights `off` if a new mode is `normal`.  
-- `prevent_night_to_morning`: Keeps lights in `night` mode if a new mode is `morning` or `normal`.  
-- `dim_while_motion`: Enables dimming of lights when motion is detected.
+- `prevent_off_to_automagical`: Keeps lights `off` if a new mode is `automagical`.  
+- `prevent_night_to_morning`: Keeps lights in `night` mode if a new mode is `morning` or `automagical`.  
 
 > [!TIP]  
-> If preventing normal mode use `reset` mode or set lightmode for spesific room to get back to normal.
+> If preventing automagical mode, use `reset` mode or set a light mode for the spesific room to turn on lights.
 
-#### **Light-Level Options**  
+
+#### **Light and Room-Level Options**  
 - `night_motion`: Enables motion detection during `night` mode.  
+- `dim_while_motion`: Enables dimming of lights when motion is detected.
+- `take_manual_control`: Breaks any automations until a new mode or reset is called if a light is manually adjusted.
+
+These options can be configured either for room or for each individual -lights.
+
+> [!INFO]  
+> When Lightwand detects a manual control it will log **"Manual Override detected for {self.lights[0]} with new brightness {self.brightness}"**. When testing some of my lights bounced a lot and ended up on the wrong brightness when transition was set to high. Check the logs if you experience lights not automating when `take_manual_control` is enabled.
+
+If `take_manual_control` is defined as a option for the room or light (or roomtype is set to living‑room or kitchen) the light will stay in the configuration it was manually adjusted to until a new mode or reset is called. Note that turning on or off a media player is considered a new mode.
 
 #### **Holiday Lights Control**
 Set an `input_boolean` (or similar) as `enable_light_control` for switches/lights you only use for special occations like christmas or during winter time.  
@@ -436,15 +451,16 @@ The app will control the light/switch only if this switch is ON.
 If the switch is OFF, the app will leave the light untouched, allowing other tasks to use it.
 
 > **NOTE**  
-> The setting is read only at startup, so you must restart AppDaemon (or the app) to enable/disable control.
+> The Holiday lights control setting is read only at startup, so you must restart AppDaemon (or the app) to enable/disable control.
 
 **Example**:  
 ```yaml
   # Configure in room
+  roomtype: kitchen
   options:
     - exclude_from_custom
     - dim_while_motion
-    - prevent_off_to_normal
+    - prevent_off_to_automagical
     - prevent_night_to_morning
   MQTTLights:
     - lights:
@@ -452,11 +468,28 @@ If the switch is OFF, the app will leave the light untouched, allowing other tas
       # Configure in light
       options:
         - night_motion
+        - take_manual_control
       enable_light_control: input_boolean.xmas_light_control
 ```
 
 > [!TIP]  
 > Use one `input_boolean` switch to disable holiday lights and hide related modes in the Home Assistant frontend.  
+
+---
+
+### 🏠 Room Types
+
+With the release of **Lightwand v2.1.0** you can now assign a *room type* to your apps by configuring one of the predefined types with `roomtype`.  
+The room type automatically configures a set of default options and some additional behavior that is tailored to the particular space.  
+Below is a quick overview of the pre‑configured room types – more advanced options will become available for each type in future releases.
+
+| Room type | Default behaviour |
+|-----------|--------------------|
+| **outdoor** | • Motion sensors trigger lighting during *away* and *night* modes.<br>• Excludes the room from the *custom* mode and the *wash* mode. |
+| **bedroom** | • Excludes the room from the *custom* mode and the *wash* mode.<br>• Logic to prevent *automagical* mode or a *reset* when *night* mode is active, unless the mode name includes the room name between 10:00:00 after morning and until 05:00:00 before morning routine starts. |
+| **hallway** | • Motion triggers lighting during *away* mode. |
+| **living‑room** | • Full manual control of the lighting by default when light is manually adjusted. |
+| **kitchen** | • Full manual control of the lighting by default when light is manually adjusted. |
 
 ---
 
@@ -486,7 +519,7 @@ You can define **two outdoor lux sensors**. The second sensor can be defined wit
 
 ### 📡 Motion Sensors and Presence Trackers  
 
-You can define the **time delay** (in seconds) after motion detection before the lights return to normal. You can also define **constraints** for each sensor using an python `if` statement checked againts the ast_evaluator.py. These constraints must be `true` for motion to activate. 
+You can define the **time delay** (in seconds) after motion detection before the lights return to automagical settings. You can also define **constraints** for each sensor using an python `if` statement checked againts the ast_evaluator.py. These constraints must be `true` for motion to activate. 
 
 **Example**:  
 ```yaml
@@ -499,9 +532,9 @@ You can define the **time delay** (in seconds) after motion detection before the
 ```
 
 > [!TIP]  
-> Tracker will set mode as `away` when not home, but there are **no restrictions** on calling new modes or switching to `normal` when in `away` mode.  
+> Tracker will set mode as `away` when not home, but there are **no restrictions** on calling new modes or switching to `automagical` when in `away` mode.  
 
-For **presence tracking**, define the trackers in the `presence` section. When a tracker is `home`, the app will switch to `presence` mode.  If `presence` is not defined in `light_modes` or constraints are not met then the room will switch to `normal` mode. If all defined trackers are **not home**, the room will switch to `away` mode.  
+For **presence tracking**, define the trackers in the `presence` section. When a tracker is `home`, the app will switch to `presence` mode.  If `presence` is not defined in `light_modes` or constraints are not met then the room will switch to `automagical` mode. If all defined trackers are **not home**, the room will switch to `away` mode.  
 
 **Example**:  
 ```yaml
@@ -511,7 +544,7 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 ```
 
 > [!NOTE]  
-> Trackers will **not change modes** when returning home unless the current mode is `normal` or `away`.  
+> Trackers will **not change modes** when returning home unless the current mode is `automagical` or `away`.  
 
 ---
 
@@ -536,7 +569,7 @@ Sorted by **priority** if more than one media player is defined in a room. You c
 - Define `light_data` in `light_modes` for the corresponding mode.  
 
 **Behavior**:  
-- The "media mode" will **override** normal lighting behavior when motion is detected, during `morning`, `normal`, or `night*` modes.
+- The "media mode" will **override** automagical lighting behavior when motion is detected, during `morning`, `automagical`, or `night*` modes.
 
 > [!TIP]  
 > Define a `delay` for media players that report `on` states shortly after being turned off. This prevents lights from dimming up and down repeatedly.  
@@ -557,7 +590,7 @@ Sorted by **priority** if more than one media player is defined in a room. You c
 
 ### 📌 Conditions and Constraints  
 
-You can use **lux sensors** to control or constrain lights. Optionally, you can define `IF` statements that must be met for the light to turn on during `normal`, `morning`, or `motion` modes, or when automations are triggered. The app inherits the **AppDaemon API** as `self.ADapi`.  
+You can use **lux sensors** to control or constrain lights. Optionally, you can define `IF` statements that must be met for the light to turn on during `automagical`, `morning`, or `motion` modes, or when automations are triggered. The app inherits the **AppDaemon API** as `self.ADapi`.  
 
 > **Example Use Case**:  
 > I use this on some lights in my living room and kitchen to detect if my wife is **not home**, without setting the room to `away` mode.  
@@ -585,7 +618,7 @@ To define custom conditions, create a `listen_sensors` list for the sensors you 
 
 ### 🔄 Manual Changes to Lights  
 
-If you've configured all your lights to your liking, the normal automation should suffice for day-to-day use. However, there are times when you may need to make **manual adjustments**, such as for special events or when the automation doesn't match your needs.  
+If you've configured all your lights to your liking, the automagical automation should suffice for day-to-day use. However, there are times when you may need to make **manual adjustments**, such as for special events or when the automation doesn't match your needs.  
 
 > [!NOTE]  
 > Manual changes will **persist** until:  
@@ -689,7 +722,7 @@ your_room_name:
       motion_constraints: "self.now_is_between('06:30:00', '21:00:00')"
   # Presence tracker detection. Configuration is same as motion sensors
   # Sets mode as away for room if all trackers are not equal to 'home'.
-  # Sets mode to presence if defined in light_modes or normal if not defined when returning home
+  # Sets mode to presence if defined in light_modes or automagical if not defined when returning home
   presence:
     - tracker: person.yourwife
       delay: 60
@@ -793,10 +826,10 @@ your_room_name:
           toggle: 3
         - mode: gaming
           state: turn_off
-      # Lux constraints will only check when a new update to light is sent, like motion/presence, media player on/off or normal mode
+      # Lux constraints will only check when a new update to light is sent, like motion/presence, media player on/off or automagical mode
       lux_constraint: 12000
       room_lux_constraint: 100
-      # Conditions as if statement to be meet for light to turn on at normal/morning/motion mode or with automations defined
+      # Conditions as if statement to be meet for light to turn on at automagical/morning/motion mode or with automations defined
       # Inherits Appdaemon Api as ADapi.
       conditions:
         - "self.ADapi.get_tracker_state('person.kid') == 'home'"
@@ -843,7 +876,7 @@ key | optional | type | default | introduced in | description
 key | optional | type | default | introduced in | description
 -- | -- | -- | -- | -- | --
 `lights` | True | list | | v1.0.0 | list of lights
-`automations` | True | dict | | v1.0.0 | Configure default light behaviour for 'normal' mode with automations
+`automations` | True | dict | | v1.0.0 | Configure default light behaviour for 'automagical' mode with automations
 `motionlights` | True | dict | | v1.0.0 | Configure default light behaviour for motion detected
 `light_modes` | True | dict | | v1.0.0 | Name of mode. Define light modes to change light accordingly
 `lux_constraint` | True | int | | v1.0.0 | Outdoor lux constraint

@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.0.5"
+__version__ = "2.1.0"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -52,7 +52,7 @@ class Room(Hass):
         self.LIGHT_MODE:str = 'none'
         # All known modes that the room can enter
         self.all_modes: Set[str] = {
-            translations.normal,
+            translations.automagical,
             translations.away,
             translations.off,
             translations.night,
@@ -62,8 +62,8 @@ class Room(Hass):
             translations.wash,
             translations.reset,
         }
-        self.getOutOfBedMode:str = translations.normal
-        self.LIGHT_MODE = translations.normal
+        self.getOutOfBedMode:str = translations.automagical
+        self.LIGHT_MODE = translations.automagical
 
         night_motion:bool = False
         dim_while_motion:bool = False
@@ -71,20 +71,34 @@ class Room(Hass):
         self.prevent_night_to_morning:bool = False
 
         # Options defined in configurations
-        if 'options' in self.args:
-            if 'exclude_from_custom' in self.args['options']:
-                self.all_modes.discard(translations.custom)
-                self.all_modes.discard(translations.wash)
-            night_motion = 'night_motion' in self.args['options']
-            dim_while_motion = 'dim_while_motion' in self.args['options']
-            self.prevent_off_to_normal = 'prevent_off_to_normal' in self.args['options']
-            self.prevent_night_to_morning = 'prevent_night_to_morning' in self.args['options']
+        self.roomtype = self.args.get('roomtype', 'normal')
 
+        options = self.args.get('options', [])
+        opts = set(options)
+        if 'exclude_from_custom' in opts or self.roomtype in ('outdoor', 'bedroom'):
+            self.all_modes.discard(translations.custom)
+            self.all_modes.discard(translations.wash)
+
+        night_motion      = 'night_motion'      in opts or self.roomtype in ('outdoor')
+        dim_while_motion  = 'dim_while_motion'  in opts
+        take_manual_control = 'take_manual_control' in opts or self.roomtype in ('livingroom', 'kitchen')
+        self.prevent_off_to_normal   = 'prevent_off_to_normal' in opts or 'prevent_off_to_automagical' in opts
+        self.prevent_night_to_morning = 'prevent_night_to_morning' in opts
+
+        # Reaction delay to mode
         self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
         self.mode_turn_on_delay:int = self.args.get('mode_turn_on_delay',0)
         self.mode_delay_handler = None
+        self._delay_map = {
+            translations.away: self.mode_turn_off_delay,
+            translations.off: self.mode_turn_off_delay,
+            translations.night: self.mode_turn_off_delay,
+            translations.automagical: self.mode_turn_on_delay,
+            translations.morning: self.mode_turn_on_delay,
+        }
         random_turn_on_delay:int = self.args.get('random_turn_on_delay',0)
 
+        # Adaptive Lighting
         adaptive_switch:str = self.args.get('adaptive_switch', None)
         adaptive_sleep_mode:str = self.args.get('adaptive_sleep_mode', None)
 
@@ -155,6 +169,7 @@ class Room(Hass):
                                 adaptive_sleep_mode = adaptive_sleep_mode,
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
+                                take_manual_control = take_manual_control,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -175,6 +190,7 @@ class Room(Hass):
                                 adaptive_sleep_mode = adaptive_sleep_mode,
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
+                                take_manual_control = take_manual_control,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -199,6 +215,7 @@ class Room(Hass):
                                 adaptive_sleep_mode = adaptive_sleep_mode,
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
+                                take_manual_control = False,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -304,7 +321,7 @@ class Room(Hass):
         """ Setup the selector input for the room mode """
 
         selector_input_exclude_modes = kwargs.get('selector_input_exclude_modes', [])
-        exclude = {'fire', 'false-alarm', 'presence', 'reset'} | set(selector_input_exclude_modes)
+        exclude = {translations.fire, translations.false_alarm, translations.reset ,'presence'} | set(selector_input_exclude_modes)
         self.selector_input_options = [m for m in self.all_modes if m not in exclude]
 
         self.call_service("input_select/set_options",
@@ -349,31 +366,40 @@ class Room(Hass):
 
         if (
             self.LIGHT_MODE == translations.off
-            and modename == translations.normal
+            and modename == translations.automagical
             and self.prevent_off_to_normal
         ):
             return
 
         if modename not in self.all_modes:
             if modename == translations.morning:
-                modename = translations.normal
+                modename = translations.automagical
             else:
                 return
 
-        # Check if old light mode is night and bed is occupied.
-
         if modename.startswith(translations.night):
+            # Check if old light mode is night and bed is occupied.
             for bed_sensor in self.bed_sensors:
                 cancel_listen_handler(ADapi = self, handler = bed_sensor.handler)
                 bed_sensor.handler = None
 
         if self.LIGHT_MODE.startswith(translations.night):
+            # A full block on automations to take room out of night
             if (
-                modename in (translations.morning, translations.normal)
+                modename in (translations.morning, translations.automagical)
                 and self.prevent_night_to_morning
             ):
                 return
-            if modename not in (translations.night, translations.off, translations.reset):
+            # A block to prevent user or automation to take room out of night unless _roomname is provided
+            if (
+                modename in (translations.automagical, translations.reset) and
+                roomname is None and
+                self.roomtype == 'bedroom' and
+                self.now_is_between('10:00:00','05:00:00')
+            ):
+                return
+            # Waiting for bedsensors to be empty before ending night
+            if modename not in (translations.night, translations.off, translations.away, translations.reset, translations.fire):
                 if self._bed_occupied() and not modename.startswith(translations.night):
                     for bed_sensor in self.bed_sensors:
                         if self.get_state(bed_sensor.sensor) == 'on':
@@ -383,24 +409,15 @@ class Room(Hass):
 
         self.LIGHT_MODE = modename
 
-        if self.mode_turn_off_delay > 0:
-            delay_map = {
-                translations.away: self.mode_turn_off_delay,
-                translations.off: self.mode_turn_off_delay,
-                translations.night: self.mode_turn_off_delay,
-                translations.normal: self.mode_turn_on_delay,
-                translations.morning: self.mode_turn_on_delay,
-            }
-
-            delay = delay_map.get(modename, 0)
-            if delay:
-                self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, self.mode_turn_off_delay)
-                return
+        delay = self._delay_map.get(modename, 0)
+        if delay > 0:
+            self.mode_delay_handler = self.run_in(self.set_Mode_with_delay, delay)
+            return
 
         self.reactToChange()
 
         if modename == translations.reset:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
 
         self._set_selector_input()
 
@@ -421,14 +438,16 @@ class Room(Hass):
         modename, roomname = _parse_mode_and_room(new)
         if roomname is not None and roomname != str(self.name):
             return
+        if modename == translations.automagical:
+            modename = translations.reset
         if modename == self.LIGHT_MODE:
             return
-        if modename in self.all_modes:
-            self.LIGHT_MODE = modename
-            self.reactToChange()
+
+        self.LIGHT_MODE = modename
+        self.reactToChange()
 
         if modename == translations.reset:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
 
     def set_Mode_with_delay(self, kwargs):
         """ Sets mode with defined delay. """
@@ -439,7 +458,7 @@ class Room(Hass):
         self.reactToChange()
 
         if self.LIGHT_MODE == translations.reset:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
 
         self._set_selector_input()
 
@@ -569,8 +588,8 @@ class Room(Hass):
                     self.log(f"Constraint eval error for {tracker.sensor}: {exc}", level = 'INFO')
                     return
 
-            if self.LIGHT_MODE in (translations.normal, translations.away) and self.check_mediaplayers_off():
-                self.LIGHT_MODE = translations.normal
+            if self.LIGHT_MODE in (translations.automagical, translations.away) and self.check_mediaplayers_off():
+                self.LIGHT_MODE = translations.automagical
                 self._set_selector_input()
 
             if not constraints_ok or 'presence' not in self.all_modes:
@@ -649,6 +668,9 @@ class Room(Hass):
         if self.LIGHT_MODE in (translations.off, translations.custom):
             return False
 
+        if self.LIGHT_MODE == translations.away and self.roomtype not in ('outdoor', 'hallway'):
+            return False
+
         if self.active_motion_sensors:
             return light.motionlight
 
@@ -657,7 +679,7 @@ class Room(Hass):
         # Media Player / sensors
     def media_on(self, entity, attribute, old, new, kwargs) -> None:
         if self.LIGHT_MODE == translations.morning:
-            self.LIGHT_MODE = translations.normal
+            self.LIGHT_MODE = translations.automagical
             self._set_selector_input()
         self.check_mediaplayers_off()
 
@@ -668,18 +690,15 @@ class Room(Hass):
         """ Returns true if media player sensors is off or self.LIGHT_DATA != 'normal'/'night'.
             If not it updates lightmode to the first detected media player. """
 
-        if self.LIGHT_MODE in (translations.normal, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
+        if self.LIGHT_MODE in (translations.automagical, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
             for mediaplayer in self.mediaplayers:
-                if self.get_state(mediaplayer['mediaplayer']) == 'on':
+                if self.get_state(mediaplayer['mediaplayer']) not in ('off', 'idle', 'paused', 'unavailable', 'unknown'):
                     for light in self.roomlight:
                         if ((light.checkConditions(light.conditions) and light.checkLuxConstraints()) or
                             light.current_keep_on_Condition
                         ):
-                            if self.LIGHT_MODE == translations.reset:
-                                light.current_LuxCondition = not light.checkLuxConstraints()
-                                light.current_light_data = {}
-                                light.is_turned_on = None
-                            light.setLightMode(lightmode = mediaplayer['mode'])
+                            force_change = self.LIGHT_MODE == translations.reset
+                            light.setLightMode(lightmode = mediaplayer['mode'], force_change = force_change)
                         else:
                             light.turn_off_lights()
 
