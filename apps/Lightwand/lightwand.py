@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -300,6 +300,13 @@ class Room(Hass):
         self.listen_event(self.mode_event, translations.MODE_CHANGE,
             namespace = self.HASS_namespace
         )
+
+        # Initialize sensors with correct state:
+        for sensor in motion_sensors:
+            if self.get_state(sensor.sensor) in MOTION:
+                motion_data:dict = {'occupancy': True}
+                self._process_sensor(sensor, motion_data)
+
 
     def _parse_bed_sensors(self):
         raw = self.args.get('bed_sensors', [])
