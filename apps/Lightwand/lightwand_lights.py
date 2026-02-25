@@ -89,10 +89,11 @@ class Light:
             except TypeError:
                 self.brightness = 0
 
-        self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
-            duration = 15,
-            namespace = HASS_namespace
-        )
+        if string.startswith('light.') or string.startswith('switch.'):
+            self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
+                duration = 15,
+                namespace = HASS_namespace
+            )
         self.is_on = self.ADapi.get_state(self.lights[0]) == 'on'
         self.is_turned_on_by_automation = self.is_on
 
@@ -1126,11 +1127,13 @@ class MQTTLight(Light):
                     self.is_on = True
                 elif lux_data['value'] == 0:
                     self.is_on = False
-            self.ADapi.run_in(self._check_if_turned_on_manually, 1, old_on_status = old_on_status)
+            if self.is_on != old_on_status:
+                self.ADapi.run_in(self._check_if_turned_on_manually, 1, old_on_status = old_on_status)
 
         elif 'state' in lux_data:
             self.is_on = lux_data['state'] == 'ON'
-            self.ADapi.run_in(self._check_if_turned_on_manually, 1, old_on_status = old_on_status)
+            if self.is_on != old_on_status:
+                self.ADapi.run_in(self._check_if_turned_on_manually, 1, old_on_status = old_on_status)
 
         else:
             """ No valid state based on program. Let user know """
