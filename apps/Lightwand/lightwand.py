@@ -711,4 +711,3 @@ class Room(Hass):
 
                     return False
         return True
-
