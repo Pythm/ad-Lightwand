@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import List, Any, Dict
 from lightwand_config import LightSpec, Automation, LightProperties, LightMode
 import copy
 
@@ -19,6 +19,16 @@ def _build_light_mode(d: dict) -> LightMode:
     noMotion: bool = data.pop('noMotion', False)
     automs: Optional[List[Automation]] = None
     light_properties: Optional[LightProperties] = None
+
+    motions = None
+    if 'motionlights' in data:
+        raw_motions = data.pop('motionlights')
+        if raw_motions:
+            if isinstance(raw_motions, List):
+                motions = [automation_from_obj(a) for a in raw_motions]
+            else:
+                motions = LightProperties(**raw_motions)
+
     if 'automations' in data:
         raw_automs = data.pop('automations')
         if raw_automs:
@@ -29,12 +39,15 @@ def _build_light_mode(d: dict) -> LightMode:
         light_properties = LightProperties(**data)
     else:
         light_properties = LightProperties()
+
     lm = LightMode(
         mode=mode_name,
         noMotion=noMotion,
         light_properties=light_properties,
         automations=automs,
-        original_automations=copy.deepcopy(automs) if automs else None
+        original_automations=copy.deepcopy(automs) if automs else None,
+        motionlights=motions,
+        original_motionlights=copy.deepcopy(motions) if motions else None
     )
     return lm
 
