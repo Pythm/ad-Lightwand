@@ -128,6 +128,14 @@ class Light:
                 if self.motionlight.state == 'adaptive':
                     self.has_adaptive_state = True
 
+        # ----- Create default fallback automations------------------------------
+        if self.motionlight and not self.automations:
+            self.automations = [Automation(time='00:00:00', state='turn_off')]
+            self.automations_original = copy.deepcopy(self.automations)
+        elif not self.automations:
+            self.automations = [Automation(time='00:00:00', state='none')]
+            self.automations_original = copy.deepcopy(self.automations)
+
         # ----- Light mode automations ------------------------------------------
         for mode in self.light_modes:
             if mode.automations:
@@ -140,13 +148,21 @@ class Light:
                 if mode.light_properties.state == 'adaptive':
                     self.has_adaptive_state = True
 
-        # ----- Create default fallback automations------------------------------
-        if self.motionlight and not self.automations:
-            self.automations = [Automation(time='00:00:00', state='turn_off')]
-            self.automations_original = copy.deepcopy(self.automations)
-        elif not self.automations:
-            self.automations = [Automation(time='00:00:00', state='none')]
-            self.automations_original = copy.deepcopy(self.automations)
+            if mode.motionlights:
+                if isinstance(mode.motionlights, List):
+                    self.checkTimesinAutomations(mode.motionlights)
+
+                    for automation in mode.motionlights:
+                        if automation.state == 'adaptive':
+                            self.has_adaptive_state = True
+
+                elif isinstance(mode.motionlights, LightProperties):
+                    if mode.motionlights.state == 'adaptive':
+                        self.has_adaptive_state = True
+                if self.motionlight is None:
+                    self.motionlight = True
+            if mode.motionlights and not mode.automations:
+                mode.automations = [Automation(time='00:00:00', state='turn_off')]
 
         self.ADapi.run_daily(self.rundaily_Automation_Adjustments, '00:01:00')
 
@@ -172,6 +188,10 @@ class Light:
             if mode.automations:
                 mode.automations = copy.deepcopy(mode.original_automations)
                 self.checkTimesinAutomations(mode.automations)
+            if mode.motionlights:
+                if isinstance(mode.motionlights, List):
+                    mode.motionlights = copy.deepcopy(mode.original_motionlights)
+                    self.checkTimesinAutomations(mode.motionlights)
 
     def checkTimesinAutomations(self, automations: List[Automation]) -> None:
         """ Find and adjust times in automations based on clock and sunrise/sunset times.
@@ -489,6 +509,19 @@ class Light:
         if lightmode != translations.automagical:
             mode = self.light_modes_by_name.get(lightmode)
             if mode is not None:
+                if mode.motionlights:
+                    if isinstance(mode.motionlights, List):
+                        light_properties_for_mode, mode_brightness_compare = self.getLightAutomationData(
+                            automations=mode.motionlights
+                        )
+                        self.setLightAutomation(automations=mode.motionlights, light_properties=light_properties_for_mode, force_change = force_change)
+                    elif isinstance(mode.motionlights, LightProperties):
+                        self.setLightAutomation(light_properties=mode.motionlights, force_change = force_change)
+
+                    self.lightmode = lightmode
+                    self.wereMotion = True
+                    return
+
                 if mode.automations:
                     light_properties_for_mode, mode_brightness_compare = self.getLightAutomationData(
                         automations=mode.automations
@@ -539,7 +572,7 @@ class Light:
         if light_properties.state in ('turn_on', 'adjust', 'none', 'adaptive'):
             if isinstance(self.motionlight, List):
                 self.setLightAutomation(automations=self.motionlight, light_properties=light_properties, force_change = force_change)
-            elif isinstance(self.motionlight, LightProperties):
+            else:
                 self.setLightAutomation(light_properties=light_properties, force_change = force_change)
 
         elif light_properties.state == 'turn_off':
@@ -554,8 +587,8 @@ class Light:
             light_properties = self.motionlight
             motion_brightness_compare = light_properties.resolve_brightness_to_255()
         else:
-            light_properties = None
-            motion_brightness_compare = 0
+            light_properties, motion_brightness_compare = self.getLightAutomationData(
+                automations=self.automations)
 
         if motion_brightness_compare == 0:
             motion_brightness_compare = self.current_light_data.get(
@@ -873,6 +906,17 @@ class Light:
                         if automation.dimrate is not None:
                             return
                         automation.light_properties.brightness = newBrightness
+            if mode.motionlights:
+                if isinstance(mode.motionlights, List):
+                    motions = mode.original_motionlights
+                    for automation in motions:
+                        if automation.light_properties.brightness == oldBrightness:
+                            if automation.dimrate is not None:
+                                return
+                            automation.light_properties.brightness = newBrightness
+                elif isinstance(mode.motionlights, LightProperties):
+                    if mode.motionlights.brightness == oldBrightness:
+                        mode.motionlights.brightness = newBrightness
 
     def setAdaptiveLightingOn(self) -> None:
         """ Set Adaptive lighting to take control over brightness to on. """

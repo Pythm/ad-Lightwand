@@ -34,6 +34,8 @@ class LightMode:
     light_properties: Optional[LightProperties] = None
     automations: Optional[List[Automation]] = None
     original_automations: Optional[List[Automation]] = None
+    motionlights: Optional[Union[List[Automation], LightProperties]] = None
+    original_motionlights: Optional[Union[List[Automation], LightProperties]] = None
 
 @dataclass
 class LightProperties:

@@ -367,7 +367,7 @@ Configure `motionlights` to define how lights react to motion detection.
 
 ### 🔄 Configuring Light Modes  
 Light modes are defined under `light_modes` as an array. They can include:  
-- `automations` for time-based settings  
+- `automations` for time-based settings and `motionlights`.
 - `light_data` for specific attributes  
 - `state` (e.g., `lux_controlled`, `turn_off`, or `manual`)  
 
@@ -393,6 +393,15 @@ Light modes are defined under `light_modes` as an array. They can include:
             - time: '03:00:00'
               state: turn_off
             - time: '23:00:00'
+          motionlights:
+            - time: '00:00:00'
+              light_data:
+                brightness: 5
+                transition: 3
+            - time: '06:00:00'
+              light_data:
+                brightness: 15
+                transition: 3
         - mode: low_with_Automation
           automations:
             - light_data:
@@ -815,6 +824,30 @@ your_room_name:
         - mode: tv
           state: lux_controlled
           offset: -50
+        - mode: with_automations_and_motions
+          automations:
+          - time: '00:00:00'
+            light_data:
+              brightness: 25
+              transition: 3
+          - time: '06:30:00'
+            light_data:
+              brightness: 90
+              transition: 3
+          - time: 'sunset - 00:30:00'
+            light_data:
+              brightness: 80
+              transition: 3
+          - time: 'sunset + 00:30:00'
+            orLater: '20:00:00'
+            dimrate: 1
+            light_data:
+              brightness: 40
+              transition: 3
+          motionlights:
+            light_data:
+              brightness: 120
+              transition: 3
   ToggleLights:
     - lights:
       - switch.toggle_bulb
