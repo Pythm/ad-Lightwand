@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -82,6 +82,7 @@ class Room(Hass):
         night_motion      = 'night_motion'      in opts or self.roomtype in ('outdoor')
         dim_while_motion  = 'dim_while_motion'  in opts
         take_manual_control = 'take_manual_control' in opts or self.roomtype in ('livingroom', 'kitchen')
+        verify_if_executed  = 'verify_if_executed' in opts
         self.prevent_off_to_normal   = 'prevent_off_to_normal' in opts or 'prevent_off_to_automagical' in opts
         self.prevent_night_to_morning = 'prevent_night_to_morning' in opts
 
@@ -170,6 +171,7 @@ class Room(Hass):
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
                                 take_manual_control = take_manual_control,
+                                verify_if_executed = verify_if_executed,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -191,6 +193,7 @@ class Room(Hass):
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
                                 take_manual_control = take_manual_control,
+                                verify_if_executed = verify_if_executed,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)
@@ -216,6 +219,7 @@ class Room(Hass):
                                 night_motion = night_motion,
                                 dim_while_motion = dim_while_motion,
                                 take_manual_control = False,
+                                verify_if_executed = False,
                                 random_turn_on_delay = random_turn_on_delay,
                                 weather = self.weather)
             self.roomlight.append(light)

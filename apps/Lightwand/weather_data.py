@@ -99,12 +99,8 @@ class LightwandWeather:
         now = self.ADapi.datetime(aware=True)
 
         self.rain = float(data['rain'])
-        if (
-            now - self.out_lux_1_last_update > timedelta(minutes = LUX_STALE_MINUTES) and
-            now - self.out_lux_2_last_update > timedelta(minutes = LUX_STALE_MINUTES)
-        ):
-            self.out_lux = float(data['lux'])
-            self._reactToChange()
+        self.out_lux = float(data['lux'])
+        self._reactToChange()
 
     def _out_lux_updated(self, entity, attribute, old, new, kwargs) -> None:
         try:
