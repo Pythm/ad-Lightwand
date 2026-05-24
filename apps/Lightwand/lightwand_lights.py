@@ -1097,12 +1097,17 @@ class Light:
                 if 'brightness' in self.current_light_data:
                     diff = abs(self.brightness - self.current_light_data['brightness'])
                 if diff > 15 :
-                    # Turn on
-                    self.ADapi.log(f"Need to turn on {self.lights[0]} with brightness {self.brightness}. Light Data: {self.current_light_data}") ###
+                    self.ADapi.log(f"Need to execute turn on {self.lights[0]} with brightness {self.brightness}. Light Data: {self.current_light_data}") ###
+                    if self.motion:
+                        self.setMotion()
+                    else:
+                        self.setLightMode()
             elif self.is_on is not True:
-                # Turn on
-                self.ADapi.log(f"Need to turn on {self.lights[0]} without light_data. Mode is {self.lightmode}") ###
-        self.check_if_on_executed_handler = None
+                self.ADapi.log(f"Need to execute turn on {self.lights[0]} without light_data.") ###
+                if self.motion:
+                    self.setMotion()
+                else:
+                    self.setLightMode()
 
 
 class MQTTLight(Light):
