@@ -31,6 +31,7 @@ class Light:
                  night_motion: str,
                  dim_while_motion: bool,
                  take_manual_control: bool,
+                 verify_if_executed: bool,
                  random_turn_on_delay: int,
                  adaptive_switch: Optional[str],
                  adaptive_sleep_mode: Optional[str],
@@ -54,6 +55,7 @@ class Light:
         self.night_motion = night_motion
         self.dim_while_motion = dim_while_motion
         self.take_manual_control = take_manual_control
+        self.verify_if_executed = verify_if_executed
         self.random_turn_on_delay = random_turn_on_delay
         self.adaptive_switch = adaptive_switch
         self.adaptive_sleep_mode = adaptive_sleep_mode
@@ -73,9 +75,9 @@ class Light:
         self.transition_time:int = 0
         self.current_light_data:dict = {}
         self.run_daily_adjustments_to_run: list[str] = []
+        self.check_if_on_executed_handler = None
 
-        string:str = self.lights[0]
-        if string.startswith('light.'):
+        if self.lights[0].startswith('light.'):
             self.dimmable_light = True
             self.ADapi.listen_state(self.BrightnessUpdated, self.lights[0],
                 attribute = 'brightness',
@@ -89,12 +91,12 @@ class Light:
             except TypeError:
                 self.brightness = 0
 
-        if string.startswith('light.') or string.startswith('switch.'):
+        if self.lights[0].startswith('light.') or self.lights[0].startswith('switch.'):
             self.ADapi.listen_state(self.update_isOn_lights, self.lights[0],
                 duration = 15,
                 namespace = HASS_namespace
             )
-        self.is_on = self.ADapi.get_state(self.lights[0]) == 'on'
+            self.is_on = self.ADapi.get_state(self.lights[0]) == 'on'
         self.is_turned_on_by_automation = self.is_on
 
         # ----- Helpers to check if conditions to turn on/off light has changed
@@ -1014,6 +1016,9 @@ class Light:
                         light=light,
                         light_data=self.current_light_data,
                     )
+            if self.verify_if_executed:
+                cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
+                self.check_if_on_executed_handler = self.ADapi.run_in(self._check_if_on_executed, 17 + int(self.transition_time))
         elif not light_data and not self.automation_set:
             if self.is_on is True and self.is_turned_on_by_automation is True:
                 self.automation_set = True
@@ -1042,6 +1047,9 @@ class Light:
                     self.ADapi.run_in(self.turn_on_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light, light_data = {'brightness': 254})
             if string.startswith('switch.'):
                 self.ADapi.turn_on(light)
+        if self.verify_if_executed:
+            cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
+            self.check_if_on_executed_handler = self.ADapi.run_in(self._check_if_on_executed, 17 + int(self.transition_time))
 
     def turn_off_lights(self) -> None:
         """ Turns off lights. """
@@ -1059,8 +1067,11 @@ class Light:
             for light in self.lights:
                 self.ADapi.run_in(self.turn_off_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light)
         self.brightness = 0
+        if self.check_if_on_executed_handler:
+            cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
+            self.check_if_on_executed_handler = None
 
-    def turn_off_lights_with_delay(self, **kwargs)  -> None:
+    def turn_off_lights_with_delay(self, **kwargs) -> None:
         """ Turns off light with random delay """
 
         self.ADapi.turn_off(kwargs['light'])
@@ -1077,6 +1088,26 @@ class Light:
             self.ADapi.log(f"light_data must be a dict, got {type(data)!r} for {self.lights[0]} with data {data}", level = 'WARNING')
             raise TypeError
         return data
+
+    def _check_if_on_executed(self, **kwargs) -> None:
+        """ Check if light has received update """
+        if not self.automation_set and not self.manual_override and self.dimHandler is None:
+            if self.current_light_data:
+                diff = 0
+                if 'brightness' in self.current_light_data:
+                    diff = abs(self.brightness - self.current_light_data['brightness'])
+                if diff > 15 :
+                    self.ADapi.log(f"Need to execute turn on {self.lights[0]} with brightness {self.brightness}. Light Data: {self.current_light_data}") ###
+                    if self.motion:
+                        self.setMotion()
+                    else:
+                        self.setLightMode()
+            elif self.is_on is not True:
+                self.ADapi.log(f"Need to execute turn on {self.lights[0]} without light_data.") ###
+                if self.motion:
+                    self.setMotion()
+                else:
+                    self.setLightMode()
 
 
 class MQTTLight(Light):
@@ -1096,6 +1127,7 @@ class MQTTLight(Light):
                  night_motion: str,
                  dim_while_motion: bool,
                  take_manual_control: bool,
+                 verify_if_executed: bool,
                  random_turn_on_delay: int,
                  adaptive_switch: Optional[str],
                  adaptive_sleep_mode: Optional[str],
@@ -1127,6 +1159,7 @@ class MQTTLight(Light):
                          night_motion,
                          dim_while_motion,
                          take_manual_control,
+                         verify_if_executed,
                          random_turn_on_delay,
                          adaptive_switch,
                          adaptive_sleep_mode,
@@ -1218,6 +1251,10 @@ class MQTTLight(Light):
                                       random_end = self.random_turn_on_delay,
                                       light = light,
                                       light_data = light_data)
+            if self.verify_if_executed:
+                cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
+                self.check_if_on_executed_handler = self.ADapi.run_in(self._check_if_on_executed, 17 + int(self.transition_time))
+
         elif not light_data and not self.automation_set:
             if self.is_on is True and self.is_turned_on_by_automation is True:
                 self.automation_set = True
@@ -1258,6 +1295,9 @@ class MQTTLight(Light):
                                   random_end = self.random_turn_on_delay,
                                   light = light,
                                   light_data = light_data)
+        if self.verify_if_executed:
+            cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
+            self.check_if_on_executed_handler = self.ADapi.run_in(self._check_if_on_executed, 17 + int(self.transition_time))
 
     def turn_off_lights(self) -> None:
         """ Turns off lights. """
@@ -1278,6 +1318,9 @@ class MQTTLight(Light):
                                     random_end = self.random_turn_on_delay,
                                     light = light)
         self.brightness = 0
+        if self.check_if_on_executed_handler:
+            cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
+            self.check_if_on_executed_handler = None
 
     def turn_off_lights_with_delay(self, **kwargs) -> None:
         """ Turns off light with random delay. """
@@ -1310,6 +1353,7 @@ class ToggleLight(Light):
                  night_motion: str,
                  dim_while_motion: bool,
                  take_manual_control: bool,
+                 verify_if_executed: bool,
                  random_turn_on_delay: int,
                  adaptive_switch: Optional[str],
                  adaptive_sleep_mode: Optional[str],
@@ -1341,6 +1385,7 @@ class ToggleLight(Light):
                          night_motion,
                          dim_while_motion,
                          take_manual_control,
+                         verify_if_executed,
                          random_turn_on_delay,
                          adaptive_switch,
                          adaptive_sleep_mode,
