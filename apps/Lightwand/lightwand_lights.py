@@ -299,6 +299,7 @@ class Light:
             return
 
         light_properties: LightProperties = kwargs['light_properties']
+        self.ADapi.log(f"Run daily lights setting {self.lights[0]} to {light_properties}") ###
         if light_properties.state == 'turn_off':
             self.turn_off_lights()
             return
