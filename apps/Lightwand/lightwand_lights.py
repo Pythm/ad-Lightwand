@@ -233,8 +233,7 @@ class Light:
 
                 if self.ADapi.parse_time(automation.time) < self.ADapi.parse_time(automation.orLater):
                     time_to_add = or_later_dt - time_dt
-                    """ Check if your times are acting as planned. Uncomment line below to get logging on time change """
-                    #self.ADapi.log(f"Time defined with 'orLater': {self.ADapi.parse_time(automation['orLater'])} is later than time: {self.ADapi.parse_time(automation['time'])}")
+                    self.ADapi.log(f"Time defined with 'orLater': {self.ADapi.parse_time(automation.orLater)} is later than time: {self.ADapi.parse_time(automation.time)}", level = 'DEBUG')
                     automation.time = automation.orLater
                 else:
                     time_to_add = time_dt - or_later_dt
@@ -259,8 +258,7 @@ class Light:
 
                 if change_time:
                     new_dt = self.ADapi.parse_datetime(automation.time) + time_to_add
-                    """ Check if your times are acting as planned. Uncomment line below to get logging on time change """
-                    #self.ADapi.log(f"Added {timeToAdd} to {automation['time']}. Light will change at {str(newtime.time())}")
+                    self.ADapi.log(f"Added {time_to_add} to {automation.time}. Light will change at {str(new_dt.time())}", level = 'DEBUG')
                     automation.time = str(new_dt.time())
 
             # ---- Remove out of order automations -------------------------------------
@@ -268,9 +266,11 @@ class Light:
                 test_time = self.ADapi.parse_time(automation.time)
             elif test_time > self.ADapi.parse_time(automation.time):
                 if not automation.fixed:
-                    """ Check if your times are acting as planned. Uncomment line below to get logging on time change """
-                    #self.ADapi.log(f"Deletes automation: {automations[num]} based on {test_time} > {self.ADapi.parse_time(automation['time'])}")
+                    self.ADapi.log(f"Deletes automation based on {test_time} > {self.ADapi.parse_time(automation.time)}: {automations[num]}", level = 'DEBUG')
                     automations_to_delete.append(num)
+                else:
+                    self.ADapi.log(f"Deletes previous automation based on {test_time} > fixed time {self.ADapi.parse_time(automation.time)}: {automations[num-1]}", level = 'DEBUG')
+                    automations_to_delete.append(num-1)
 
             # ---- Prepare data for later scheduling ----------------------------------
             if self.ADapi.parse_time(automation.time) > now_time_notAware and not automation.time in self.run_daily_adjustments_to_run:
@@ -1056,20 +1056,27 @@ class Light:
 
         self.is_turned_on_by_automation = False    
         self.automation_set = False
+        if self.is_on is not False:
+            if self.has_adaptive_state:
+                self.setAdaptiveLightingOff()
+            self.current_light_data = {}
+        
+            if self.random_turn_on_delay == 0:
+                self.turn_off_lights_without_delay()
+            else:
+                for light in self.lights:
+                    self.ADapi.run_in(self.turn_off_lights_with_delay, delay = 0,
+                                                                       random_start = 0,
+                                                                       random_end = self.random_turn_on_delay,
+                                                                       light = light)
+            self.brightness = 0
+            if self.check_if_on_executed_handler:
+                cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
+                self.check_if_on_executed_handler = None
 
-        if self.has_adaptive_state:
-            self.setAdaptiveLightingOff()
-        self.current_light_data = {}
-        if self.random_turn_on_delay == 0:
-            for light in self.lights:
-                self.ADapi.turn_off(light)
-        else:
-            for light in self.lights:
-                self.ADapi.run_in(self.turn_off_lights_with_delay, delay = 0,  random_start = 0, random_end = self.random_turn_on_delay, light = light)
-        self.brightness = 0
-        if self.check_if_on_executed_handler:
-            cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
-            self.check_if_on_executed_handler = None
+    def turn_off_lights_without_delay(self) -> None:
+        for light in self.lights:
+            self.ADapi.turn_off(light)
 
     def turn_off_lights_with_delay(self, **kwargs) -> None:
         """ Turns off light with random delay """
@@ -1299,28 +1306,9 @@ class MQTTLight(Light):
             cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
             self.check_if_on_executed_handler = self.ADapi.run_in(self._check_if_on_executed, 17 + int(self.transition_time))
 
-    def turn_off_lights(self) -> None:
-        """ Turns off lights. """
-
-        if self.has_adaptive_state:
-            self.setAdaptiveLightingOff()
-        self.current_light_data = {}
-        self.is_turned_on_by_automation = False
-        self.automation_set = False
-        if self.random_turn_on_delay == 0:
-            for light in self.lights:
-                self.mqtt.mqtt_publish(topic = str(light) + '/set', payload = 'OFF', namespace = self.MQTT_namespace)
-        else:
-            for light in self.lights:
-                self.ADapi.run_in(self.turn_off_lights_with_delay,
-                                    delay = 0,
-                                    random_start = 0,
-                                    random_end = self.random_turn_on_delay,
-                                    light = light)
-        self.brightness = 0
-        if self.check_if_on_executed_handler:
-            cancel_timer_handler(ADapi = self.ADapi, handler = self.check_if_on_executed_handler)
-            self.check_if_on_executed_handler = None
+    def turn_off_lights_without_delay(self) -> None:
+        for light in self.lights:
+            self.mqtt.mqtt_publish(topic = str(light) + '/set', payload = 'OFF', namespace = self.MQTT_namespace)
 
     def turn_off_lights_with_delay(self, **kwargs) -> None:
         """ Turns off light with random delay. """
@@ -1462,8 +1450,7 @@ class ToggleLight(Light):
 
         self.is_turned_on_by_automation = False
         self.automation_set = False
-        for light in self.lights:
-            self.ADapi.turn_off(light)
+        self.turn_off_lights_without_delay()
         self.current_toggle = 0
 
     def calculateToggles(self, toggle_bulb:int = 1) -> None:
