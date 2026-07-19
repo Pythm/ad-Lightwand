@@ -269,8 +269,11 @@ class Light:
             elif test_time > self.ADapi.parse_time(automation.time):
                 if not automation.fixed:
                     """ Check if your times are acting as planned. Uncomment line below to get logging on time change """
-                    #self.ADapi.log(f"Deletes automation: {automations[num]} based on {test_time} > {self.ADapi.parse_time(automation['time'])}")
+                    self.ADapi.log(f"Deletes automation: {automations[num]} based on {test_time} > {self.ADapi.parse_time(automation.time)}")
                     automations_to_delete.append(num)
+                else:
+                    self.ADapi.log(f"Deletes automation: {automations[num-1]} based on {test_time} > {self.ADapi.parse_time(automation.time)} and time beeing fixed") ###
+                    automations_to_delete.append(num-1)
 
             # ---- Prepare data for later scheduling ----------------------------------
             if self.ADapi.parse_time(automation.time) > now_time_notAware and not automation.time in self.run_daily_adjustments_to_run:
@@ -299,7 +302,6 @@ class Light:
             return
 
         light_properties: LightProperties = kwargs['light_properties']
-        self.ADapi.log(f"Run daily lights setting {self.lights[0]} to {light_properties}") ###
         if light_properties.state == 'turn_off':
             self.turn_off_lights()
             return
