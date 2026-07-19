@@ -233,8 +233,7 @@ class Light:
 
                 if self.ADapi.parse_time(automation.time) < self.ADapi.parse_time(automation.orLater):
                     time_to_add = or_later_dt - time_dt
-                    """ Check if your times are acting as planned. Uncomment line below to get logging on time change """
-                    #self.ADapi.log(f"Time defined with 'orLater': {self.ADapi.parse_time(automation['orLater'])} is later than time: {self.ADapi.parse_time(automation['time'])}")
+                    self.ADapi.log(f"Time defined with 'orLater': {self.ADapi.parse_time(automation.orLater)} is later than time: {self.ADapi.parse_time(automation.time)}", level = 'DEBUG')
                     automation.time = automation.orLater
                 else:
                     time_to_add = time_dt - or_later_dt
@@ -259,8 +258,7 @@ class Light:
 
                 if change_time:
                     new_dt = self.ADapi.parse_datetime(automation.time) + time_to_add
-                    """ Check if your times are acting as planned. Uncomment line below to get logging on time change """
-                    #self.ADapi.log(f"Added {timeToAdd} to {automation['time']}. Light will change at {str(newtime.time())}")
+                    self.ADapi.log(f"Added {time_to_add} to {automation.time}. Light will change at {str(new_dt.time())}", level = 'DEBUG')
                     automation.time = str(new_dt.time())
 
             # ---- Remove out of order automations -------------------------------------
@@ -268,11 +266,10 @@ class Light:
                 test_time = self.ADapi.parse_time(automation.time)
             elif test_time > self.ADapi.parse_time(automation.time):
                 if not automation.fixed:
-                    """ Check if your times are acting as planned. Uncomment line below to get logging on time change """
-                    self.ADapi.log(f"Deletes automation: {automations[num]} based on {test_time} > {self.ADapi.parse_time(automation.time)}")
+                    self.ADapi.log(f"Deletes automation based on {test_time} > {self.ADapi.parse_time(automation.time)}: {automations[num]}", level = 'DEBUG')
                     automations_to_delete.append(num)
                 else:
-                    self.ADapi.log(f"Deletes automation: {automations[num-1]} based on {test_time} > {self.ADapi.parse_time(automation.time)} and time beeing fixed") ###
+                    self.ADapi.log(f"Deletes previous automation based on {test_time} > fixed time {self.ADapi.parse_time(automation.time)}: {automations[num-1]}", level = 'DEBUG')
                     automations_to_delete.append(num-1)
 
             # ---- Prepare data for later scheduling ----------------------------------

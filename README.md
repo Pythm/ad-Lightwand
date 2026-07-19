@@ -304,8 +304,7 @@ Automations are configured by defining an array of time-based rules. These can b
 ```
 
 > [!TIP]  
-> Use the commented-out logging in the Python file to debug time changes. Search for:  
-> `Check if your times are acting as planned. Uncomment line below to get logging on time change`.  
+> You can now set `log_level: DEBUG` for the app to see how times are adjusted.
 
 > [!NOTE]  
 > If `time: '00:00:00'` is not defined, a default `turn_off` state will be applied at midnight if other times are configured in automations or motionlights.  
