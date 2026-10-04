@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.2.2"
+__version__ = "2.3.0"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
