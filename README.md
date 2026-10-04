@@ -179,27 +179,56 @@ your_room_name:
 ### 🔄 Translating or Changing Modes
 
 #### Steps to Customize Mode Names
+> **If you use English mode names and the `MODE_CHANGE` event you do not need to do anything.** The defaults are built in.
+
 1. **Save the File Persistently**  
-   Store the supplied example `translation.json` in a location that persists across sessions and updates (e.g., `/config/lightwand/translation.json`).  
+   Copy the supplied `translations.json` to a location that persists across sessions and updates (for example `/conf/persistent/lightwand/translations.json`).  
 
 2. **Edit the Translation File**  
-   Modify `translation.json` to update the mode names and event settings.  
+   Modify the copy to update the mode names and event settings.  
    > **Tip**  
-   > In `translation.json`, you can specify a custom event name (e.g., `"LIGHT_MODE"`) instead of the default `"MODE_CHANGE"` to match your existing automations.  
+   > You can specify a custom event name (e.g., `"LIGHT_MODE"`) instead of the default `"MODE_CHANGE"` to match your existing automations.  
 
    **Only translate the words that already exist in the default file.** The json file only contains mode names with a predefined action.
 
-3. **Specify the Path and Language in Configuration**  
-   Use the `language_file` parameter and `lightwand_language` to set your preferred language in **one** of your room‑app configurations:  
+3. **Add the `ModeTranslation` app (Lightwand 2.3.0 and later)**  
+   Add it once to your configuration. It loads the file and language, and logs the names it uses at startup:  
+
+   ```yaml
+   mode_translation:
+     module: mode_translation
+     class: ModeTranslation
+     language_file: /conf/persistent/lightwand/translations.json
+     language: "en"
+   ```  
+
+   | Parameter | Required | Description |
+   |---|---|---|
+   | `language_file` | No | Path to your copy of `translations.json`. The file in the Lightwand folder is used if omitted. |
+   | `language` | No | Language key in the file (`en`, `de`, `no` in the supplied file). `en` if omitted. |
+
+4. **Make the apps that use mode names start after it**  
+   Add `dependencies` to every Lightwand room and every other app that uses the mode names (ModeManagement, ElectricalManagement, and so on):  
 
    ```yaml
    your_room_name:
-     ...
-     language_file: /config/lightwand/translation.json
-     lightwand_language: "en"
+     module: lightwand
+     class: Room
+     dependencies: mode_translation
    ```  
 
-   Lightwand creates a singleton that can be imported by other apps to listen to the same modes.  
+   > [!WARNING]  
+   > AppDaemon will **not start any app** if a name in `dependencies` does not exist as an app in your configuration. This is how AppDaemon works with all dependencies. Only add it when you have added the `ModeTranslation` app, and if you remove or rename the app, remove it from `dependencies` too.  
+
+   Without `dependencies` an app reads the mode names when AppDaemon happens to start it. Apps defined in files that sort before the file with `ModeTranslation`, or listed above it in the same file, can then start with the English names.  
+
+#### Upgrading from Lightwand 2.2.x
+Before 2.3.0 you set `language_file` and `lightwand_language` in **one** of your room apps. That still works, but Lightwand logs a warning once at startup. To migrate:  
+1. Remove `language_file` and `lightwand_language` from the room app.  
+2. Add the `ModeTranslation` app from step 3 above. `lightwand_language` is called `language` there (`lightwand_language` is also accepted).  
+3. Add `dependencies: mode_translation` to your rooms and the other apps that use mode names.  
+
+Changes in 2.3.0 that you will notice: a missing or invalid `language_file` no longer empties all translations, the previous file stays active and an error is logged. The event name and the mode names are unchanged.  
 
 4. **Consistency Across the System**  
    If you translate a word (for instance, `"off"` → `"aus"` and `"night"` → `"nacht"`), **every** app that uses the translation will recognize the new word.
