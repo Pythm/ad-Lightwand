@@ -2,6 +2,8 @@
 **An [AppDaemon](https://github.com/AppDaemon/appdaemon) app for advanced lighting control via Home Assistant or MQTT**  
 Automate your lights based on time of day, use Mode Change events or environmental conditions like lux levels, rain, and sensors like motion, presence and media players.  
 
+> 🤖 **Set up with an AI assistant:** the [LLM guide](https://github.com/Pythm/Pythm_AppdaemonApps/blob/master/LLM_GUIDE.md) helps an AI assistant find your own entity ids in Home Assistant and write the configuration.
+
 ![AI-Generated Illustration](/_d4d6a73c-b264-4fa6-b431-6d403c01c1f5.jpg)  
 
 ---
