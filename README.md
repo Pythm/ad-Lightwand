@@ -536,7 +536,7 @@ Below is a quick overview of the pre‑configured room types – more advanced o
 
 #### 📌 Notes  
 - **Weather Data**: Use the [ad-Weather](https://github.com/Pythm/ad-Weather) app for **optimal integration**. It consolidates all your weather sensors into a single app and publishes events for other apps to consume.  
-  > ⚠️ **Important**: If you configure weather sensors **directly in Lightwand**, they will **take precedence** over the `ad-Weather` app.  
+  > ⚠️ **Important**: If a room has its own outdoor lux sensor (`OutLux_sensor`, `OutLuxMQTT`, `_2`), the room uses **those** while they report, and the lux from the `ad-Weather` app if they have been silent for 20 minutes. Use it for a room on another side of the house: configure the main sensor in `ad-Weather` and the other side's sensor in the room. A sensor configured in both places is just used twice. Without own sensors the lux from `ad-Weather` is used. Rain always comes from `ad-Weather`; a value it does not have is sent as `None` and counts as no rain.
 
 You can define **two outdoor lux sensors**. The second sensor can be defined with a suffix of `_2`. The app will use the **higher lux value** or the **last updated value** if the other sensor hasn't updated in the last 15 minutes. Use `OutLux_sensor` for Home Assistant sensors and `OutLuxMQTT` for MQTT sensors.
 

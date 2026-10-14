@@ -11,7 +11,7 @@ import os
 from typing import List, Iterable, Set
 
 from translations_lightmodes import translations
-from weather_data import LightwandWeather
+from weather_data import OutdoorWeather
 
 from lightwand_utils import _parse_mode_and_room, cancel_timer_handler, cancel_listen_handler
 from lightwand_builder import _convert_dict_to_light_spec
@@ -150,8 +150,10 @@ class Room(Hass):
         self.bed_sensors: list[Sensor] = self._parse_bed_sensors()
 
         # Weather sensors
-        self.weather = LightwandWeather(
+        self.weather = OutdoorWeather(
             api = self,
+            on_change = self.reactToChange,
+            react_blocked = self._mode_delay_running,
             HASS_namespace = self.HASS_namespace,
             MQTT_namespace = MQTT_namespace,
             lux_sensor = self.args.get('OutLux_sensor'),
@@ -658,6 +660,9 @@ class Room(Hass):
         """ Update light settings when state of a HA entity is updated. """
 
         self.reactToChange()
+
+    def _mode_delay_running(self) -> bool:
+        return self.mode_delay_handler is not None and self.timer_running(self.mode_delay_handler)
 
     def reactToChange(self):
         """ This function is called when a sensor has new values and based upon mode and if motion is detected,
