@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.2.2"
+__version__ = "2.3.0"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -11,7 +11,7 @@ import os
 from typing import List, Iterable, Set
 
 from translations_lightmodes import translations
-from weather_data import LightwandWeather
+from weather_data import OutdoorWeather
 
 from lightwand_utils import _parse_mode_and_room, cancel_timer_handler, cancel_listen_handler
 from lightwand_builder import _convert_dict_to_light_spec
@@ -25,6 +25,7 @@ from lightwand_lights import ToggleLight
 from ast_evaluator import safe_eval
 
 MOTION = ('on', 'open')
+_legacy_language_warned:bool = False
 
 class Room(Hass):
 
@@ -36,18 +37,28 @@ class Room(Hass):
 
         self.roomlight:list = []
 
-        if 'language_file' in self.args:
-            language_file = self.args['language_file']
+        # Legacy way of setting translations. The ModeTranslation app is the preferred way.
+        if 'language_file' in self.args or 'lightwand_language' in self.args:
+            global _legacy_language_warned
+            if not _legacy_language_warned:
+                _legacy_language_warned = True
+                self.log(
+                    "language_file and lightwand_language in a room app is deprecated since 2.3.0. "
+                    "Move them to the ModeTranslation app (module: mode_translation) and add "
+                    "'dependencies' on it. See the Lightwand README, 'Translating or Changing Modes'.",
+                    level = 'WARNING'
+                )
             try:
-                translations.set_file_path(language_file)
+                translations.configure(
+                    language_file = self.args.get('language_file', None),
+                    language = self.args.get('lightwand_language', None)
+                )
             except Exception as e:
-                self.log(f"Not able to set language file {language_file}: {e}", level = 'WARNING')
-        if 'lightwand_language' in self.args:
-            user_lang = self.args['lightwand_language']
-            try:
-                translations.set_language(user_lang)
-            except Exception as e:
-                self.log(f"Not able to set language {user_lang}: {e}", level = 'WARNING')
+                self.log(
+                    f"Not able to set language_file {self.args.get('language_file', None)} / "
+                    f"lightwand_language {self.args.get('lightwand_language', None)}: {e}",
+                    level = 'WARNING'
+                )
 
         self.LIGHT_MODE:str = 'none'
         # All known modes that the room can enter
@@ -139,8 +150,10 @@ class Room(Hass):
         self.bed_sensors: list[Sensor] = self._parse_bed_sensors()
 
         # Weather sensors
-        self.weather = LightwandWeather(
+        self.weather = OutdoorWeather(
             api = self,
+            on_change = self.reactToChange,
+            react_blocked = self._mode_delay_running,
             HASS_namespace = self.HASS_namespace,
             MQTT_namespace = MQTT_namespace,
             lux_sensor = self.args.get('OutLux_sensor'),
@@ -647,6 +660,9 @@ class Room(Hass):
         """ Update light settings when state of a HA entity is updated. """
 
         self.reactToChange()
+
+    def _mode_delay_running(self) -> bool:
+        return self.mode_delay_handler is not None and self.timer_running(self.mode_delay_handler)
 
     def reactToChange(self):
         """ This function is called when a sensor has new values and based upon mode and if motion is detected,

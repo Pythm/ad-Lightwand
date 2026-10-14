@@ -1,10 +1,22 @@
+""" Outdoor lux (and rain) for apps that use the Weather app.
+    https://github.com/Pythm/ad-Weather
+
+    This file is identical in Lightwand and ClimateCommander (both are installed from HACS,
+    which cannot share files between repos). Change it in both repos.
+
+    Lux comes from the app's own outdoor lux sensors if any are configured, otherwise from the
+    WEATHER_CHANGE event. With two own sensors the highest fresh value is used, by design.
+    If all own sensors have been silent for EVENT_FALLBACK_MINUTES, the event lux is used.
+"""
+
 from datetime import timedelta
 import json
 
 LUX_STALE_MINUTES = 15
+EVENT_FALLBACK_MINUTES = 20
 MIN_REACT_MINUTES = 2
 
-class LightwandWeather:
+class OutdoorWeather:
 
     def __init__(self,
         api,
@@ -14,20 +26,29 @@ class LightwandWeather:
         lux_sensor_mqtt,
         lux_sensor_2,
         lux_sensor_2_mqtt,
-        room_lux_sensor,
-        room_lux_sensor_mqtt,
+        on_change,
+        room_lux_sensor = None,
+        room_lux_sensor_mqtt = None,
+        react_blocked = None,
+        min_react_minutes = MIN_REACT_MINUTES,
     ):
+        """ on_change: called without arguments when lux (or room lux) changed.
+            react_blocked: optional callable, True means do not call on_change now.
+            min_react_minutes: minimum time between two calls of on_change. """
         self.ADapi = api
         self.mqtt = None
+        self.on_change = on_change
+        self.react_blocked = react_blocked
+        self.min_react_minutes = min_react_minutes
 
         now = self.ADapi.datetime(aware=True)
 
         self.out_lux:float = 0.0
         self.out_lux_1:float = 0.0
         self.out_lux_2:float = 0.0
-        self.out_lux_1_last_update = now - timedelta(minutes = LUX_STALE_MINUTES)
-        self.out_lux_2_last_update = now - timedelta(minutes = LUX_STALE_MINUTES)
-        self.last_react_update = now - timedelta(minutes=MIN_REACT_MINUTES)
+        self.out_lux_1_last_update = now - timedelta(days = 1)
+        self.out_lux_2_last_update = now - timedelta(days = 1)
+        self.last_react_update = now - timedelta(minutes = min_react_minutes)
         self.room_lux:float = 0.0
         self.rain:float = 0.0
 
@@ -41,6 +62,9 @@ class LightwandWeather:
                 ))
             except (ValueError, TypeError):
                 pass
+            else:
+                self.out_lux_1 = self.out_lux
+                self.out_lux_1_last_update = now
 
         if lux_sensor_mqtt is not None:
             if not self.mqtt:
@@ -56,6 +80,14 @@ class LightwandWeather:
             self.ADapi.listen_state(self._out_lux_2_updated, lux_sensor_2,
                 namespace = HASS_namespace
             )
+            try:
+                self.out_lux_2 = float(self.ADapi.get_state(lux_sensor_2,
+                    namespace = HASS_namespace
+                ))
+            except (ValueError, TypeError):
+                pass
+            else:
+                self.out_lux_2_last_update = now
 
         if lux_sensor_2_mqtt is not None:
             if not self.mqtt:
@@ -98,9 +130,23 @@ class LightwandWeather:
 
         now = self.ADapi.datetime(aware=True)
 
-        self.rain = float(data['rain'])
-        self.out_lux = float(data['lux'])
+        # The Weather app sends None for data it does not have
+        rain = data.get('rain')
+        self.rain = float(rain) if rain is not None else 0.0
+        lux = data.get('lux')
+        if lux is not None and not self._own_lux_reporting():
+            self.out_lux = float(lux)
         self._reactToChange()
+
+    def _own_lux_reporting(self) -> bool:
+        """ True if an own outdoor lux sensor has reported lately. Without own sensors this is
+            always False, so the lux from the Weather app is used. """
+        limit = timedelta(minutes = EVENT_FALLBACK_MINUTES)
+        now = self.ADapi.datetime(aware=True)
+        return (
+            now - self.out_lux_1_last_update <= limit
+            or now - self.out_lux_2_last_update <= limit
+        )
 
     def _out_lux_updated(self, entity, attribute, old, new, kwargs) -> None:
         try:
@@ -108,13 +154,9 @@ class LightwandWeather:
         except (ValueError, TypeError):
             return
         if value != self.out_lux_1:
-            self._choose_lux(
-                new=value,
-                other=self.out_lux_2,
-                other_last=self.out_lux_2_last_update,
-            )
             self.out_lux_1 = value
             self.out_lux_1_last_update = self.ADapi.datetime(aware=True)
+            self._choose_lux()
 
     def _out_lux_mqtt_event(self, event_name, data, **kwargs) -> None:
         self._handle_mqtt_lux(data, attr='out_lux_1')
@@ -125,13 +167,9 @@ class LightwandWeather:
         except (ValueError, TypeError):
             return
         if value != self.out_lux_2:
-            self._choose_lux(
-                new=value,
-                other=self.out_lux_1,
-                other_last=self.out_lux_1_last_update,
-            )
             self.out_lux_2 = value
             self.out_lux_2_last_update = self.ADapi.datetime(aware=True)
+            self._choose_lux()
 
     def _out_lux_2_mqtt_event(self, event_name, data, **kwargs) -> None:
         self._handle_mqtt_lux(data, attr='out_lux_2')
@@ -185,35 +223,37 @@ class LightwandWeather:
             setattr(self, attr, value)
             now = self.ADapi.datetime(aware=True)
             if attr == 'out_lux_1':
-                self._choose_lux(
-                    new=value,
-                    other=self.out_lux_2,
-                    other_last=self.out_lux_2_last_update,
-                )
                 self.out_lux_1_last_update = now
+                self._choose_lux()
             elif attr == 'out_lux_2':
-                self._choose_lux(
-                    new=value,
-                    other=self.out_lux_1,
-                    other_last=self.out_lux_1_last_update,
-                )
                 self.out_lux_2_last_update = now
+                self._choose_lux()
             elif attr == 'room_lux':
                 self.room_lux = value
                 self._reactToChange()
 
-    def _choose_lux(self, new, other, other_last):
+    def _choose_lux(self):
+        """ Uses the HIGHEST fresh value of the two outdoor lux sensors, by design.
+            Calculated from both stored values, so the result follows the sensor
+            in both directions. """
         now = self.ADapi.datetime(aware=True)
-        if now - other_last > timedelta(minutes=LUX_STALE_MINUTES) or new >= other:
-            self.out_lux = new
+        fresh = [
+            value
+            for value, last in (
+                (self.out_lux_1, self.out_lux_1_last_update),
+                (self.out_lux_2, self.out_lux_2_last_update),
+            )
+            if now - last <= timedelta(minutes=LUX_STALE_MINUTES)
+        ]
+        if fresh:
+            self.out_lux = max(fresh)
             self._reactToChange()
 
     def _reactToChange(self) -> None:
-        if self.ADapi.mode_delay_handler is not None:
-            if self.ADapi.timer_running(self.ADapi.mode_delay_handler):
-                return
+        if self.react_blocked is not None and self.react_blocked():
+            return
 
         now = self.ADapi.datetime(aware=True)
-        if now - self.last_react_update > timedelta(minutes=MIN_REACT_MINUTES):
-            self.ADapi.reactToChange()
+        if now - self.last_react_update >= timedelta(minutes = self.min_react_minutes):
+            self.on_change()
             self.last_react_update = now

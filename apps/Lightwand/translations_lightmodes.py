@@ -61,20 +61,23 @@ class TranslationStore:
 
 
     def _load(self) -> None:
+        """ Reads the JSON file into a new dict and swaps it in only when the
+            whole file is valid, so a bad file never leaves the store empty. """
         try:
             raw = json.loads(self._file_path.read_text(encoding="utf-8"))
         except FileNotFoundError as exc:
             raise RuntimeError(f"Translation file not found: {self._file_path}") from exc
 
+        loaded: dict[str, ModeTranslation] = {}
         for lang, block in raw.items():
             try:
-                self._data[lang] = ModeTranslation(**block)
+                loaded[lang] = ModeTranslation(**block)
             except ValidationError as exc:
                 raise RuntimeError(f"Invalid translation block for language '{lang}': {exc}") from exc
+        self._data = loaded
 
     def reload(self) -> None:
         """Call this if the JSON file changes while the server is running."""
-        self._data.clear()
         self._load()
 
     def get(self, lang: str, key: str) -> str:
@@ -126,8 +129,34 @@ class Translations:
         self._store.reload()
 
     def set_file_path(self, path: str | Path) -> None:
-        """ Tell the singleton to read a *different* JSON file. """
+        """ Tell the singleton to read a *different* JSON file.
+            If the file is missing or invalid the previous file stays active. """
+        old_path = self._store._file_path
         self._store._file_path = Path(path)
-        self._store.reload()
+        try:
+            self._store.reload()
+        except Exception:
+            self._store._file_path = old_path
+            raise
+        if self._lang not in self._store._data:
+            self._lang = "en"
+
+    def configure(self, language_file: str | Path | None = None, language: str | None = None) -> None:
+        """ Used by the ModeTranslation app (and legacy Lightwand room args).
+            Applies the file first and then the language. A bad file does not stop
+            the language from being applied. Raises the first error after trying both. """
+        first_error: Exception | None = None
+        if language_file:
+            try:
+                self.set_file_path(language_file)
+            except Exception as exc:
+                first_error = exc
+        if language:
+            try:
+                self.set_language(language)
+            except Exception as exc:
+                first_error = first_error or exc
+        if first_error is not None:
+            raise first_error
 
 translations = Translations()
