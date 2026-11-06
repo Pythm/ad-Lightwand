@@ -1,8 +1,8 @@
 """ Outdoor lux (and rain) for apps that use the Weather app.
     https://github.com/Pythm/ad-Weather
 
-    This file is identical in Lightwand and ClimateCommander (both are installed from HACS,
-    which cannot share files between repos). Change it in both repos.
+    This file is identical in Lightwand and ClimateCommander (they are separate repositories,
+    so each has its own copy). Change it in both repos.
 
     Lux comes from the app's own outdoor lux sensors if any are configured, otherwise from the
     WEATHER_CHANGE event. With two own sensors the highest fresh value is used, by design.
