@@ -672,6 +672,7 @@ To define custom conditions, create a `listen_sensors` list for the sensors you 
 > [!NOTE]  
 > - The light can only turn on automatically when the `conditions` are met. By default **all** conditions must be `true`.  
 > - `keep_on_conditions` keeps the light **on** when they are met, even if `lux_constraint` or `room_lux_constraint` would turn it off. By default **any** condition is enough. A light without `keep_on_conditions` simply follows the automation.  
+> - `room_lux_constraint` compares against the room's own lux sensor, which also sees the room's light. If the light itself lifts the room lux above the constraint, the light turns itself off at the next check, the lux drops and the light can turn on again. Set the constraint well above what the room's own light adds, or use `keep_on_conditions` for that light.  
 > - Start either list with `any` or `all` to choose how the conditions are combined:  
 >   ```yaml
 >   keep_on_conditions:
@@ -972,7 +973,7 @@ key | optional | type | default | introduced in | description
 `motionlights` | True | dict | | v1.0.0 | Configure default light behaviour for motion detected
 `light_modes` | True | dict | | v1.0.0 | Name of mode. Define light modes to change light accordingly
 `lux_constraint` | True | int | | v1.0.0 | Outdoor lux constraint
-`room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint
+`room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint. The room's own light is seen by the room lux sensor, see the note under the conditions example
 `conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi. First item can be `any` or `all` (default `all`)
 `keep_on_conditions` | True | list | | v2.4.0 | Keeps the light on when met, even if the lux constraint would turn it off. First item can be `any` or `all` (default `any`)
 `settle_time` | True | int | 15 | v2.4.0 | Seconds the on/off state and brightness reported by the light must be stable before Lightwand trusts it. Some dimmers keep changing their value after a new command. Only affects confirmation and manual change detection, never whether a command is sent

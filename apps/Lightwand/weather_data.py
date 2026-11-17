@@ -15,6 +15,7 @@ import json
 LUX_STALE_MINUTES = 15
 EVENT_FALLBACK_MINUTES = 20
 MIN_REACT_MINUTES = 2
+REPLAY_BLOCKED_SECONDS = 30
 
 class OutdoorWeather:
 
@@ -40,6 +41,7 @@ class OutdoorWeather:
         self.on_change = on_change
         self.react_blocked = react_blocked
         self.min_react_minutes = min_react_minutes
+        self._replay_handler = None
 
         now = self.ADapi.datetime(aware=True)
 
@@ -127,8 +129,6 @@ class OutdoorWeather:
     def weather_event(self, event_name, data, **kwargs) -> None:
         """ Listens for weather change from the weather app.
             https://github.com/Pythm/ad-Weather """
-
-        now = self.ADapi.datetime(aware=True)
 
         # The Weather app sends None for data it does not have
         rain = data.get('rain')
@@ -250,10 +250,33 @@ class OutdoorWeather:
             self._reactToChange()
 
     def _reactToChange(self) -> None:
+        """ Calls on_change at most once per min_react_minutes and never while react_blocked.
+            A change that arrives when it cannot be applied is not lost: it is replayed once
+            when the throttle (or the block) ends, using the values stored by then. """
         if self.react_blocked is not None and self.react_blocked():
+            self._schedule_replay(REPLAY_BLOCKED_SECONDS)
             return
 
         now = self.ADapi.datetime(aware=True)
-        if now - self.last_react_update >= timedelta(minutes = self.min_react_minutes):
+        elapsed = now - self.last_react_update
+        wait = timedelta(minutes = self.min_react_minutes)
+        if elapsed >= wait:
+            self._cancel_replay()
             self.on_change()
             self.last_react_update = now
+        else:
+            self._schedule_replay((wait - elapsed).total_seconds() + 1)
+
+    def _schedule_replay(self, seconds) -> None:
+        if self._replay_handler is not None and self.ADapi.timer_running(self._replay_handler):
+            return
+        self._replay_handler = self.ADapi.run_in(self._replay, seconds)
+
+    def _cancel_replay(self) -> None:
+        if self._replay_handler is not None:
+            self.ADapi.cancel_timer(self._replay_handler, silent = True)
+            self._replay_handler = None
+
+    def _replay(self, **kwargs) -> None:
+        self._replay_handler = None
+        self._reactToChange()
