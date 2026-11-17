@@ -1272,7 +1272,9 @@ class Light:
         """ Turns off lights.
         Also sends when the light is not confirmed on yet but an on-command is pending. """
 
-        on_command_pending = self.is_turned_on_by_automation is True and not self.automation_set
+        # The last command was an on: the light may be on although is_on (confirmed state, settles
+        # for settle_time) still says off, so the off must be sent.
+        on_command_pending = self.is_turned_on_by_automation is True
         self.is_turned_on_by_automation = False    
         self.automation_set = False
         self.adjust_active = False
