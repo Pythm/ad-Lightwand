@@ -263,6 +263,23 @@ Changes in 2.3.0 that you will notice: a missing or invalid `language_file` no l
 With this approach you can keep your translations clean, maintain logical consistency across your automations, and extend Lightwand with your own custom modes when needed.
 ---
 
+
+#### Upgrading to Lightwand 2.4.0
+Nothing has to change in your YAML: every new option is optional and the defaults keep the old behaviour. What you will notice:  
+- `keep_on_conditions` is now really evaluated (see Conditions and Constraints below). It was ignored before. If you used it, check that the result is what you expect.  
+- A `light_data` without `brightness` (only `color_temp`, `rgb_color`, `effect` ...) now turns the light on and leaves the brightness alone. Z-Wave `value` is limited to 99.  
+- A command sent shortly after the opposite command (for example off right after a motion on) is no longer dropped.  
+- A mode with only `motionlights` keeps turning the light off when there is no motion, also after midnight.  
+- A scheduled time only runs for the list that is active (normal automations, motion or the current mode), and a `turn_off` at `00:00:00` that you define yourself is now carried out at midnight.  
+- MQTT lights work with any base topic, not only `zigbee2mqtt/...`.  
+- Conditions and constraints use a stricter, safer evaluator. Read-only calls on `self` and `self.ADapi` (`get_*`, `now_is_between`, `sun_up` ...) work as before. A condition that calls anything else, or uses an unknown name, counts as **false** and logs one warning.  
+- A tracker that becomes `unavailable` or `unknown` no longer sets the room to `away`.  
+- `prevent_off_to_automagical` also stops `morning`.  
+- A bed that is occupied now also holds `away` until the bed is exited (see Bed Sensors below).  
+- A broken or missing mode file no longer stops the room from starting.  
+- The default of `delay` for motion sensors and presence trackers is `0`, which is what the code always used.  
+New optional keys: `settle_time` (per light), `night_lock_start` and `night_lock_end` (room), and `any` / `all` as the first item in `conditions` / `keep_on_conditions`.  
+
 ## 📈 Configuring Light Behavior
 
 ### 🔁 Setting `light_data`
@@ -292,7 +309,7 @@ Lightwand can be used together with the [Adaptive Lighting custom component for 
   - If no `state` is explicitly defined, the mode's default behavior applies.
 
 - **`turn_off`**: Turns the light off at the given time or in the specified mode.
-- **`adjust`**: Does not turn the light on or off, but adjusts it to the `light_data` defined for the current state.
+- **`adjust`**: Does not turn the light on or off, but adjusts it to the `light_data` defined for the current state. When the light is turned on by hand, the `light_data` level is applied at that moment (after `settle_time`). This is not counted as a manual change, also with `take_manual_control`.
 - **`pass`**: Lightwand will apply the `light_data` as a "turn on" command, but **will not send a new command** if the light is already on. Lights running a program (e.g., "sunrise" effect in Philips Hue) will **restart the program** every time a new command is sent.
 - **`manual`**: Lightwand will **not interact** with the light in this mode.
 - **`lux_controlled`**: The light will be on if **lux levels are below the defined `lux_constraint`**.
@@ -341,6 +358,8 @@ Automations are configured by defining an array of time-based rules. These can b
 > If `time: '00:00:00'` is not defined, a default `turn_off` state will be applied at midnight if other times are configured in automations or motionlights.  
 
 > [!NOTE]  
+> A `turn_off` automation at `00:00:00` that you define yourself is carried out at midnight. Without one, nothing happens at midnight (a light that only has `motionlights` keeps following motion).  
+
 > If only `time` is provided in automations, the light will turn on if conditions are met. However, if no `light_data` is defined, nothing will be adjusted.  
 
 ---
@@ -486,7 +505,7 @@ If `take_manual_control` is defined as a option for the room or light (or roomty
 
 #### **Holiday Lights Control**
 Set an `input_boolean` (or similar) as `enable_light_control` for switches/lights you only use for special occations like christmas or during winter time.  
-The app will control the light/switch only if this switch is ON.  
+The app will control the light/switch only if this switch is ON. The switch is read when the app starts, so restart the app after changing it.  
 If the switch is OFF, the app will leave the light untouched, allowing other tasks to use it.
 
 > **NOTE**  
@@ -525,7 +544,7 @@ Below is a quick overview of the pre‑configured room types – more advanced o
 | Room type | Default behaviour |
 |-----------|--------------------|
 | **outdoor** | • Motion sensors trigger lighting during *away* and *night* modes.<br>• Excludes the room from the *custom* mode and the *wash* mode. |
-| **bedroom** | • Excludes the room from the *custom* mode and the *wash* mode.<br>• Logic to prevent *automagical* mode or a *reset* when *night* mode is active, unless the mode name includes the room name between 10:00:00 after morning and until 05:00:00 before morning routine starts. |
+| **bedroom** | • Excludes the room from the *custom* mode and the *wash* mode.<br>• Logic to prevent *automagical* mode or a *reset* when *night* mode is active, unless the mode name includes the room name between 10:00:00 after morning and until 05:00:00 before morning routine starts. Change the times with `night_lock_start` and `night_lock_end` on the room. |
 | **hallway** | • Motion triggers lighting during *away* mode. |
 | **living‑room** | • Full manual control of the lighting by default when light is manually adjusted. |
 | **kitchen** | • Full manual control of the lighting by default when light is manually adjusted. |
@@ -551,7 +570,6 @@ You can define **two outdoor lux sensors**. The second sensor can be defined wit
   OutLuxMQTT_2: zigbee2mqtt/OutdoorHueLux
   RoomLux_sensor: sensor.lux_sensor
   RoomLuxMQTT: zwave/KITCHEN_sensor/sensor_multilevel/endpoint_0/Illuminance
-  rain_sensor: sensor.netatmo_rain
 ```
 
 ---
@@ -588,8 +606,10 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 ---
 
 ### 🛏️ Bed Sensors   
-- The `bed_sensors` feature keeps the light in **night** mode until the bed is exited.  
-  You can now define a constraint for the bed sensor that, when it is not true, will prevent the bed from being considered *occupied*.
+- The `bed_sensors` feature keeps the room in **night** mode until the bed is exited.  
+  You can define a constraint for the bed sensor that, when it is not true, prevents the bed from being considered *occupied*.
+- While a bed is occupied and the room is in night, every mode that would take the room out of night (`automagical`, `morning`, `reset`, `away` ...) is held as the *pending* mode. The newest pending mode wins. When all beds are empty for `delay` seconds the pending mode is applied, or `automagical` if there is none. Only this room changes. Lightwand never sends a house wide mode, so doors and other apps are not affected by someone leaving the bed.  
+- `fire` is always applied at once. A new night mode is also applied at once.
 
 **Example**:  
 ```yaml
@@ -602,7 +622,7 @@ For **presence tracking**, define the trackers in the `presence` section. When a
 
 ### 📺 Media Players  
 
-Sorted by **priority** if more than one media player is defined in a room. You can use any entity with an `on/off` state (e.g., sensors, switches).  
+Sorted by **priority** if more than one media player is defined in a room. You can use any entity that reports `on` and `off` (e.g., sensors, switches, media players). Lightwand reacts when it changes from `off` to `on` and from `on` to `off`; other states such as `playing` or `standby` are only used when the state is checked.  
 
 - Define the **mode name** for each media player.  
 - Define `light_data` in `light_modes` for the corresponding mode.  
@@ -650,8 +670,16 @@ To define custom conditions, create a `listen_sensors` list for the sensors you 
 ```
 
 > [!NOTE]  
-> - The `conditions` block keeps the light **off** if all conditions are `true`.  
-> - The `keep_on_conditions` block keeps the light **on** if **any** condition is `true`.  
+> - The light can only turn on automatically when the `conditions` are met. By default **all** conditions must be `true`.  
+> - `keep_on_conditions` keeps the light **on** when they are met, even if `lux_constraint` or `room_lux_constraint` would turn it off. By default **any** condition is enough. A light without `keep_on_conditions` simply follows the automation.  
+> - Start either list with `any` or `all` to choose how the conditions are combined:  
+>   ```yaml
+>   keep_on_conditions:
+>     - all
+>     - "self.get_state('input_boolean.guests') == 'on'"
+>     - "self.now_is_between('18:00:00', '23:00:00')"
+>   ```  
+> - Conditions are checked by a safe evaluator, not by Python `eval`. You can use `and`, `or`, `not`, comparisons including `in`, `is`, arithmetic (not `**`), `float()`, `int()`, `str()`, `len()` and similar, and read-only calls on `self` and `self.ADapi` such as `get_state`, `get_tracker_state`, `now_is_between`, `sun_up`. Calling services or anything starting with `_` is blocked. A condition that fails counts as `false` and is logged once as a warning.  
 
 ---
 
@@ -681,7 +709,8 @@ If you've configured all your lights to your liking, the automagical automation 
 ---
 
 ### 🔄 Persistent Storage  
-Each lightwand app will write the current light mode on termination to a json file and read it on initialization. Default location for json files is ```pyton {self.AD.config_dir}/persistent/lightwand/ ```. You can overrule this by defining `json_path`.
+Each lightwand app will write the current light mode on termination to a json file and read it on initialization. Default location for json files is ```pyton {self.AD.config_dir}/persistent/lightwand/ ```. You can overrule this by defining `json_path`.  
+The file is deliberately only written on termination (restart, reload or stop) and not on every mode change, so a Raspberry Pi with an SD card is not worn out. After a power cut or a killed container the room starts with the mode from the last clean stop. A missing, empty or broken file, or a stored mode that no longer exists, is ignored with a log message and the room starts in `automagical`.
 
 ### 🧱 Namespaces  
 Define MQTT/HASS namespaces if not using defaults:  
@@ -737,7 +766,6 @@ your_room_name:
   RoomLux_sensor: sensor.room_lux_sensor
   RoomLuxMQTT: zwave/KITCHEN_sensor/sensor_multilevel/endpoint_0/Illuminance
   # HA sensor for detection of rain. If rain is detected, it will raise lux constraint by * 1.5
-  rain_sensor: sensor.netatmo_rain
   # Listen to sensors to update Lights when there is a change
   listen_sensors:
     - person.wife
@@ -905,10 +933,9 @@ key | optional | type | default | introduced in | description
 `module` | False | string | | v1.0.0 | The module name of the app.
 `class` | False | string | | v1.0.0 | The name of the Class.
 `HASS_namespace` | True | string | default | v1.1.0 | HASS namespace
-`MQTT_namespace` | True | string | default | v1.1.0 | MQTT namespace
-`options` | True | list | False | v1.1.5 | Can contain exclude_from_custom to exclude the room from custom mode, and night_motion to allow motion detection during night
+`MQTT_namespace` | True | string | mqtt | v1.1.0 | MQTT namespace
+`options` | True | list | False | v1.1.5 | Can contain exclude_from_custom to exclude the room from custom mode, night_motion to allow motion detection during night, dim_while_motion, and verify_if_executed. With verify_if_executed Lightwand checks a few seconds after each command (17 s plus the transition time) that the light followed, and sends the command again if it did not
 `json_path` | True | string | | v1.0.0 | Use Json for persistency when restarted. Adds 'your_room_name' + '.json' to the json_path
-`rain_sensor` | True | sensor | | v1.0.0 | HA sensor for detection of rain. If rain is detected, it will raise lux constraint by * 1.5
 `OutLux_sensor` | True | sensor | | v1.0.0 | Sensor for Lux detection
 `OutLuxMQTT` | True | MQTT sensor | | v1.0.0 | Lux detection via MQTT
 `OutLux_sensor_2` | True | sensor | | v1.0.3 | Secondary Sensor for Lux detection
@@ -926,13 +953,15 @@ key | optional | type | default | introduced in | description
 `mode_turn_off_delay` | True | int | | v1.3.1 | Add delay to turn on and off
 `mode_turn_on_delay` | True | int | | v1.3.1 | Add delay to turn on and off
 `random_turn_on_delay` | True | int | | v1.3.2 | Add delay to turn on and off
+`night_lock_start` | True | time | 10:00:00 | v2.4.0 | Bedroom only. Start of the period where `automagical`/`reset` cannot take the room out of night
+`night_lock_end` | True | time | 05:00:00 | v2.4.0 | Bedroom only. End of that period
 `adaptive_switch` | True | string | | v1.3.3 | HA switch to turn on/off Adaptive Lighting
 `adaptive_sleep_mode` | True | string | | v1.3.4 | HA switch to turn on/off Adaptive Lightings sleep mode
 ### Key definitions to add to motion and presence sensors
 key | optional | type | default | introduced in | description
 -- | -- | -- | -- | -- | --
 `motion_sensor` | True | sensor | | v1.0.0 | Motion sensor
-`delay` | True | int | 60 | v1.0.0 | Input delay in seconds before light turns back from motion to current mode
+`delay` | True | int | 0 | v1.0.0 | Input delay in seconds before light turns back from motion to current mode. Presence trackers and bed sensors use the same key and the same default
 `motion_constraints` | True | string | | v1.0.0 | if statement that must be true for motion to activate. Inherits Appdaemon API to self
 `bed_sensor` | True | sensor | | v1.1.6 | This will wait until bed is exited to turn on light in room when night ended
 ### Key definitions to add to Lights
@@ -944,7 +973,9 @@ key | optional | type | default | introduced in | description
 `light_modes` | True | dict | | v1.0.0 | Name of mode. Define light modes to change light accordingly
 `lux_constraint` | True | int | | v1.0.0 | Outdoor lux constraint
 `room_lux_constraint` | True | int | | v1.0.0 | Room lux constraint
-`conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi
+`conditions` | True | list | | v1.0.0 | Conditions as if statement. Inherits Appdaemon Api as ADapi. First item can be `any` or `all` (default `all`)
+`keep_on_conditions` | True | list | | v2.4.0 | Keeps the light on when met, even if the lux constraint would turn it off. First item can be `any` or `all` (default `any`)
+`settle_time` | True | int | 15 | v2.4.0 | Seconds the on/off state and brightness reported by the light must be stable before Lightwand trusts it. Some dimmers keep changing their value after a new command. Only affects confirmation and manual change detection, never whether a command is sent
 `toggle_speed` | True | float | 1 | v1.1.4 | Set time in seconds between each toggle. Supports sub second with 0.x
 ---
 

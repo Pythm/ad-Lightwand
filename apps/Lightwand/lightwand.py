@@ -3,7 +3,7 @@
     @Pythm / https://github.com/Pythm
 """
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 
 from appdaemon.plugins.hass.hassapi import Hass
 import json
@@ -22,14 +22,22 @@ from lightwand_lights import Light
 from lightwand_lights import MQTTLight
 from lightwand_lights import ToggleLight
 
-from ast_evaluator import safe_eval
+from ast_evaluator import safe_eval_logged
 
 MOTION = ('on', 'open')
+NOT_A_STATE = ('unavailable', 'unknown', None)
 _legacy_language_warned:bool = False
 
 class Room(Hass):
 
     def initialize(self):
+        # Set first so terminate() works even if initialize stops early
+        self.selector_input = None
+        self.selector_input_options:list = []
+        self._selector_echo:list = []
+        self.weather = None
+        self.json_storage = None
+
         self.mqtt = self.get_plugin_api('MQTT')
         # Namespaces for HASS and MQTT
         self.HASS_namespace:str = self.args.get('HASS_namespace', 'default')
@@ -73,7 +81,8 @@ class Room(Hass):
             translations.wash,
             translations.reset,
         }
-        self.getOutOfBedMode:str = translations.automagical
+        # Mode to apply when the bed is exited. None: automagical
+        self.getOutOfBedMode = None
         self.LIGHT_MODE = translations.automagical
 
         night_motion:bool = False
@@ -90,12 +99,16 @@ class Room(Hass):
             self.all_modes.discard(translations.custom)
             self.all_modes.discard(translations.wash)
 
-        night_motion      = 'night_motion'      in opts or self.roomtype in ('outdoor')
+        night_motion      = 'night_motion'      in opts or self.roomtype == 'outdoor'
         dim_while_motion  = 'dim_while_motion'  in opts
         take_manual_control = 'take_manual_control' in opts or self.roomtype in ('livingroom', 'kitchen')
         verify_if_executed  = 'verify_if_executed' in opts
         self.prevent_off_to_normal   = 'prevent_off_to_normal' in opts or 'prevent_off_to_automagical' in opts
         self.prevent_night_to_morning = 'prevent_night_to_morning' in opts
+
+        # Bedroom: time window where automagical/reset without room name does not end night
+        self.night_lock_start:str = self.args.get('night_lock_start', '10:00:00')
+        self.night_lock_end:str = self.args.get('night_lock_end', '05:00:00')
 
         # Reaction delay to mode
         self.mode_turn_off_delay:int = self.args.get('mode_turn_off_delay', 0)
@@ -124,7 +137,7 @@ class Room(Hass):
                 namespace = self.HASS_namespace,
                 tracker = tracker
             )
-            if self.get_state(tracker.sensor) == 'home':
+            if self.get_state(tracker.sensor, namespace = self.HASS_namespace) == 'home':
                 ishome = True
 
         if not ishome:
@@ -170,7 +183,7 @@ class Room(Hass):
         for raw in self.args.get('MQTTLights', []):
             if 'enable_light_control' in raw:
                 light_control_state = raw.get(str('light_control_state'), 'on')
-                if self.get_state(raw['enable_light_control']) != light_control_state:
+                if self.get_state(raw['enable_light_control'], namespace = self.HASS_namespace) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
@@ -192,7 +205,7 @@ class Room(Hass):
         for raw in self.args.get('Lights', []):
             if 'enable_light_control' in raw:
                 light_control_state = raw.get(str('light_control_state'), 'on')
-                if self.get_state(raw['enable_light_control']) != light_control_state:
+                if self.get_state(raw['enable_light_control'], namespace = self.HASS_namespace) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
@@ -214,7 +227,7 @@ class Room(Hass):
         for raw in self.args.get('ToggleLights', []):
             if 'enable_light_control' in raw:
                 light_control_state = raw.get(str('light_control_state'), 'on')
-                if self.get_state(raw['enable_light_control']) != light_control_state:
+                if self.get_state(raw['enable_light_control'], namespace = self.HASS_namespace) != light_control_state:
                     continue
 
             spec = _convert_dict_to_light_spec(raw)
@@ -255,25 +268,32 @@ class Room(Hass):
             selector_input_exclude_modes = self.args.get('selector_input_exclude_modes', [])
             self.run_in(self.setup_selector_input, 30, selector_input_exclude_modes = selector_input_exclude_modes)
 
-        # Persistent storage for storing mode and lux data
+        # Persistent storage for storing mode and lux data.
+        # Written only here (new file) and in terminate() to spare SD cards.
+        legacy_storage = None
         if 'json_path' in self.args:
-            self.json_storage = self.args['json_path']
+            json_dir = str(self.args['json_path'])
+            if not json_dir.endswith(os.sep):
+                # Before 2.4.0 the file name was appended without a separator
+                legacy_storage = f"{json_dir}{self.name}.json"
         else:
-            self.json_storage:str = f"{self.AD.config_dir}/persistent/lightwand/"
-            if not os.path.exists(self.json_storage):
-                os.makedirs(self.json_storage)
-        self.json_storage += f"{self.name}.json"
-        lightwand_data:dict = {}
-        try:
-            with open(self.json_storage, 'r') as json_read:
-                lightwand_data = json.load(json_read)
-                self.LIGHT_MODE = lightwand_data['mode']
-                if 'lux' in lightwand_data:
-                    self.weather.out_lux = lightwand_data['lux']
-        except FileNotFoundError:
-            lightwand_data = {'mode' : self.LIGHT_MODE, 'lux' : self.weather.out_lux}
-            with open(self.json_storage, 'w') as json_write:
-                json.dump(lightwand_data, json_write, indent = 4)
+            json_dir = os.path.join(str(self.AD.config_dir), 'persistent', 'lightwand')
+        self.json_storage = os.path.join(json_dir, f"{self.name}.json")
+
+        storage = self.json_storage
+        if (
+            legacy_storage is not None
+            and not os.path.exists(self.json_storage)
+            and os.path.exists(legacy_storage)
+        ):
+            storage = legacy_storage
+        lightwand_data = self._read_json(storage)
+        if lightwand_data is None:
+            self._write_json()
+        else:
+            self._restore_from_json(lightwand_data)
+            if storage != self.json_storage:
+                self._write_json()
 
         # Listen sensors for when to update lights
         for sensor in self.listen_sensors:
@@ -320,7 +340,7 @@ class Room(Hass):
 
         # Initialize sensors with correct state:
         for sensor in motion_sensors:
-            if self.get_state(sensor.sensor) in MOTION:
+            if self.get_state(sensor.sensor, namespace = self.HASS_namespace) in MOTION:
                 motion_data:dict = {'occupancy': True}
                 self._process_sensor(sensor, motion_data)
 
@@ -346,7 +366,7 @@ class Room(Hass):
 
         selector_input_exclude_modes = kwargs.get('selector_input_exclude_modes', [])
         exclude = {translations.fire, translations.false_alarm, translations.reset ,'presence'} | set(selector_input_exclude_modes)
-        self.selector_input_options = [m for m in self.all_modes if m not in exclude]
+        self.selector_input_options = [m for m in self._ordered_modes() if m not in exclude]
 
         self.call_service("input_select/set_options",
             entity_id = self.selector_input,
@@ -360,39 +380,103 @@ class Room(Hass):
 
         """ End initial setup for Room """
 
+    def _ordered_modes(self) -> list:
+        """ all_modes in a stable order: built-in modes first, then the light modes as configured. """
+
+        ordered = [
+            translations.automagical,
+            translations.away,
+            translations.off,
+            translations.night,
+            translations.custom,
+            translations.fire,
+            translations.false_alarm,
+            translations.wash,
+            translations.reset,
+        ]
+        for light in self.roomlight:
+            ordered.extend(mode.mode for mode in light.light_modes)
+        modes = [m for m in dict.fromkeys(ordered) if m in self.all_modes]
+        return modes + sorted(m for m in self.all_modes if m not in modes)
+
+    def _read_json(self, path:str):
+        """ Returns the stored data, or None if there is no usable file. """
+
+        try:
+            with open(path, 'r') as json_read:
+                lightwand_data = json.load(json_read)
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as e:
+            self.log(f"Ignoring {path}, not able to read it: {e}", level = 'WARNING')
+            return None
+        if not isinstance(lightwand_data, dict) or 'mode' not in lightwand_data:
+            self.log(f"Ignoring {path}, it has no stored mode: {lightwand_data!r}", level = 'WARNING')
+            return None
+        return lightwand_data
+
+    def _restore_from_json(self, lightwand_data:dict) -> None:
+        mode = lightwand_data['mode']
+        # Unknown modes (renamed, translation changed, 'normal' from before 2.1.0) and reset start as automagical
+        if not isinstance(mode, str) or mode not in self.all_modes or mode == translations.reset:
+            self.log(f"Stored mode {mode!r} is not a mode for {self.name}. Starting in {translations.automagical}", level = 'INFO')
+            mode = translations.automagical
+        self.LIGHT_MODE = mode
+
+        # Stored lux is only a fallback until an own lux sensor has reported
+        if 'lux' in lightwand_data and not self.weather._own_lux_reporting():
+            try:
+                self.weather.out_lux = float(lightwand_data['lux'])
+            except (TypeError, ValueError):
+                pass
+
+    def _write_json(self) -> None:
+        if getattr(self, 'json_storage', None) is None:
+            return
+        weather = getattr(self, 'weather', None)
+        lightwand_data = {
+            'mode' : getattr(self, 'LIGHT_MODE', translations.automagical),
+            'lux' : weather.out_lux if weather is not None else None
+        }
+        tmp_storage = f"{self.json_storage}.tmp"
+        try:
+            os.makedirs(os.path.dirname(self.json_storage) or '.', exist_ok = True)
+            with open(tmp_storage, 'w') as json_write:
+                json.dump(lightwand_data, json_write, indent = 4)
+            os.replace(tmp_storage, self.json_storage)
+        except Exception as e:
+            self.log(f"Not able to store to {self.json_storage} : {e}", level = 'WARNING')
+
     def terminate(self) -> None:
         """ Writes out data to persistent storage before terminating. """
 
-        if self.selector_input is not None:
-            self.call_service("input_select/set_options",
-                entity_id = self.selector_input,
-                options = self.LIGHT_MODE,
-                namespace = self.HASS_namespace
-            )
+        self._write_json()
 
-        lightwand_data = {'mode' : self.LIGHT_MODE, 'lux' : self.weather.out_lux}
-        try:
-            with open(self.json_storage, 'w') as json_write:
-                json.dump(lightwand_data, json_write, indent = 4)
-        except FileNotFoundError:
+        if getattr(self, 'selector_input', None) is not None:
             try:
-                with open(self.json_storage, 'w') as json_write:
-                    json.dump(lightwand_data, json_write, indent = 4)
+                self.call_service("input_select/set_options",
+                    entity_id = self.selector_input,
+                    options = self.LIGHT_MODE,
+                    namespace = self.HASS_namespace
+                )
             except Exception as e:
-                self.log(f"Not able to store to {self.json_storage} : {e}", level = 'WARNING')
+                self.log(f"Not able to set options for {self.selector_input} : {e}", level = 'WARNING')
 
     def mode_event(self, event_name, data, **kwargs) -> None:
         """ New mode events. Updates lights if conditions are met. """
 
-        modename, roomname = _parse_mode_and_room(data['mode'])
+        mode = data.get('mode') if isinstance(data, dict) else None
+        if not isinstance(mode, str) or not mode:
+            self.log(f"{event_name} without a valid mode: {data}", level = 'DEBUG')
+            return
+
+        modename, roomname = _parse_mode_and_room(mode)
         if roomname is not None and roomname != str(self.name):
             return
 
-        if (
-            self.LIGHT_MODE == translations.off
-            and modename == translations.automagical
-            and self.prevent_off_to_normal
-        ):
+        if modename == translations.fire:
+            # Fire is applied at once, regardless of any block, bed or delay
+            self._apply_mode(modename)
             return
 
         if modename not in self.all_modes:
@@ -401,11 +485,12 @@ class Room(Hass):
             else:
                 return
 
-        if modename.startswith(translations.night):
-            # Check if old light mode is night and bed is occupied.
-            for bed_sensor in self.bed_sensors:
-                cancel_listen_handler(ADapi = self, handler = bed_sensor.handler)
-                bed_sensor.handler = None
+        if (
+            self.LIGHT_MODE == translations.off
+            and modename in (translations.automagical, translations.morning)
+            and self.prevent_off_to_normal
+        ):
+            return
 
         if self.LIGHT_MODE.startswith(translations.night):
             # A full block on automations to take room out of night
@@ -419,17 +504,26 @@ class Room(Hass):
                 modename in (translations.automagical, translations.reset) and
                 roomname is None and
                 self.roomtype == 'bedroom' and
-                self.now_is_between('10:00:00','05:00:00')
+                self.now_is_between(self.night_lock_start, self.night_lock_end)
             ):
                 return
             # Waiting for bedsensors to be empty before ending night
-            if modename not in (translations.night, translations.off, translations.away, translations.reset, translations.fire):
-                if self._bed_occupied() and not modename.startswith(translations.night):
-                    for bed_sensor in self.bed_sensors:
-                        if self.get_state(bed_sensor.sensor) == 'on':
-                            self._listen_out_of_bed(bed_sensor)
-                    self.getOutOfBedMode = modename
-                    return
+            if (
+                not modename.startswith(translations.night)
+                and modename != translations.off
+                and self._bed_occupied()
+            ):
+                self._start_bed_wait(modename)
+                return
+
+        self._apply_mode(modename)
+
+    def _apply_mode(self, modename:str) -> None:
+        """ Sets the room mode from a mode event, with the mode delay if defined. """
+
+        self._cancel_bed_wait()
+        cancel_timer_handler(ADapi = self, handler = self.mode_delay_handler)
+        self.mode_delay_handler = None
 
         self.LIGHT_MODE = modename
 
@@ -446,12 +540,16 @@ class Room(Hass):
         self._set_selector_input()
 
     def _set_selector_input(self) -> None:
+        # Options are empty until setup_selector_input has run
         if self.selector_input is not None and self.LIGHT_MODE in self.selector_input_options:
+            # Remember what Lightwand wrote, so the state change it causes is not taken as a user selection
+            if not self._selector_echo or self._selector_echo[-1] != self.LIGHT_MODE:
+                self._selector_echo.append(self.LIGHT_MODE)
             try:
                 self.call_service("input_select/select_option",
                     entity_id = self.selector_input,
                     option = self.LIGHT_MODE,
-                    namespace = self.namespace
+                    namespace = self.HASS_namespace
                 )
             except Exception as e:
                 self.log(f"Could not set mode to {self.selector_input}. Error: {e}", level = 'DEBUG')
@@ -459,14 +557,27 @@ class Room(Hass):
     def mode_update_from_selector(self, entity, attribute, old, new, kwargs) -> None:
         """ Updates mode based on HA selector update. """
 
+        if new in NOT_A_STATE or not isinstance(new, str):
+            self.log(f"Ignoring {new} from {entity}", level = 'DEBUG')
+            return
+        if new in self._selector_echo:
+            # Written by Lightwand. Echoes arrive in the order they were written
+            del self._selector_echo[:self._selector_echo.index(new) + 1]
+            return
+        self._selector_echo.clear()
+
         modename, roomname = _parse_mode_and_room(new)
         if roomname is not None and roomname != str(self.name):
+            return
+        if modename not in self.all_modes:
+            self.log(f"Ignoring {new} from {entity}: not a mode for {self.name}", level = 'DEBUG')
             return
         if modename == translations.automagical:
             modename = translations.reset
         if modename == self.LIGHT_MODE:
             return
 
+        self._cancel_bed_wait()
         self.LIGHT_MODE = modename
         self.reactToChange()
 
@@ -501,7 +612,14 @@ class Room(Hass):
     def MQTT_motion_event(self, event_name, data, **kwargs) -> None:
         """ Listens to motion MQTT event.  """
 
-        motion_data = json.loads(data['payload'])
+        try:
+            motion_data = json.loads(data['payload'])
+        except (KeyError, TypeError, ValueError) as e:
+            self.log(f"Not able to read motion payload {data}: {e}", level = 'DEBUG')
+            return
+        if not isinstance(motion_data, dict):
+            self.log(f"Motion payload is not a json object: {data}", level = 'DEBUG')
+            return
         sensor: Sensor = kwargs['sensor']
 
         """ Test your MQTT settings. Uncomment line below to get logging when motion detected """
@@ -535,11 +653,7 @@ class Room(Hass):
     def _activate(self, sensor: Sensor) -> None:
         constraints_ok = True
         if sensor.constraints is not None:
-            try:
-                constraints_ok = safe_eval(sensor.constraints, {'self': self})
-            except Exception as exc:
-                self.log(f"Constraint eval error for {sensor.sensor}: {exc}", level = 'INFO')
-                return
+            constraints_ok = safe_eval_logged(sensor.sensor, sensor.constraints, {'self': self}, self.log)
 
         if not constraints_ok:
             return
@@ -571,46 +685,66 @@ class Room(Hass):
                 light.setMotion(lightmode=self.LIGHT_MODE)
 
     def out_of_bed(self, entity, attribute, old, new, **kwargs) -> None:
-        """ Check if all bed sensors are empty and if so change to current mode. """
+        """ Check if all bed sensors are empty and if so change to the pending mode. """
 
         if self._bed_occupied():
             return
-        self.LIGHT_MODE = self.getOutOfBedMode
-        self._set_selector_input()
+        modename = self.getOutOfBedMode or translations.automagical
+        self._cancel_bed_wait()
+
+        self.LIGHT_MODE = modename
         self.reactToChange()
 
+        if self.LIGHT_MODE == translations.reset:
+            self.LIGHT_MODE = translations.automagical
+
+        self._set_selector_input()
+
     def _bed_occupied(self) -> bool:
-        """Return True if any bed sensor reports 'on'."""
+        """Return True if any bed sensor reports 'on' and its constraints are met."""
 
         return any(
-            self.get_state(sensor.sensor) == 'on'
-            and safe_eval(sensor.constraints, {'self': self})
+            self.get_state(sensor.sensor, namespace = self.HASS_namespace) == 'on'
+            and safe_eval_logged(sensor.sensor, sensor.constraints, {'self': self}, self.log)
             for sensor in self.bed_sensors
         )
 
-    def _listen_out_of_bed(self, sensor: str) -> None:
-        sensor.handler = self.listen_state(
-            self.out_of_bed,
-            sensor.sensor,
-            new = 'off',
-            duration = sensor.delay,
-            oneshot = True,
-            sensor = sensor,
-        )
+    def _start_bed_wait(self, modename:str) -> None:
+        """ Room stays in night until the bed is exited, then applies *modename* (newest wins). """
+
+        self._cancel_bed_wait()
+        for sensor in self.bed_sensors:
+            sensor.handler = self.listen_state(
+                self.out_of_bed,
+                sensor.sensor,
+                new = 'off',
+                duration = sensor.delay,
+                namespace = self.HASS_namespace,
+                sensor = sensor,
+            )
+        self.getOutOfBedMode = modename
+
+    def _cancel_bed_wait(self) -> None:
+        """ Ends waiting for the bed to be exited and drops the pending mode. """
+
+        for sensor in self.bed_sensors:
+            cancel_listen_handler(ADapi = self, handler = sensor.handler)
+            sensor.handler = None
+        self.getOutOfBedMode = None
 
     def presence_change(self, entity, attribute, old, new, **kwargs) -> None:
         """ Listens to tracker/person state change. """
 
         tracker: Sensor = kwargs['tracker']
 
+        # A tracker that drops out (HA restart, glitch) has not left
+        if new in NOT_A_STATE:
+            return
+
         if new == 'home':
             constraints_ok = True
             if tracker.constraints is not None:
-                try:
-                    constraints_ok = safe_eval(tracker.constraints, {'self': self})
-                except Exception as exc:
-                    self.log(f"Constraint eval error for {tracker.sensor}: {exc}", level = 'INFO')
-                    return
+                constraints_ok = safe_eval_logged(tracker.sensor, tracker.constraints, {'self': self}, self.log)
 
             if self.LIGHT_MODE in (translations.automagical, translations.away) and self.check_mediaplayers_off():
                 self.LIGHT_MODE = translations.automagical
@@ -632,11 +766,15 @@ class Room(Hass):
 
         elif old == 'home':
             for tracker in self.trackers:
-                if self.get_state(tracker.sensor) == 'home':
+                if self.get_state(tracker.sensor, namespace = self.HASS_namespace) == 'home':
                     self.reactToChange()
                     return
             if self.LIGHT_MODE not in (translations.off, translations.custom):
+                self._cancel_bed_wait()
                 self.LIGHT_MODE = translations.away
+                self.reactToChange()
+                self._set_selector_input()
+                return
 
         self.reactToChange()
 
@@ -650,10 +788,12 @@ class Room(Hass):
         
         if self.active_motion_sensors:
             return
+        # Motion has ended also when a media player is on
+        for light in self.roomlight:
+            light.motion = False
+            light.last_motion_brightness = 0
         if self.check_mediaplayers_off():
             for light in self.roomlight:
-                light.motion = False
-                light.last_motion_brightness = 0
                 light.setLightMode(lightmode = self.LIGHT_MODE)
 
     def state_changed(self, entity, attribute, old, new, kwargs) -> None:
@@ -719,7 +859,7 @@ class Room(Hass):
 
         if self.LIGHT_MODE in (translations.automagical, translations.reset) or self.LIGHT_MODE.startswith(translations.night):
             for mediaplayer in self.mediaplayers:
-                if self.get_state(mediaplayer['mediaplayer']) not in ('off', 'idle', 'paused', 'unavailable', 'unknown'):
+                if self.get_state(mediaplayer['mediaplayer'], namespace = self.HASS_namespace) not in ('off', 'idle', 'paused', 'unavailable', 'unknown'):
                     for light in self.roomlight:
                         if ((light.checkConditions(light.conditions) and light.checkLuxConstraints()) or
                             light.current_keep_on_Condition

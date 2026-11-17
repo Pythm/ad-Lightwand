@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Literal, Optional, Union
+from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Union
 from pydantic import BaseModel
 
 State = Literal['turn_off', 'turn_on', 'adjust', 'lux_controlled', 'manual', 'pass', 'none', 'adaptive']
@@ -126,3 +126,4 @@ class LightSpec:
     options: Optional[List[str]] = None   # exclude_from_custom, night_motion, dim_while_motion
     adaptive_switch: Optional[str] = None
     adaptive_sleep_mode: Optional[str] = None
+    settle_time: int = 15                 # seconds the on/off state must be stable before it is trusted

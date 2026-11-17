@@ -1,4 +1,4 @@
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 from lightwand_config import LightSpec, Automation, LightProperties, LightMode
 import copy
 
@@ -34,7 +34,9 @@ def _build_light_mode(d: dict) -> LightMode:
         if raw_automs:
             automs = [automation_from_obj(a) for a in raw_automs]
         else:
+            # 'automations: []' behaves like a mode without settings
             automs = None
+            light_properties = LightProperties(**data) if data else LightProperties()
     elif data:
         light_properties = LightProperties(**data)
     else:

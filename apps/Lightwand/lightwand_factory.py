@@ -36,6 +36,7 @@ def build_light(api,
         'adaptive_switch': spec.adaptive_switch or adaptive_switch,
         'adaptive_sleep_mode': spec.adaptive_sleep_mode or adaptive_sleep_mode,
         'weather': weather,
+        'settle_time': getattr(spec, 'settle_time', 15),
     }
 
     if mqtt_plugin is not None:

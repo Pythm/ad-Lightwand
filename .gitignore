@@ -202,3 +202,5 @@ Thumbs.db
 /.vscode
 .vscode/
 apps/.vscode/
+# Claude Code scratch
+.claude/
